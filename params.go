@@ -8,13 +8,13 @@ import (
 
 
 // number of cells in each batch
-var Cells = 200
+var Cells = 10
 
 // number of features
-var Features = 40
+var Features = 8
 
 // number of filters
-var Filters = 8
+var Filters = 6
 
 // number of classes
 var Classes = 2
@@ -26,7 +26,10 @@ var LearningRate = 1.0
 var Momentum = 0.9
 
 // ring dimension
-var LogN = 15
+var LogN = 14
+
+// Total number of levels
+var Levels = 10
 
 // number of special primes for the key-switching
 var NbPi = 2
@@ -41,7 +44,7 @@ func GenParams(scale float64) (params *ckks.Parameters){
 	log2Scale := math.Log2(scale)
 
 
-	bootstrappModuliSize := int(1+(128.0 + log2Scale)/3.0)
+	bootstrappModuliSize := int(math.Ceil((128.0 + log2Scale)/3.0))
 
 	if bootstrappModuliSize > 60{
 		panic("scale too high")
@@ -49,13 +52,13 @@ func GenParams(scale float64) (params *ckks.Parameters){
 
 	fmt.Println(bootstrappModuliSize)
 
-	logQi := make([]int, 11)
+	logQi := make([]int, Levels)
 
 	for i := 0; i < 3; i++{
 		logQi[i] = bootstrappModuliSize
 	}
 
-	for i := 3; i < 11; i++{
+	for i := 3; i < Levels; i++{
 		logQi[i] = int(log2Scale)
 	}
 

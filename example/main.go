@@ -9,9 +9,12 @@ import (
 	"github.com/ldsec/cellCNN"
 )
 
+
+
+
 func main() {
 
-	params := cellCNN.GenParams(float64(1 << 50))
+	params := cellCNN.GenParams(float64(1 << 52))
 
 	fmt.Println(params.LogQP())
 
@@ -35,8 +38,8 @@ func main() {
 
 	rotations = append(rotations, filters)
 
-	levelW := 3+1
-	levelC := 3+2
+	levelW := 2 + 1
+	levelC := 2 + 2
 
 	// Convolution rotations
 	rotHoisted := []int{}
@@ -96,7 +99,7 @@ func main() {
 	ptL := cellCNN.EncodeLeftForPtMul(L, filters, 1, params)
 	ptLT := cellCNN.EncodeLeftForPtMul(L.Transpose(), filters, math.Pow(0.5 * learningRate / float64(cells), 0.5),  params)
 	ctC := cellCNN.EncryptRightForPtMul(C, cells, params, levelC, sk)
-	ptY := cellCNN.EncodePlaintextForE1(Y, features, filters, classes, params)
+	ptY := cellCNN.EncodeLabelsForBackward(Y, features, filters, classes, params)
 
 
 	// Returns
@@ -107,22 +110,18 @@ func main() {
 	ctW := cellCNN.EncryptRightForNaiveMul(W, params, levelW, sk)
 
 
-	epoch := 50
+	epoch := 1
 
 	for i := 0; i < epoch; i++{
 
 		fmt.Printf("Epoch[%d]\n", i)
 		start := time.Now()
 
-		ctP := cellCNN.Convolution(ptL, ctC, features, filters, eval)
-		ctPpool := cellCNN.Pooling(ctP, cells, filters, classes, eval)
-		ctU := cellCNN.DenseLayer(ctPpool, ctW, filters, classes, eval)
+		ctTmp := cellCNN.Forward(ptL, ctC, ctW, cells, features, filters, classes, eval, params, sk)
 
-		cellCNN.RepackBeforeBootstrapping(ctU, ctPpool, ctW, cells, filters, classes, eval, params, sk)
-		ctBoot := cellCNN.DummyBoot(ctU, cells, features, filters, classes, learningRate, params, sk)
+		ctBoot := cellCNN.DummyBoot(ctTmp, cells, features, filters, classes, learningRate, params, sk)
 
-		ctE1, ctDW := cellCNN.DeltaW(ctBoot, ptY, features, filters, classes, params, eval, sk)
-		ctDC, _ := cellCNN.DeltaC(ctBoot, ctE1, ptLT, cells, features, filters, classes, params, eval, sk)
+		ctDW, ctDC := cellCNN.Backward(ctBoot, ptY, ptLT, cells, features, filters, classes, params, eval, sk)
 
 		eval.Sub(ctW, ctDW, ctW)
 		eval.Sub(ctC, ctDC, ctC)
@@ -134,6 +133,9 @@ func main() {
 		// ========== Plaintext circuit ==========
 		// =======================================
 		P.MulMat(L, C)
+
+		P.Print()
+
 		Ppool.SumColumns(P)
 		Ppool.MultConst(Ppool, complex(1.0/float64(cells), 0))
 		U.MulMat(Ppool, W)
@@ -166,25 +168,16 @@ func main() {
 		C.Sub(C, DC)
 		// =======================================
 
+		/*
 		fmt.Println("DW")
 		DW.Print()
-		decryptPrint(0, 16, ctDW, params, sk)
+		cellCNN.DecryptPrint(0, 16, ctDW, params, sk)
 
 		fmt.Println("DC")
 		DC.Print()
-		decryptPrint(0, 16, ctDC, params, sk)
+		cellCNN.DecryptPrint(0, 16, ctDC, params, sk)
+		*/
 	}
 }
 
-func decryptPrint(start, finish int, ciphertext *ckks.Ciphertext, params *ckks.Parameters, sk *ckks.SecretKey) {
 
-	decryptor := ckks.NewDecryptor(params, sk)
-	encoder := ckks.NewEncoder(params)
-
-	v := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
-
-	for i := start; i < finish; i++ {
-		fmt.Println(i, v[i])
-	}
-	fmt.Println()
-}

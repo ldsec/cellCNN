@@ -1,8 +1,6 @@
 package cellCNN
 
 import(
-	"fmt"
-
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 

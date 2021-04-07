@@ -4,66 +4,44 @@ import(
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
-func DeltaW(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (E1, DW *ckks.Ciphertext){
+func Backward(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, ptLt []*ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
+
 
 	// sigma(U) and sigma'(U)
-	ctL, ctLDeriv := ActivationsCt(ctBoot, params.Scale(), eval)
+	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params.Scale(), eval)
 
 	// Y - sigma(U)
-	eval.Sub(Y, ctL, ctL)
+	eval.Sub(Y, ctU1, ctU1)
 
 	// E1 = sigma'(U) * (Y - sigma(U))
-	eval.MulRelin(ctL, ctLDeriv, ctL)
-	if err := eval.Rescale(ctL, params.Scale(), ctL); err != nil{
+	eval.MulRelin(ctU1, ctU1Deriv, ctU1)
+	if err := eval.Rescale(ctU1, params.Scale(), ctU1); err != nil{
 		panic(err)
 	}
 
 	// Ppool * E1 
-	ctPpool := eval.RotateNew(ctBoot, classes*filters*features + classes*filters)
+	ctDW = eval.RotateNew(ctBoot, classes*filters*features + classes*filters)
 
-
-	eval.MulRelin(ctPpool, ctL, ctPpool)
-	if err := eval.Rescale(ctPpool, params.Scale(), ctPpool); err != nil{
+	eval.MulRelin(ctDW, ctU1, ctDW)
+	if err := eval.Rescale(ctDW, params.Scale(), ctDW); err != nil{
 		panic(err)
 	}
 
-	E1 = ctL
-	DW = ctPpool
-
-	return E1, DW
-}
-
-func DeltaC(ctBoot, E1 *ckks.Ciphertext, ptLt []*ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey)(ctDC, ctE0 *ckks.Ciphertext){
+	E1 := eval.RotateNew(ctDW, classes*filters)
 
 	tmp := ckks.NewCiphertext(params, 1, E1.Level(), E1.Scale())
-	
-	// Puts [W0 ... W0][W1 ... W1] on the first slots
-	eval.Rotate(ctBoot, classes*filters + classes*filters*features + classes * filters, ctBoot)
-	eval.Rotate(E1, classes*filters, E1)
-	
-	// [W0 ... W0][W1 ... W1]
-	//      X          X
-	// [E0 ... E0][E1 ... E1]
-	//      =          =
-	// [E2 ... E2][E3 ... E3]
-	eval.MulRelin(ctBoot, E1, ctBoot)
-	eval.Rescale(ctBoot, params.Scale(), ctBoot)
 
-	// [ E2 ...  E2][ E3 ...  E3]
-	//       +            +
-	// [iE2 ... iE2][iE3 ... iE3]
-	//       =            =
-	// [(E2+iE2) ... (E2+iE2)] [(E3+iE3) ... (E3+iE3)]
-	eval.MultByi(ctBoot, tmp)
-	eval.Add(ctBoot, tmp, ctBoot)
+	eval.MultByi(E1, tmp)
 
-	eval.InnerSum(ctBoot, features*filters, classes, ctBoot)
+	eval.Add(E1, tmp, E1)
+
+	eval.InnerSum(E1, features*filters, classes, E1)
 
 	// MultSum with transpose(L)
-	ctDC = eval.MulNew(ctBoot, ptLt[0])
+	ctDC = eval.MulNew(E1, ptLt[0])
 
 	for i := 1; i < cells>>1; i++ {
-		eval.Mul(ctBoot, ptLt[i], tmp) 
+		eval.Mul(E1, ptLt[i], tmp) 
 		eval.Add(ctDC, tmp, ctDC)
 	}
 
@@ -73,8 +51,7 @@ func DeltaC(ctBoot, E1 *ckks.Ciphertext, ptLt []*ckks.Plaintext, cells, features
 	eval.Add(ctDC, eval.ConjugateNew(ctDC), ctDC)
 
 	// Replicates to match the encrypted convolution matrix
-	//Replicate(ctDC, features*filters, int(float64(cells)/float64(features) + 1.5), eval)
-
+	// Replicate(ctDC, features*filters, int(float64(cells)/float64(features) + 1.5), eval)
 	tmp = ctDC.CopyNew().Ciphertext()
 
 	for i := 1; i < int(float64(cells)/float64(features) + 1.5); i++{
@@ -82,6 +59,33 @@ func DeltaC(ctBoot, E1 *ckks.Ciphertext, ptLt []*ckks.Plaintext, cells, features
 		eval.Add(ctDC, tmp, ctDC)
 	}
 
-	return ctDC, ctBoot
+	return 
 }
 
+func EncodeLabelsForBackward(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
+
+	encoder := ckks.NewEncoder(params)
+
+	values := make([]complex128, params.Slots())
+
+	for i := 0; i < classes; i++ {
+		c := Y.M[i]
+		for j := 0; j < filters; j++ {
+			values[i*filters + j] = c
+		}
+	}
+
+	idx := classes * filters
+
+	for i := 0; i < classes; i++ {
+		c := Y.M[i]
+		for j := 0; j < filters*features; j++ {
+			values[idx + i*filters*features + j] = c
+		}
+	}
+
+	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
+	encoder.EncodeNTT(pt, values, params.LogSlots())
+
+	return pt
+}

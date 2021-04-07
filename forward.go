@@ -2,7 +2,20 @@ package cellCNN
 
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
+	"fmt"
 )
+
+func Forward(ptL []*ckks.Plaintext, ctC *ckks.Ciphertext, ctW *ckks.Ciphertext, cells, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
+	ctP := Convolution(ptL, ctC, features, filters, eval, params, sk)
+
+	fmt.Println("ctP")
+	DecryptPrint(0, cells*filters, ctP, params, sk)
+
+	ctPpool := Pooling(ctP, cells, filters, classes, eval)
+	ctU := DenseLayer(ctPpool, ctW, filters, classes, eval)
+	RepackBeforeBootstrapping(ctU, ctPpool, ctW, cells, filters, classes, eval, params, sk)
+	return ctU
+}
 
 // =====================
 // ==== Convolution ====
@@ -13,8 +26,8 @@ import(
 // [[ P = L X C row encoded ] [        available        ]]
 //  |    cells * filters    | | Slots - cells * filters | 
 //
-func Convolution(L0 []*ckks.Plaintext, C *ckks.Ciphertext, features, filters int, eval ckks.Evaluator) (*ckks.Ciphertext){
-	return  MulMatrixLeftPtWithRightCt(L0, C, features, filters, eval)
+func Convolution(L0 []*ckks.Plaintext, C *ckks.Ciphertext, features, filters int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
+	return  MulMatrixLeftPtWithRightCt(L0, C, features, filters, eval, params, sk)
 }
 
 

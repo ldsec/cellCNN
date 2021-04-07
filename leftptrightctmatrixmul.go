@@ -45,7 +45,29 @@ func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, params *ckks
 	return ptL
 }
 
-func MulMatrixLeftPtWithRightCt(A []*ckks.Plaintext, B *ckks.Ciphertext, BRows, BCols int, eval ckks.Evaluator) (AB *ckks.Ciphertext){
+func EncryptRightForPtMul(C *ckks.Matrix, cells int, params *ckks.Parameters, level int, sk *ckks.SecretKey) (*ckks.Ciphertext){
+
+	encoder := ckks.NewEncoder(params)
+	encryptor := ckks.NewEncryptorFromSk(params, sk)
+
+	features := C.Rows()
+	filters := C.Cols()
+
+	values := make([]complex128, params.Slots())
+
+	// Replicates C + (features/2)*2*filters elements for the rotations + filters element for the complex trick
+	for i := 0; i < cells*filters + filters + features*filters; i++ {
+		values[i] = C.M[i%len(C.M)]
+	}
+
+	ptC := ckks.NewPlaintext(params, level, params.Scale())
+	encoder.EncodeNTT(ptC, values, params.LogSlots())
+	ctC := encryptor.EncryptNew(ptC)
+
+	return ctC
+}
+
+func MulMatrixLeftPtWithRightCt(A []*ckks.Plaintext, B *ckks.Ciphertext, BRows, BCols int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (AB *ckks.Ciphertext){
 
 	level := utils.MinInt(A[0].Level(), B.Level())
 
