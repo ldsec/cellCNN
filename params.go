@@ -29,7 +29,7 @@ var Momentum = 0.9
 var LogN = 14
 
 // Total number of levels
-var Levels = 10
+var Levels = 9
 
 // number of special primes for the key-switching
 var NbPi = 2

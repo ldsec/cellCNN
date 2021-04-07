@@ -3,7 +3,6 @@ package cellCNN
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
 	"fmt"
-	"math"
 )
 
 
@@ -51,9 +50,7 @@ func RepackBeforeBootstrapping(ctU, ctPpool, ctW *ckks.Ciphertext, cells, filter
 	eval.Add(ctU, ctWRotate, ctU)
 }
 
-func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes int, learningRate float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
-
-	print := false
+func DummyBoot(ciphertext *ckks.Ciphertext, L *ckks.Matrix, cells, features, filters, classes int, learningRate float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
 
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
@@ -75,16 +72,17 @@ func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes in
 
 	idx := classes *filters
 
-	//[[        U        ][             U            ] [ available ]]
-	// | classes*filters || classes*filters*features | |           | 
+	//[[        U        ][             U                                        ] [ available ]]
+	// | classes*filters || classes*(cells*filters + filters + features*filters) | |           | 
 	for i := 0; i < classes; i++ {
 		c := complex(real(v[i*filters]), 0)
-		for j := 0; j < filters*features; j++ {
-			newv[idx + i*filters*features + j] = c
+		fmt.Println("c", c)
+		for j := 0; j < cells*filters + filters + features*filters; j++ {
+			newv[idx + i*(cells*filters + filters + features*filters) + j] = c
 		}
 	}
 
-	idx += classes * filters*features
+	idx += classes * (cells*filters + filters + features*filters)
 	
 	//[[        U        ][            U             ] [       Ppool        ] [ available ]]
 	// | classes*filters || classes*filters*features | | classes * filters  | |           |
@@ -100,18 +98,37 @@ func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes in
 	//[[        U        ][            U             ] [       Ppool        ] [   W transpose row encoded    ] [ available ]]
 	// | classes*filters || classes*filters*features | | classes * filters  | | classes * filters * features |
 	
+
+	// cells*filters + filters + features*filters
+
+	LSum := new(ckks.Matrix)
+	LSum.SumRows(L.Transpose())
+
+	fmt.Println(LSum)
+
 	for i := 0; i < classes; i++ {
-		for j := 0; j < filters; j++ {
-			c := complex(real(v[(2*(cells-1)*filters + 2*classes*filters) + i * filters + j]), 0) * complex(math.Pow(0.5 * learningRate / float64(cells), 0.5), 0)
-			for k := 0 ; k < features; k++ {
-				newv[idx + i*filters*features + k*filters + j] = c
+
+		idxLSum := 0
+
+		for j := 0; j < cells*filters + filters + features*filters; j++ {
+
+			if j%filters == 0 && j != 0{
+				idxLSum++
+				idxLSum%=features
 			}
+
+			c := real(v[(2*(cells-1)*filters + 2*classes*filters) + i * filters + (j%filters)])
+			c *= learningRate / float64(cells)
+
+			c *= real(LSum.M[idxLSum])
+
+			newv[idx + i*(cells*filters + filters + features*filters) + j] = complex(c, 0)
 		}
 	}
 
-	idx += classes * filters * features
+	idx += classes * (cells * filters + filters + features*filters)
 
-	if print {
+	if false {
 		fmt.Println("Repacked Plaintext")
 		for i := 0; i < idx; i++{
 			fmt.Println(i, newv[i])

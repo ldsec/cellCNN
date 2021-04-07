@@ -4,7 +4,7 @@ import(
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
-func Backward(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, ptLt []*ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
+func Backward(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
 
 
 	// sigma(U) and sigma'(U)
@@ -20,49 +20,24 @@ func Backward(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, ptLt []*ckks.Plaintext
 	}
 
 	// Ppool * E1 
-	ctDW = eval.RotateNew(ctBoot, classes*filters*features + classes*filters)
+	ctDW = eval.RotateNew(ctBoot, classes*(cells*filters + filters + features*filters) + classes*filters)
 
 	eval.MulRelin(ctDW, ctU1, ctDW)
 	if err := eval.Rescale(ctDW, params.Scale(), ctDW); err != nil{
 		panic(err)
 	}
 
-	E1 := eval.RotateNew(ctDW, classes*filters)
+	ctDC = eval.RotateNew(ctDW, classes*filters)
 
-	tmp := ckks.NewCiphertext(params, 1, E1.Level(), E1.Scale())
+	eval.InnerSum(ctDC, cells * filters + filters + features*filters, classes, ctDC)
+	
+	//fmt.Println("E1xW")
+	//DecryptPrint(0, classes * (cells * filters + filters + features*filters), ctDC, params, sk)
 
-	eval.MultByi(E1, tmp)
-
-	eval.Add(E1, tmp, E1)
-
-	eval.InnerSum(E1, features*filters, classes, E1)
-
-	// MultSum with transpose(L)
-	ctDC = eval.MulNew(E1, ptLt[0])
-
-	for i := 1; i < cells>>1; i++ {
-		eval.Mul(E1, ptLt[i], tmp) 
-		eval.Add(ctDC, tmp, ctDC)
-	}
-
-	eval.Rescale(ctDC, params.Scale(), ctDC)
-
-	// Eliminates the imaginary value
-	eval.Add(ctDC, eval.ConjugateNew(ctDC), ctDC)
-
-	// Replicates to match the encrypted convolution matrix
-	// Replicate(ctDC, features*filters, int(float64(cells)/float64(features) + 1.5), eval)
-	tmp = ctDC.CopyNew().Ciphertext()
-
-	for i := 1; i < int(float64(cells)/float64(features) + 1.5); i++{
-		eval.Rotate(tmp, -filters * features, tmp)
-		eval.Add(ctDC, tmp, ctDC)
-	}
-
-	return 
+	return ctDW, ctDC
 }
 
-func EncodeLabelsForBackward(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
 
 	encoder := ckks.NewEncoder(params)
 
@@ -79,8 +54,8 @@ func EncodeLabelsForBackward(Y *ckks.Matrix, features, filters, classes int, par
 
 	for i := 0; i < classes; i++ {
 		c := Y.M[i]
-		for j := 0; j < filters*features; j++ {
-			values[idx + i*filters*features + j] = c
+		for j := 0; j <  (cells * filters + filters + features*filters); j++ {
+			values[idx + i*(cells * filters + filters + features*filters) + j] = c
 		}
 	}
 

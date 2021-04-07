@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"time"
-	"math"
 
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/cellCNN"
@@ -58,6 +57,10 @@ func main() {
 	// Dense layer rotations
 	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(1, filters)...)
 
+	
+	//
+	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(cells*filters + filters + features*filters, classes)...)
+
 	// Repacking of ctPpool before bootstrapping
 	rotations = append(rotations, -((cells-1)*filters+classes*filters))
 
@@ -69,6 +72,8 @@ func main() {
 	rotations = append(rotations, -features*filters)
 
 	rotations = append(rotations, classes*filters + classes*filters*features + classes * filters)
+
+	rotations = append(rotations, classes*(cells*filters + filters + features*filters) + classes*filters)
 	
 	//rotations = append(rotations, GenReplicateRotKeyIndex(features*filters, int(float64(cells)/float64(features) + 1.5))...)
 
@@ -97,9 +102,8 @@ func main() {
 	
 
 	ptL := cellCNN.EncodeLeftForPtMul(L, filters, 1, params)
-	ptLT := cellCNN.EncodeLeftForPtMul(L.Transpose(), filters, math.Pow(0.5 * learningRate / float64(cells), 0.5),  params)
 	ctC := cellCNN.EncryptRightForPtMul(C, cells, params, levelC, sk)
-	ptY := cellCNN.EncodeLabelsForBackward(Y, features, filters, classes, params)
+	ptY := cellCNN.EncodeLabelsForBackward(Y, cells,features, filters, classes, params)
 
 
 	// Returns
@@ -114,27 +118,10 @@ func main() {
 
 	for i := 0; i < epoch; i++{
 
-		fmt.Printf("Epoch[%d]\n", i)
-		start := time.Now()
-
-		ctTmp := cellCNN.Forward(ptL, ctC, ctW, cells, features, filters, classes, eval, params, sk)
-
-		ctBoot := cellCNN.DummyBoot(ctTmp, cells, features, filters, classes, learningRate, params, sk)
-
-		ctDW, ctDC := cellCNN.Backward(ctBoot, ptY, ptLT, cells, features, filters, classes, params, eval, sk)
-
-		eval.Sub(ctW, ctDW, ctW)
-		eval.Sub(ctC, ctDC, ctC)
-		
-		fmt.Printf("Total : %s\n", time.Since(start))
-		fmt.Println()
-
 		// =======================================
 		// ========== Plaintext circuit ==========
 		// =======================================
 		P.MulMat(L, C)
-
-		P.Print()
 
 		Ppool.SumColumns(P)
 		Ppool.MultConst(Ppool, complex(1.0/float64(cells), 0))
@@ -147,28 +134,61 @@ func main() {
 		E1.Dot(E1, L1Deriv)
 
 		DW.MulMat(Ppool.Transpose(), E1)
+
+		fmt.Println("E1")
+		E1.Print()
+
+
+		fmt.Println("W")
+		W.Print()
+
 		E0.MulMat(E1, W.Transpose())
 
-		// Up sampling
-		DC := ckks.NewMatrix(cells, filters)
-		for i := 0; i < cells; i++{
-			for j := range E0.M{
-				DC.M[i*filters+j] = E0.M[j]
-			}
-		}
+		fmt.Println("E1 x W")
+		E0.Print()
 
+		DC := new(ckks.Matrix)
+		DC.SumRows(L.Transpose())
 		DC.MultConst(DC, complex(1.0/float64(cells), 0))
 
-		DC.MulMat(L.Transpose(), DC)
+		fmt.Println("LSum")
+		DC.Print()
+
+		DC.MulMat(DC, E0)
+
+		fmt.Println("LSum x (E1 x W)")
+		DC.Print()
+		
 
 		DW.MultConst(DW, complex(learningRate, 0))
+
+
+
 		DC.MultConst(DC, complex(learningRate, 0))
 
 		W.Sub(W, DW)
 		C.Sub(C, DC)
 		// =======================================
 
-		/*
+		fmt.Printf("Epoch[%d]\n", i)
+		start := time.Now()
+
+		ctTmp := cellCNN.Forward(ptL, ctC, ctW, cells, features, filters, classes, eval, params, sk)
+
+		ctBoot := cellCNN.DummyBoot(ctTmp, L, cells, features, filters, classes, learningRate, params, sk)
+
+		ctDW, ctDC := cellCNN.Backward(ctBoot, ptY, cells, features, filters, classes, params, eval, sk)
+
+		eval.Sub(ctW, ctDW, ctW)
+		eval.Sub(ctC, ctDC, ctC)
+		
+		fmt.Printf("Total : %s\n", time.Since(start))
+		fmt.Println()
+
+
+
+
+		
 		fmt.Println("DW")
 		DW.Print()
 		cellCNN.DecryptPrint(0, 16, ctDW, params, sk)
@@ -176,7 +196,7 @@ func main() {
 		fmt.Println("DC")
 		DC.Print()
 		cellCNN.DecryptPrint(0, 16, ctDC, params, sk)
-		*/
+		
 	}
 }
 
