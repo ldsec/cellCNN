@@ -4,7 +4,10 @@ import(
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
-var coeffsActivation = []complex128{0.5, 0.1831, 0, -0.003817}
+//var coeffsActivation = []complex128{0.5, 0.1831, 0, -0.003817}
+
+//Interval 3
+var coeffsActivation = []complex128{0.5, 0.24656666666666668, 0, -0.009070370370370371}
 var coeffsActivationDeriv = CoeffsDeriv(coeffsActivation)
 
 func EvaluatePoly(x complex128, coeffs []complex128) (y complex128){

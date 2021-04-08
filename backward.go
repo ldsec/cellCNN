@@ -2,9 +2,19 @@ package cellCNN
 
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
+	"math"
 )
 
-func Backward(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
+func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
+
+
+	// Extracts previous DC * momentum and previous DW * mementum
+	ctDWPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (cells + features + 1)))
+	ctDCPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (cells + features + 1)) + classes*filters)
+
+
+	//DecryptPrint(0, classes*filters, ctDWPrev, params, sk)
+	//DecryptPrint(0, 2*classes * filters * (cells + features + 1), ctDCPrev, params, sk)
 
 
 	// sigma(U) and sigma'(U)
@@ -19,22 +29,65 @@ func Backward(ctBoot *ckks.Ciphertext, Y *ckks.Plaintext, cells, features, filte
 		panic(err)
 	}
 
-	// Ppool * E1 
-	ctDW = eval.RotateNew(ctBoot, classes*(cells*filters + filters + features*filters) + classes*filters)
+	// Acess the index of the pooling results and upsampled W
+	tmp := eval.RotateNew(ctBoot, classes*(cells*filters + filters + features*filters) + classes*filters)
 
-	eval.MulRelin(ctDW, ctU1, ctDW)
-	if err := eval.Rescale(ctDW, params.Scale(), ctDW); err != nil{
+	// Multiplies at the same time pool^t x E1 and upSampled(E1 x W^t)
+	eval.MulRelin(tmp, ctU1, tmp)
+	if err := eval.Rescale(tmp, params.Scale(), tmp); err != nil{
 		panic(err)
 	}
 
-	ctDC = eval.RotateNew(ctDW, classes*filters)
+	// Adds prev DW*momentum
+	ctDW = eval.AddNew(tmp, ctDWPrev)
+	eval.Mul(ctDW, maskPtW, ctDW)
+	eval.Rescale(ctDW, params.Scale(), ctDW)
 
+	// Accesses upSampled(E1 x W^t)
+	ctDC = eval.RotateNew(tmp, classes*filters)
+
+	// Finishes the computation of E0 = upSampled(E1 x W^t) by summing all the rows
 	eval.InnerSum(ctDC, cells * filters + filters + features*filters, classes, ctDC)
-	
-	//fmt.Println("E1xW")
-	//DecryptPrint(0, classes * (cells * filters + filters + features*filters), ctDC, params, sk)
+
+	//  DC = Ltranspose x E0
+	eval.Mul(ctDC, ptLBackward, ctDC)
+	eval.Rescale(ctDC, params.Scale(), ctDC)
+
+	// adds prevDC * momentum
+	eval.Mul(ctDCPrev, maskPtC, ctDCPrev)
+	eval.Rescale(ctDCPrev, params.Scale(), ctDCPrev)
+	eval.Add(ctDC, ctDCPrev, ctDC)
 
 	return ctDW, ctDC
+}
+
+func EncodeCellsForBackward(L *ckks.Matrix, cells, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+	encoder := ckks.NewEncoder(params)
+
+	values := make([]complex128, params.Slots())
+
+	LSum := new(ckks.Matrix)
+	LSum.SumRows(L.Transpose())
+
+
+	idxLSum := 0
+
+	for j := 0; j < cells*filters + filters + features*filters; j++ {
+
+		if j%filters == 0 && j != 0{
+			idxLSum++
+			idxLSum%=features
+		}
+
+		c := real(LSum.M[idxLSum]) * math.Pow(learningRate / float64(cells), 0.5)
+
+		values[j] = complex(c, 0)
+	}
+
+	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
+	encoder.EncodeNTT(pt, values, params.LogSlots())
+
+	return pt
 }
 
 func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){

@@ -2,11 +2,12 @@ package cellCNN
 
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
+	"math"
 	"fmt"
 )
 
 
-func RepackBeforeBootstrapping(ctU, ctPpool, ctW *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey){
+func RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey){
 
 	// ctU
 	//
@@ -21,6 +22,7 @@ func RepackBeforeBootstrapping(ctU, ctPpool, ctW *ckks.Ciphertext, cells, filter
 	//
 
 	eval.Rotate(ctPpool, -((cells-1)*filters+classes*filters), ctPpool)
+	eval.Add(ctU, ctPpool, ctU)
 
 	// ctW
 	//
@@ -37,20 +39,37 @@ func RepackBeforeBootstrapping(ctU, ctPpool, ctW *ckks.Ciphertext, cells, filter
 	}
 
 	ctWRotate.SetScale(ctU.Scale())
+	eval.Add(ctU, ctWRotate, ctU)
+
+	if ctDWprev != nil && ctDWprev != nil{
+
+		eval.Rotate(ctDWprev, -(2*(cells-1)*filters + 3*classes*filters), ctDWprev)
+		eval.Rotate(ctDCprev, -(2*(cells-1)*filters + 4*classes*filters), ctDCprev)
+
+		eval.Add(ctDWprev, ctDCprev, ctDWprev)
+
+		eval.MultByConst(ctDWprev, ctU.Scale()/ctDWprev.Scale(), ctDWprev)
+
+		if err := eval.Rescale(ctDWprev, params.Scale(), ctDWprev); err != nil {
+			panic(err)
+		}
+
+		ctDWprev.SetScale(ctU.Scale())
+		eval.Add(ctU, ctDWprev, ctU)
+	}
 
 	//decryptPrint(2*(cells-1)*filters + 2*classes*filters, 2*(cells-1)*filters + 2*classes*filters+classes*filters, ctWRotate, params, sk)
 
 	// Returns
-	//  |========CTU========| |==============================CTPpool================================| |===========CTW===========|    
-	// [[      classes      ] [      garbage      ] [ #filters  ...  #filters ] [     garbage       ] [ W transpose row encoded ] [ available ] [ garbage ]] 
-	//  | classes * filters | | (cells-1)*filters | |   classes * filters     | | (cells-1)*filters | |    classes * filters    | |           | | filters |
+	//  [========CTU========] [==============================CTPpool================================] [===========CTW===========] [     prevCTDW      ] [                prevCTDC                  ] [available] [ garbage ]
+	//  | classes * filters | | (cells-1)*filters | |   classes * filters     | | (cells-1)*filters | |    classes * filters    | | classes * filters | [classes * filters * (cells + features + 1)] |         | | filters |
 	//
 	
-	eval.Add(ctU, ctPpool, ctU)
-	eval.Add(ctU, ctWRotate, ctU)
+	
+	
 }
 
-func DummyBoot(ciphertext *ckks.Ciphertext, L *ckks.Matrix, cells, features, filters, classes int, learningRate float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
+func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes int, learningRate, momentum float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
 
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
@@ -70,22 +89,21 @@ func DummyBoot(ciphertext *ckks.Ciphertext, L *ckks.Matrix, cells, features, fil
 		}
 	}
 
-	idx := classes *filters
+	idx := classes*filters
 
-	//[[        U        ][             U                                        ] [ available ]]
-	// | classes*filters || classes*(cells*filters + filters + features*filters) | |           | 
+	//[[        U        ][                      U                     ] [ available ]]
+	// | classes*filters || classes * filters * (cells + features + 1) | |           | 
 	for i := 0; i < classes; i++ {
 		c := complex(real(v[i*filters]), 0)
-		fmt.Println("c", c)
-		for j := 0; j < cells*filters + filters + features*filters; j++ {
-			newv[idx + i*(cells*filters + filters + features*filters) + j] = c
+		for j := 0; j < filters * (cells + features + 1); j++ {
+			newv[idx + i*filters*(cells + features + 1) + j] = c
 		}
 	}
 
-	idx += classes * (cells*filters + filters + features*filters)
+	idx += classes * filters * (cells + features + 1)
 	
-	//[[        U        ][            U             ] [       Ppool        ] [ available ]]
-	// | classes*filters || classes*filters*features | | classes * filters  | |           |
+	//[[        U        ][                      U                     ] [       Ppool        ] [ available ]]
+	// | classes*filters || classes * filters * (cells + features + 1) | | classes * filters  | |           |
 
 	for i := 0; i < classes; i++ {
 		for j := 0; j < filters; j++{
@@ -95,38 +113,39 @@ func DummyBoot(ciphertext *ckks.Ciphertext, L *ckks.Matrix, cells, features, fil
 
 	idx += classes * filters
 
-	//[[        U        ][            U             ] [       Ppool        ] [   W transpose row encoded    ] [ available ]]
-	// | classes*filters || classes*filters*features | | classes * filters  | | classes * filters * features |
+	//[[        U        ][                                            ] [       Ppool        ] [          W transpose row encoded           ] [ available ]]
+	// | classes*filters || classes * filters * (cells + features + 1) | | classes * filters  | | classes * filters * (cells + features + 1) |
 	
-
-	// cells*filters + filters + features*filters
-
-	LSum := new(ckks.Matrix)
-	LSum.SumRows(L.Transpose())
-
-	fmt.Println(LSum)
 
 	for i := 0; i < classes; i++ {
 
-		idxLSum := 0
-
-		for j := 0; j < cells*filters + filters + features*filters; j++ {
-
-			if j%filters == 0 && j != 0{
-				idxLSum++
-				idxLSum%=features
-			}
+		for j := 0; j < filters * (cells + features + 1); j++ {
 
 			c := real(v[(2*(cells-1)*filters + 2*classes*filters) + i * filters + (j%filters)])
-			c *= learningRate / float64(cells)
+			c *= math.Pow(learningRate / float64(cells), 0.5)
 
-			c *= real(LSum.M[idxLSum])
-
-			newv[idx + i*(cells*filters + filters + features*filters) + j] = complex(c, 0)
+			newv[idx + i*filters*(cells + features + 1) + j] = complex(c, 0)
 		}
 	}
 
-	idx += classes * (cells * filters + filters + features*filters)
+	idx += classes * filters * (cells + features + 1)
+
+
+	//[[        U        ][                      U                     ] [       Ppool        ] [           W transpose row encoded         ] [  Previous DeltaW  ] [           Previous DeltaC                ] [ available ]]
+	// | classes*filters || classes * filters * (cells + features + 1) | | classes * filters  | | classes * filters * (cells + features + 1)| [ classes * filters ] [classes * filters * (cells + features + 1)]
+	
+
+	for i := 0; i < classes * filters; i++ {
+		newv[idx + i] = complex(real(v[(2*(cells-1)*filters + 3*classes*filters)+i])*momentum, 0)
+	}
+
+	idx += classes*filters
+
+	for i := 0; i < filters * (cells + features + 1); i++ {
+		newv[idx + i] = complex(real(v[(2*(cells-1)*filters + 4*classes*filters)+i])*momentum, 0)
+	}
+
+	idx += filters * (cells + features + 1)
 
 	if false {
 		fmt.Println("Repacked Plaintext")

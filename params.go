@@ -6,30 +6,37 @@ import (
 	"fmt"
 )
 
+// number of samples
+var Samples = 50
+
+// Number of samples per batch
+var BatcheSize = 50
 
 // number of cells in each batch
-var Cells = 10
+var Cells = 200
 
 // number of features
-var Features = 8
+var Features = 38
 
 // number of filters
-var Filters = 6
+var Filters = 8
 
 // number of classes
 var Classes = 2
 
 // learning rate
-var LearningRate = 1.0
+var LearningRate = 0.01
 
 // momentum
 var Momentum = 0.9
 
 // ring dimension
-var LogN = 14
+var LogN = 15
+
+var Scale = float64(1 << 52)
 
 // Total number of levels
-var Levels = 9
+var Levels = 10
 
 // number of special primes for the key-switching
 var NbPi = 2
@@ -37,11 +44,11 @@ var NbPi = 2
 
 // GenParams generates CKKS parameters based on the input scale to
 // ensure a secure bootstrapping and appropriate moduli
-func GenParams(scale float64) (params *ckks.Parameters){
+func GenParams() (params *ckks.Parameters){
 
 	var err error
 
-	log2Scale := math.Log2(scale)
+	log2Scale := math.Log2(Scale)
 
 
 	bootstrappModuliSize := int(math.Ceil((128.0 + log2Scale)/3.0))
@@ -76,7 +83,7 @@ func GenParams(scale float64) (params *ckks.Parameters){
 		panic(err)
 	}
 
-	params.SetScale(scale)
+	params.SetScale(Scale)
 	params.SetLogSlots(LogN-1)
 
 	return 

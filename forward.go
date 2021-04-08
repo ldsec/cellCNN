@@ -4,13 +4,14 @@ import(
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
-func Forward(ptL []*ckks.Plaintext, ctC *ckks.Ciphertext, ctW *ckks.Ciphertext, cells, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
+func Forward(ptL []*ckks.Plaintext, ctC, ctW, ctDWPrev, ctDCPrev *ckks.Ciphertext, cells, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
 	ctP := Convolution(ptL, ctC, features, filters, eval, params, sk)
 
-
 	ctPpool := Pooling(ctP, cells, filters, classes, eval)
+
 	ctU := DenseLayer(ctPpool, ctW, filters, classes, eval)
-	RepackBeforeBootstrapping(ctU, ctPpool, ctW, cells, filters, classes, eval, params, sk)
+
+	RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWPrev, ctDCPrev, cells, filters, classes, eval, params, sk)
 	return ctU
 }
 
@@ -65,8 +66,8 @@ func Pooling(ct *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluat
 // =====================
 // Returns
 //
-// [[      classes      ] [        available          ] [ garbage ]]
-//  | classes * filters | | Slots-(classes+1)*filters | | filters |
+// [[      classes      ] [        available          ] [  garbage  ]]
+//  | classes * filters | | Slots-(classes+1)*filters | | filters-1 |
 //
 func DenseLayer(ctP, ctW *ckks.Ciphertext, filters, classes int, eval ckks.Evaluator) (*ckks.Ciphertext) {
 	ctU := eval.MulRelinNew(ctP, ctW)
