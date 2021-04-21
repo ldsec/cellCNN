@@ -11,8 +11,8 @@ func RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphe
 
 	// ctU
 	//
-	// [[      classes      ] [ available ] [ garbage ]]
-	//  | classes * filters | |           | | filters |
+	// [[      classes      ] [ available ] [   garbage  ]]
+	//  | classes * filters | |           | | filters -1 |
 	//
 
 	// ctPpool
@@ -64,9 +64,6 @@ func RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphe
 	//  [========CTU========] [==============================CTPpool================================] [===========CTW===========] [     prevCTDW      ] [                prevCTDC                  ] [available] [ garbage ]
 	//  | classes * filters | | (cells-1)*filters | |   classes * filters     | | (cells-1)*filters | |    classes * filters    | | classes * filters | [classes * filters * (cells + features + 1)] |         | | filters |
 	//
-	
-	
-	
 }
 
 func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes int, learningRate, momentum float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
@@ -147,7 +144,7 @@ func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes in
 
 	idx += filters * (cells + features + 1)
 
-	if false {
+	if true {
 		fmt.Println("Repacked Plaintext")
 		for i := 0; i < idx; i++{
 			fmt.Println(i, newv[i])
@@ -155,6 +152,150 @@ func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes in
 	}
 	
 
+	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
+	encoder.EncodeNTT(pt, newv, params.LogSlots())
+	newCt := encryptor.EncryptNew(pt)
+
+	return newCt
+
+}
+
+func RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey){
+
+	// ctU
+	//
+	// [[      classes      ] [ available ] [   garbage  ]]
+	//  | classes * filters | |           | | filters -1 |
+	//
+
+	// ctPpool
+	//
+	// [[    available    ] [ #filters  ...  #filters ] [ available ]]
+	//  | classes*filters | |   classes * filters     | |           | 
+	//
+
+	eval.Add(ctU, eval.RotateNew(ctPpool, -classes*filters), ctU)
+
+	// ctW
+	//
+	// [[       available       ] [ W transpose row encoded ] [ available ]]
+	//  | 2*(classes * filters) | |    classes * filters    | |           |
+ 	//
+
+	ctWRotate := eval.RotateNew(ctW, -2*classes*filters)
+	eval.Add(ctU, ctWRotate, ctU)
+
+	if ctDWprev != nil && ctDWprev != nil{
+
+		// ctDWprev
+		//
+		// [[       available       ] [ W transpose row encoded ] [ available ]]
+		//  | 3*(classes * filters) | |    classes * filters    | |           |
+	 	//
+
+	 	// ctDCprev
+		//
+		// [[       available       ] [ W transpose row encoded ] [ available ]]
+		//  | 4*(classes * filters) | |    classes * filters    | |           |
+	 	//
+
+		eval.Rotate(ctDWprev, -3*classes*filters, ctDWprev)
+		eval.Rotate(ctDCprev, -4*classes*filters, ctDCprev)
+
+		eval.Add(ctDWprev, ctDCprev, ctDWprev)
+		eval.Add(ctU, ctDWprev, ctU)
+	}
+
+	// Returns
+	//  [========CTU========] [======CTPpool======] [========CTW========] [     prevCTDW      ] [            prevCTDC                ] [available] [   garbage  ]
+	//  | classes * filters | | classes * filters | | classes * filters | | classes * filters | [classes * filters * (features + 2)] | |         | | filters -1 |
+	//
+}
+
+func DummyBootWithPrepool(ciphertext *ckks.Ciphertext, cells, features, filters, classes int, learningRate, momentum float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
+
+	decryptor := ckks.NewDecryptor(params, sk)
+	encoder := ckks.NewEncoder(params)
+	encryptor := ckks.NewEncryptorFromSk(params, sk)
+
+	v := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
+
+	newv := make([]complex128, params.Slots())
+
+	//[[        U        ][ available ]]
+	// | classes*filters ||           | 
+
+	for i := 0; i < classes; i++ {
+		c := complex(real(v[i*filters]), 0)
+		for j := 0; j < filters; j++ {
+			newv[i*filters + j] = c
+		}
+	}
+
+	idx := classes*filters
+
+	//[[        U        ][                  U                 ] [ available ]]
+	// | classes*filters || classes * filters * (features + 2) | |           | 
+	for i := 0; i < classes; i++ {
+		c := complex(real(v[i*filters]), 0)
+		for j := 0; j < filters * (features + 2); j++ {
+			newv[idx + i*filters*(features + 2) + j] = c
+		}
+	}
+
+	idx += classes * filters * (features + 2)
+	
+	//[[        U        ][                  U                 ] [       Ppool        ] [ available ]]
+	// | classes*filters || classes * filters * (features + 2) | | classes * filters  | |           |
+
+	for i := 0; i < classes; i++ {
+		for j := 0; j < filters; j++{
+			newv[idx + i*filters + j] = complex(real(v[classes*filters + i * filters + j]) * learningRate, 0)
+		}
+	}
+
+	idx += classes * filters
+
+	//[[        U        ][                  U                 ] [       Ppool        ] [      W transpose row encoded       ] [ available ]]
+	// | classes*filters || classes * filters * (features + 2) | | classes * filters  | | classes * filters * (features + 2) |
+	
+
+	for i := 0; i < classes; i++ {
+
+		for j := 0; j < filters * (features + 2); j++ {
+
+			c := real(v[2*classes*filters + i * filters + (j%filters)])
+
+			newv[idx + i*filters*(features + 2) + j] = complex(c, 0)
+		}
+	}
+
+	idx += classes * filters * (features + 2)
+
+
+	//[[        U        ][                  U                 ] [       Ppool        ] [       W transpose row encoded     ] [  Previous DeltaW  ] [       Previous DeltaC            ] [ available ]]
+	// | classes*filters || classes * filters * (features + 2) | | classes * filters  | | classes * filters * (features + 2)| [ classes * filters ] [classes * filters * (features + 2)]
+	
+
+	for i := 0; i < classes * filters; i++ {
+		newv[idx + i] = complex(real(v[3*classes*filters+i])*momentum, 0)
+	}
+
+	idx += classes*filters
+
+	for i := 0; i < filters * (features + 2); i++ {
+		newv[idx + i] = complex(real(v[4*classes*filters+i])*momentum, 0)
+	}
+
+	idx += filters * (features + 2)
+
+	if false {
+		fmt.Println("Repacked Plaintext")
+		for i := 0; i < idx; i++{
+			fmt.Println(i, newv[i])
+		}
+	}
+	
 	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(pt, newv, params.LogSlots())
 	newCt := encryptor.EncryptNew(pt)

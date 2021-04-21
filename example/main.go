@@ -62,12 +62,20 @@ func main() {
 	//
 	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(cells*filters + filters + features*filters, classes)...)
 
+	// Pre-pool convolution replication
+	rotations = append(rotations, -filters)
+
 	// Repacking of ctPpool before bootstrapping
 	rotations = append(rotations, -((cells-1)*filters+classes*filters))
 
 	// Repacking of ctW before bootstrapping
 	rotations = append(rotations, -(2*(cells-1)*filters + 2*classes*filters))
 	rotations = append(rotations, classes*filters*features + classes*filters)
+
+	rotations = append(rotations, -classes*filters)
+	rotations = append(rotations, -2*classes*filters)
+	rotations = append(rotations, -3*classes*filters)
+	rotations = append(rotations, -4*classes*filters)
 
 	rotations = append(rotations, features*filters)
 	rotations = append(rotations, -features*filters)
@@ -79,9 +87,12 @@ func main() {
 	rotations = append(rotations, -(classes * filters + 2*(cells-1)*filters + 2*classes*filters))
 	rotations = append(rotations, -(classes * filters + 2*(cells-1)*filters + 3*classes*filters))
 
-	rotations = append(rotations, 2*(classes*filters + classes * filters * (cells + features + 1)))
-	rotations = append(rotations, 2*(classes*filters + classes * filters * (cells + features + 1)) + classes*filters)
+	//rotations = append(rotations, 2*(classes*filters + classes * filters * (cells + features + 1)))
+	//rotations = append(rotations, 2*(classes*filters + classes * filters * (cells + features + 1)) + classes*filters)
 
+	rotations = append(rotations, 2*(classes*filters + classes * filters * (features + 2)))
+	rotations = append(rotations, 2*(classes*filters + classes * filters * (features + 2)) + classes*filters)
+	rotations = append(rotations, classes*filters + classes*filters*(features+2))
 
 	rotkeys := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -92,17 +103,17 @@ func main() {
 	C := cellCNN.WeightsInit(features, filters, features)
 	W := cellCNN.WeightsInit(filters, classes, filters) 
 
-	ctC := cellCNN.EncryptRightForPtMul(C, cells, params, levelC, sk)
-	_=ctC
+	ctC := cellCNN.EncryptRightForPtMul(C, 1, params, levelC, sk)
+
 	// Returns
 	//
 	// [[ W transpose row encoded ] [         available         ]]
 	//  |    classes * filters    | | Slots - classes * filters | 
 	//
 	ctW := cellCNN.EncryptRightForNaiveMul(W, params, levelW, sk)
-	_=ctW
 
-	P := new(ckks.Matrix)
+
+	XPrePool := new(ckks.Matrix)
 	Ppool := new(ckks.Matrix)
 	U := new(ckks.Matrix)
 	L1 := new(ckks.Matrix)
@@ -136,9 +147,9 @@ func main() {
 	maskPtC := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(maskPtC, maskC, params.LogSlots())
 
-	epoch := 30
+	epoch := 2
 
-	//var ctDW, ctDC *ckks.Ciphertext
+	var ctDW, ctDC *ckks.Ciphertext
 
 	for i := 0; i < epoch; i++{
 
@@ -148,21 +159,21 @@ func main() {
 
 			for j := 0; j < samples; j++ {
 
-				//ptL := cellCNN.EncodeLeftForPtMul(XTrain[j], filters, 1, params)
-				//ptY := cellCNN.EncodeLabelsForBackward(YTrain[j], cells,features, filters, classes, params)
-				//ptLBackward := cellCNN.EncodeCellsForBackward(XTrain[j], cells, features, filters, classes, learningRate, params)
+				X := XTrain[k*batchSize + j]
+				Y := YTrain[k*batchSize + j]
+
+				XPrePool.SumColumns(X)
+				XPrePool.MultConst(XPrePool, complex(1.0/float64(cells), 0))
+
+				ptL := cellCNN.EncodeLeftForPtMul(XPrePool, filters, 1, params)
+				ptY := cellCNN.EncodeLabelsForBackwardWithPrepooling(Y,features, filters, classes, params)
+				ptLBackward := cellCNN.EncodeCellsForBackwardWithPrepool(XPrePool.Transpose(), features, filters, classes, learningRate, params)
 
 				// =======================================
 				// ========== Plaintext circuit ==========
 				// =======================================
 
-				X := XTrain[k*batchSize + j]
-				Y := YTrain[k*batchSize + j]
-
-				P.MulMat(X, C)
-
-				Ppool.SumColumns(P)
-				Ppool.MultConst(Ppool, complex(1.0/float64(cells), 0))
+				Ppool.MulMat(XPrePool, C)
 
 				U.MulMat(Ppool, W)
 
@@ -176,10 +187,7 @@ func main() {
 
 				E0.MulMat(E1, W.Transpose())
 
-				DC.SumRows(X.Transpose())
-				DC.MultConst(DC, complex(1.0/float64(cells), 0))
-
-				DC.MulMat(DC, E0)
+				DC.MulMat(XPrePool.Transpose(), E0)
 
 				// Pools the gradients of the batch
 				DCPool.Add(DCPool, DC)
@@ -187,25 +195,19 @@ func main() {
 				
 				// =======================================
 
-				
-				
 				start := time.Now()
-				_=start
-				/*
+	
+				ctTmp := cellCNN.ForwardWithPrepool(ptL, ctC, ctW, ctDW, ctDC, cells, features, filters, classes, eval, params, sk)
 
-				ctTmp := cellCNN.Forward(ptL, ctC, ctW, ctDW, ctDC, cells, features, filters, classes, eval, params, sk)
+				ctBoot := cellCNN.DummyBootWithPrepool(ctTmp, 1, features, filters, classes, learningRate, momentum, params, sk)
 
-				ctBoot := cellCNN.DummyBoot(ctTmp, cells, features, filters, classes, learningRate, momentum, params, sk)
-
-				ctDW, ctDC = cellCNN.Backward(ctBoot, ptY, ptLBackward, maskPtW, maskPtC, cells, features, filters, classes, params, eval, sk)
+				ctDW, ctDC = cellCNN.BackwardWithPrePooling(ctBoot, ptY, ptLBackward, maskPtW, maskPtC, features, filters, classes, params, eval, sk)
 
 				eval.Sub(ctW, ctDW, ctW)
 				eval.Sub(ctC, ctDC, ctC)
 				
 				fmt.Printf("Total : %s\n", time.Since(start))
 				fmt.Println()
-
-
 
 				fmt.Println("DW")
 				DWt := DW.Transpose()
@@ -215,7 +217,6 @@ func main() {
 				fmt.Println("DC")
 				DC.Print()
 				cellCNN.DecryptPrintMatrix(features, filters, true, ctDC, params, sk)
-				*/
 			}
 
 			

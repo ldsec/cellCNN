@@ -7,25 +7,25 @@ import (
 )
 
 // number of samples
-var Samples = 50
+var Samples = 1
 
 // Number of samples per batch
-var BatcheSize = 50
+var BatcheSize = 1
 
 // number of cells in each batch
-var Cells = 200
+var Cells = 10
 
 // number of features
-var Features = 38
+var Features = 8
 
 // number of filters
-var Filters = 8
+var Filters = 6
 
 // number of classes
 var Classes = 2
 
 // learning rate
-var LearningRate = 0.01
+var LearningRate = 1.0
 
 // momentum
 var Momentum = 0.9
