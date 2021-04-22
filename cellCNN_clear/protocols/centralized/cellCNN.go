@@ -17,9 +17,9 @@ const write = false // write accuracy values to file
 
 func ComputeGradient(i int, j int, v float64, y []float64) float64 {
 	if int(y[i]) == j {
-		return -v
+		return v - 1
 	} else {
-		return 0
+		return 1 - v
 	}
 }
 
@@ -70,8 +70,10 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		compute_grad := func(i int, j int, v float64) float64 {
 			return ComputeGradient(i, j, v, newBatchLabels)
 		}
+
 		var gradient mat.Dense
 		gradient.Apply(compute_grad, out2)
+
 		if i == 1 || i%100 == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
