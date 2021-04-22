@@ -16,11 +16,23 @@ const batchSize = 200
 const write = false // write accuracy values to file
 
 func ComputeGradient(i int, j int, v float64, y []float64) float64 {
-	if int(y[i]) == j {
-		return v - 1
-	} else {
-		return 1 - v
+	//represent one hot encoding
+
+	if int(y[i]) == 0 {
+		if int(y[i]) == j {
+			return v - 1
+		} else {
+			return v
+		}
 	}
+	if int(y[i]) == 1 {
+		if int(y[i]) != j {
+			return v
+		} else {
+			return v - 1
+		}
+	}
+	return 0
 }
 
 // Train a cellCNN on given dataset
@@ -65,7 +77,8 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		out1 = conv.Forward(newBatch, nil)
 		out2 = pool.Forward(out1)
 		out2 = dense.Forward(out2, nil)
-
+		//fmt.Println("out is" , out2)
+		//	fmt.Println("labels are,",newBatchLabels)
 		//compute loss gradient + print accuracy
 		compute_grad := func(i int, j int, v float64) float64 {
 			return ComputeGradient(i, j, v, newBatchLabels)
@@ -73,7 +86,8 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 
 		var gradient mat.Dense
 		gradient.Apply(compute_grad, out2)
-
+		//fmt.Println("gradient is", gradient)
+		//	os.Exit(0)
 		if i == 1 || i%100 == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
