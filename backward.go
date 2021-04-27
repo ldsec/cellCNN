@@ -13,7 +13,7 @@ func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Pl
 	ctDCPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (cells + features + 1)) + classes*filters)
 
 	// sigma(U) and sigma'(U)
-	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params.Scale(), eval)
+	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
 
 	// Y - sigma(U)
 	eval.Sub(Y, ctU1, ctU1)
@@ -116,27 +116,29 @@ func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes i
 }
 
 
-func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
+func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaintext, features, filters, classes int, lastSample bool, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
 
+	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
+	denseMatrixSize := DenseMatrixSize(filters, classes)
 
 	// ctBoot
-	//[[        U        ][                  U                 ] [       Ppool        ] [       W transpose row encoded     ] [  Previous DeltaW  ] [       Previous DeltaC            ] [ available ]]
-	// | classes*filters || classes * filters * (features + 2) | | classes * filters  | | classes * filters * (features + 2)| [ classes * filters ] [classes * filters * (features + 2)] |           |
-
+	//[[        U        ][           U           ] [      Ppool       ] [     W transpose row encoded     ] [ Previous DeltaW ] [        Previous DeltaC        ] [ available ]]
+	// | DenseMatrixSize || classes*ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize | [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           |
 
 	// Extracts previous DC * momentum and previous DW * momentum
+	if lastSample {
 
-	//[[  Previous DeltaW  ] [       Previous DeltaC            ] [ available ] [        U        ][                  U                 ] [       Ppool        ] [       W transpose row encoded     ] ]
-	// [ classes * filters ] [classes * filters * (features + 2)] |           | | classes*filters || classes * filters * (features + 2) | | classes * filters  | | classes * filters * (features + 2)| 
-	ctDWPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (features + 2)))
+		//[[       Previous DeltaC            ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] ]
+		// [ classes * ConvolutionMatrixSize  ] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] 
+		ctDCPrev = eval.RotateNew(ctBoot, 3*denseMatrixSize + 2*classes * convolutionMatrixSize)
 
-	//[[       Previous DeltaC            ] [ available ] [        U        ][                  U                 ] [       Ppool        ] [       W transpose row encoded     ] [  Previous DeltaW  ] ]
-	// [classes * filters * (features + 2)] |           | | classes*filters || classes * filters * (features + 2) | | classes * filters  | | classes * filters * (features + 2)| [ classes * filters ] 
-	ctDCPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (features + 2)) + classes*filters)
-
+		//[[ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] ]
+		// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
+		ctDWPrev = eval.RotateNew(ctBoot, 2*denseMatrixSize + 2*classes * convolutionMatrixSize)
+	}
 
 	// sigma(U) and sigma'(U)
-	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params.Scale(), eval)
+	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
 
 	// Y - sigma(U)
 	eval.Sub(Y, ctU1, ctU1)
@@ -147,49 +149,42 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, ma
 		panic(err)
 	}
 
-	// Acess the index of the pooling results and upsampled W
+	// Access the index of the pooling results and upsampled W
 
-	//[[       Ppool        ] [       W transpose row encoded     ] [  Previous DeltaW  ] [       Previous DeltaC            ] [ available ] [        U        ][                  U                 ] ]
-	// | classes * filters  | | classes * filters * (features + 2)| [ classes * filters ] [classes * filters * (features + 2)] |           | | classes*filters || classes * filters * (features + 2) | 
-	tmp := eval.RotateNew(ctBoot, classes*filters + classes*filters*(features+2))
+	//[[      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] ]
+	// | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | 
+	ctDW = eval.RotateNew(ctBoot, denseMatrixSize + classes*convolutionMatrixSize)
 
 	// Multiplies at the same time pool^t x E1 and upSampled(E1 x W^t)
-	eval.MulRelin(tmp, ctU1, tmp)
-	if err := eval.Rescale(tmp, params.Scale(), tmp); err != nil{
+	eval.MulRelin(ctDW, ctU1, ctDW)
+	if err := eval.Rescale(ctDW, params.Scale(), ctDW); err != nil{
 		panic(err)
 	}
 
-	// Adds prev DW*momentum
-	ctDW = eval.AddNew(tmp, ctDWPrev)
-	eval.Mul(ctDW, maskPtW, ctDW)
-	eval.Rescale(ctDW, params.Scale(), ctDW)
-
 	// Accesses upSampled(E1 x W^t)
-	ctDC = eval.RotateNew(tmp, classes*filters)
+	ctDC = eval.RotateNew(ctDW, denseMatrixSize)
 
 	// Finishes the computation of E0 = upSampled(E1 x W^t) by summing all the rows
-	eval.InnerSum(ctDC, filters * (features + 2), classes, ctDC)
+	eval.InnerSum(ctDC, convolutionMatrixSize, classes, ctDC)
 
 	//  DC = Ltranspose x E0
 	eval.Mul(ctDC, ptLBackward, ctDC)
 	eval.Rescale(ctDC, params.Scale(), ctDC)
 
-	// adds prevDC * momentum
-	eval.Mul(ctDCPrev, maskPtC, ctDCPrev)
-	eval.Rescale(ctDCPrev, params.Scale(), ctDCPrev)
-	eval.Add(ctDC, ctDCPrev, ctDC)
-
-	return ctDW, ctDC
+	return ctDC, ctDW, ctDCPrev, ctDWPrev 
 }
 
-func EncodeCellsForBackwardWithPrepool(L *ckks.Matrix, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeCellsForBackwardWithPrepool(level int, L *ckks.Matrix, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+
+	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
+
 	encoder := ckks.NewEncoder(params)
 
 	values := make([]complex128, params.Slots())
 
 	idxLSum := 0
 
-	for j := 0; j < filters * (features + 2); j++ {
+	for j := 0; j < convolutionMatrixSize; j++ {
 
 		if j%filters == 0 && j != 0{
 			idxLSum++
@@ -201,13 +196,15 @@ func EncodeCellsForBackwardWithPrepool(L *ckks.Matrix, features, filters, classe
 		values[j] = complex(c, 0)
 	}
 
-	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
+	pt := ckks.NewPlaintext(params, level, float64(params.Qi()[level]))
 	encoder.EncodeNTT(pt, values, params.LogSlots())
 
 	return pt
 }
 
 func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
+
+	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
 
 	encoder := ckks.NewEncoder(params)
 
@@ -224,8 +221,8 @@ func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, cl
 
 	for i := 0; i < classes; i++ {
 		c := Y.M[i]
-		for j := 0; j <  filters * (features +2); j++ {
-			values[idx + i*filters * (features +2) + j] = c
+		for j := 0; j <  convolutionMatrixSize; j++ {
+			values[idx + i*convolutionMatrixSize + j] = c
 		}
 	}
 

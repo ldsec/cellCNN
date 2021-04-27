@@ -7,19 +7,19 @@ import (
 )
 
 // number of samples
-var Samples = 1
+var Samples = 200
 
 // Number of samples per batch
-var BatcheSize = 1
+var BatcheSize = 50
 
 // number of cells in each batch
-var Cells = 10
+var Cells = 200
 
 // number of features
-var Features = 8
+var Features = 38
 
 // number of filters
-var Filters = 6
+var Filters = 8
 
 // number of classes
 var Classes = 2
@@ -28,7 +28,7 @@ var Classes = 2
 var LearningRate = 1.0
 
 // momentum
-var Momentum = 0.9
+var Momentum = 0.0
 
 // ring dimension
 var LogN = 15
@@ -41,6 +41,14 @@ var Levels = 10
 // number of special primes for the key-switching
 var NbPi = 2
 
+func ConvolutionMatrixSize(cells, filters, features int) int {
+	//     original result   additional rotations padd   complex trick
+	return cells * filters + (features/2 -1)*2*filters + filters
+}
+
+func DenseMatrixSize(filters, classes int) int{
+	return filters * classes
+}
 
 // GenParams generates CKKS parameters based on the input scale to
 // ensure a secure bootstrapping and appropriate moduli

@@ -2,6 +2,7 @@ package cellCNN
 
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
+	"math"
 )
 
 //var coeffsActivation = []complex128{0.5, 0.1831, 0, -0.003817}
@@ -38,14 +39,17 @@ func ActivationDeriv(x complex128) complex128{
 	return EvaluatePoly(x, coeffsActivationDeriv)
 }
 
-func ActivationsCt(ctU0 *ckks.Ciphertext, scale float64, eval ckks.Evaluator) (ctL1, ctL1Deriv *ckks.Ciphertext){
+func ActivationsCt(ctU0 *ckks.Ciphertext, params *ckks.Parameters, eval ckks.Evaluator) (ctL1, ctL1Deriv *ckks.Ciphertext){
 	var err error
 
-	if ctL1, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivation), scale); err != nil {
+	if ctL1, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivation), params.Scale()); err != nil {
 		panic(err)
 	}
 
-	if ctL1Deriv, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivationDeriv), scale); err != nil {
+	depthDeriv := int(math.Ceil(math.Log2(float64(len(coeffsActivationDeriv)+1))))
+	scaleDeriv := float64(params.Qi()[ctU0.Level() - depthDeriv]) * float64(params.Qi()[ctU0.Level() - depthDeriv-1]) / params.Scale()
+
+	if ctL1Deriv, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivationDeriv), scaleDeriv); err != nil {
 		panic(err)
 	}
 

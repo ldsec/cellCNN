@@ -24,12 +24,17 @@ func main() {
 	// Relinearization key
 	rlk := kgen.GenRelinearizationKey(sk)
 
+	encoder := ckks.NewEncoder(params)
+
 	batchSize := cellCNN.BatcheSize
 	samples := cellCNN.Samples
 	cells := cellCNN.Cells
 	features := cellCNN.Features
 	filters := cellCNN.Filters
 	classes := cellCNN.Classes
+
+	denseMatrixSize := cellCNN.DenseMatrixSize(filters, classes)
+	convolutionMatrixSize := cellCNN.ConvolutionMatrixSize(1, features, filters)
 
 	learningRate := cellCNN.LearningRate
 	momentum := cellCNN.Momentum
@@ -62,14 +67,14 @@ func main() {
 	//
 	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(cells*filters + filters + features*filters, classes)...)
 
+	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(convolutionMatrixSize, classes)...)
+
 	// Pre-pool convolution replication
 	rotations = append(rotations, -filters)
 
 	// Repacking of ctPpool before bootstrapping
-	rotations = append(rotations, -((cells-1)*filters+classes*filters))
 
 	// Repacking of ctW before bootstrapping
-	rotations = append(rotations, -(2*(cells-1)*filters + 2*classes*filters))
 	rotations = append(rotations, classes*filters*features + classes*filters)
 
 	rotations = append(rotations, -classes*filters)
@@ -84,15 +89,10 @@ func main() {
 
 	rotations = append(rotations, classes*(cells*filters + filters + features*filters) + classes*filters)
 
-	rotations = append(rotations, -(classes * filters + 2*(cells-1)*filters + 2*classes*filters))
-	rotations = append(rotations, -(classes * filters + 2*(cells-1)*filters + 3*classes*filters))
+	rotations = append(rotations, denseMatrixSize + classes*convolutionMatrixSize)
 
-	//rotations = append(rotations, 2*(classes*filters + classes * filters * (cells + features + 1)))
-	//rotations = append(rotations, 2*(classes*filters + classes * filters * (cells + features + 1)) + classes*filters)
-
-	rotations = append(rotations, 2*(classes*filters + classes * filters * (features + 2)))
-	rotations = append(rotations, 2*(classes*filters + classes * filters * (features + 2)) + classes*filters)
-	rotations = append(rotations, classes*filters + classes*filters*(features+2))
+	rotations = append(rotations, 3*denseMatrixSize + 2*classes*convolutionMatrixSize)
+	rotations = append(rotations, 2*denseMatrixSize + 2*classes*convolutionMatrixSize)
 
 	rotkeys := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -113,6 +113,48 @@ func main() {
 	ctW := cellCNN.EncryptRightForNaiveMul(W, params, levelW, sk)
 
 
+	levelMaskPtW := 5
+	levelMaskPtC := 4
+
+	scaleMaskPtW := float64(params.Qi()[levelMaskPtW])
+	scaleMaskPtC := float64(params.Qi()[levelMaskPtC])
+
+	// Mask W
+	maskW := make([]complex128, params.Slots())
+
+	// mask
+	for i := 0; i < classes*filters; i++ {
+		maskW[i] = complex(1.0, 0)
+	}
+	maskPtW := ckks.NewPlaintext(params, levelMaskPtW, scaleMaskPtW)
+	encoder.EncodeNTT(maskPtW, maskW, params.LogSlots())
+
+	// mask avg
+	for i := 0; i < classes*filters; i++ {
+		maskW[i] = complex(1.0/float64(batchSize), 0)
+	}
+	maskPtWavg := ckks.NewPlaintext(params, levelMaskPtW, scaleMaskPtW)
+	encoder.EncodeNTT(maskPtWavg, maskW, params.LogSlots())
+
+	// Mask C
+	maskC := make([]complex128, params.Slots())
+
+	// mask
+	for i := 0; i < cells * filters + (features/2 -1)*2*filters + filters; i++ {
+		maskC[i] = complex(1.0, 0)
+	}
+	maskPtC := ckks.NewPlaintext(params, levelMaskPtC, scaleMaskPtC)
+	encoder.EncodeNTT(maskPtC, maskC, params.LogSlots())
+
+	// mask with avg
+	for i := 0; i < cells * filters + (features/2 -1)*2*filters + filters; i++ {
+		maskC[i] = complex(1.0/float64(batchSize), 0)
+	}
+	maskPtCavg := ckks.NewPlaintext(params, levelMaskPtC, scaleMaskPtC)
+	encoder.EncodeNTT(maskPtCavg, maskC, params.LogSlots())
+
+	var ctDW, ctDC *ckks.Ciphertext
+
 	XPrePool := new(ckks.Matrix)
 	Ppool := new(ckks.Matrix)
 	U := new(ckks.Matrix)
@@ -122,42 +164,27 @@ func main() {
 	E0 := new(ckks.Matrix)
 	DC := new(ckks.Matrix)
 	DW := new(ckks.Matrix)
+
 	DCPrev := ckks.NewMatrix(features, filters)
-	DWPrev := ckks.NewMatrix(filters, classes)	
-	DCPool := ckks.NewMatrix(features, filters)
-	DWPool := ckks.NewMatrix(filters, classes)
+	DWPrev := ckks.NewMatrix(filters, classes)
+	ctDCPrev := ckks.NewCiphertext(params, 1, 3, params.Scale())
+	ctDWPrev := ckks.NewCiphertext(params, 1, 4, params.Scale())
+	var ctDCPrevBoot, ctDWPrevBoot *ckks.Ciphertext
 
-	maskW := make([]complex128, params.Slots())
-
-	for i := 0; i < classes*filters; i++ {
-		maskW[i] = complex(1, 0)
-	}
-
-	encoder := ckks.NewEncoder(params)
-	maskPtW := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
-	encoder.EncodeNTT(maskPtW, maskW, params.LogSlots())
-
-
-	maskC := make([]complex128, params.Slots())
-
-	for i := 0; i < classes * filters * (cells + features + 1); i++ {
-		maskC[i] = complex(1, 0)
-	}
-
-	maskPtC := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
-	encoder.EncodeNTT(maskPtC, maskC, params.LogSlots())
-
-	epoch := 2
-
-	var ctDW, ctDC *ckks.Ciphertext
-
+	epoch := 10
 	for i := 0; i < epoch; i++{
 
 		for k := 0; k < samples/batchSize; k++ {
 
+			DCPool := ckks.NewMatrix(features, filters)
+			DWPool := ckks.NewMatrix(filters, classes)
+
+			ctDCPool := ckks.NewCiphertext(params, 1, params.MaxLevel(), params.Scale())
+			ctDWPool := ckks.NewCiphertext(params, 1, params.MaxLevel(), params.Scale())
+
 			fmt.Printf("Epoch[%02d] | Batch[%d]\n", i, k)
 
-			for j := 0; j < samples; j++ {
+			for j := 0; j < batchSize; j++ {
 
 				X := XTrain[k*batchSize + j]
 				Y := YTrain[k*batchSize + j]
@@ -167,7 +194,7 @@ func main() {
 
 				ptL := cellCNN.EncodeLeftForPtMul(XPrePool, filters, 1, params)
 				ptY := cellCNN.EncodeLabelsForBackwardWithPrepooling(Y,features, filters, classes, params)
-				ptLBackward := cellCNN.EncodeCellsForBackwardWithPrepool(XPrePool.Transpose(), features, filters, classes, learningRate, params)
+				ptLBackward := cellCNN.EncodeCellsForBackwardWithPrepool(levelMaskPtW, XPrePool.Transpose(), features, filters, classes, learningRate, params)
 
 				// =======================================
 				// ========== Plaintext circuit ==========
@@ -196,46 +223,68 @@ func main() {
 				// =======================================
 
 				start := time.Now()
-	
-				ctTmp := cellCNN.ForwardWithPrepool(ptL, ctC, ctW, ctDW, ctDC, cells, features, filters, classes, eval, params, sk)
 
+				var ctTmp *ckks.Ciphertext
+				if j == batchSize-1{
+					ctTmp = cellCNN.ForwardWithPrepool(ptL, ctC, ctW, ctDCPrev, ctDWPrev, cells, features, filters, classes, eval, params, sk)
+				}else{
+					ctTmp = cellCNN.ForwardWithPrepool(ptL, ctC, ctW, nil, nil, cells, features, filters, classes, eval, params, sk)
+				}
+				
 				ctBoot := cellCNN.DummyBootWithPrepool(ctTmp, 1, features, filters, classes, learningRate, momentum, params, sk)
 
-				ctDW, ctDC = cellCNN.BackwardWithPrePooling(ctBoot, ptY, ptLBackward, maskPtW, maskPtC, features, filters, classes, params, eval, sk)
+				ctDC, ctDW, ctDCPrevBoot, ctDWPrevBoot = cellCNN.BackwardWithPrePooling(ctBoot, ptY, ptLBackward, features, filters, classes, j == batchSize-1, params, eval, sk)
 
-				eval.Sub(ctW, ctDW, ctW)
-				eval.Sub(ctC, ctDC, ctC)
+				eval.Add(ctDC, ctDCPool, ctDCPool)
+				eval.Add(ctDW, ctDWPool, ctDWPool)
+
+				ctDCPool.SetScale(ctDC.Scale())
+				ctDWPool.SetScale(ctDW.Scale())
 				
-				fmt.Printf("Total : %s\n", time.Since(start))
-				fmt.Println()
-
-				fmt.Println("DW")
-				DWt := DW.Transpose()
-				DWt.Print()
-				cellCNN.DecryptPrintMatrix(classes, filters, true, ctDW, params, sk)
-
-				fmt.Println("DC")
-				DC.Print()
-				cellCNN.DecryptPrintMatrix(features, filters, true, ctDC, params, sk)
+				fmt.Printf("Sample[%d] : %s\n", k*batchSize+j, time.Since(start))
 			}
 
-			
-			// Multiplies by learning rate and takes the average of sum(DW) and sum(DC)
+			// Wt = avg(Wt)
 			DCPool.MultConst(DCPool, complex(learningRate/float64(batchSize), 0))
 			DWPool.MultConst(DWPool, complex(learningRate/float64(batchSize), 0))
 
-			// Adds the previous DW and DC
+			// W_i = learning_rate * Wt + W_i-1 * momentum
 			DCPool.Add(DCPool, DCPrev)
 			DWPool.Add(DWPool, DWPrev)
 
-			// Stores the current DW and DC and multiplies by the momentum
 			DCPrev.MultConst(DCPool, complex(momentum, 0))
 			DWPrev.MultConst(DWPool, complex(momentum, 0))
 
 			// Subtstracks DC and DW to the weights
 			C.Sub(C, DCPool)
 			W.Sub(W, DWPool)
-			
+
+			// Masks DW and DC
+			ctDCAvg := eval.MulNew(ctDCPool, maskPtCavg)
+			ctDWAvg := eval.MulNew(ctDWPool, maskPtWavg)
+
+			// Mask DWPrev*momentum and DCPrev*momentum
+			eval.Mul(ctDCPrevBoot, maskPtC, ctDCPrevBoot)
+			eval.Mul(ctDWPrevBoot, maskPtW, ctDWPrevBoot)
+
+			// Adds DW with DWPrev*momentum 
+			eval.Add(ctDCAvg, ctDCPrevBoot, ctDCAvg)
+			eval.Add(ctDWAvg, ctDWPrevBoot, ctDWAvg)
+
+			// Rescales
+			eval.Rescale(ctDCAvg, params.Scale(), ctDCAvg)
+			eval.Rescale(ctDWAvg, params.Scale(), ctDWAvg)
+
+			// Stores DW + DWPrev*momentum 
+			ctDCPrev = ctDCAvg.CopyNew().Ciphertext()
+			ctDWPrev = ctDWAvg.CopyNew().Ciphertext()
+
+			// Updates the weights
+			eval.Sub(ctC, ctDCAvg, ctC)
+			eval.Sub(ctW, ctDWAvg, ctW)
+
+			cellCNN.DecryptPrintMatrix(C, true, ctC, params, sk)
+			cellCNN.DecryptPrintMatrix(W.Transpose(), true, ctW, params, sk)
 		}
 	}
 }
