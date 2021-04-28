@@ -5,9 +5,6 @@ import (
 	"github.com/ldsec/lattigo/v2/utils"
 )
 
-
-
-
 func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, params *ckks.Parameters) ([]*ckks.Plaintext){
 
 	encoder := ckks.NewEncoder(params)
@@ -47,11 +44,7 @@ func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, params *ckks
 	return ptL
 }
 
-func EncryptRightForPtMulSlotCount(cells, features, filters int) int{
-	return cells * filters + (features/2 -1)*2*filters + filters
-}
-
-func EncryptRightForPtMul(C *ckks.Matrix, cells int, params *ckks.Parameters, level int, sk *ckks.SecretKey) (*ckks.Ciphertext){
+func EncryptRightForPtMul(C *ckks.Matrix, nbMatrices, cells int, params *ckks.Parameters, level int, sk *ckks.SecretKey) (*ckks.Ciphertext){
 
 	encoder := ckks.NewEncoder(params)
 	encryptor := ckks.NewEncryptorFromSk(params, sk)
@@ -61,8 +54,10 @@ func EncryptRightForPtMul(C *ckks.Matrix, cells int, params *ckks.Parameters, le
 
 	values := make([]complex128, params.Slots())
 
-	// Replicates cells * filters + (features/2)*2*filters elements for the rotations and an additional "#filters" element for the complex trick
-	for i := 0; i < EncryptRightForPtMulSlotCount(cells, features, filters); i++ {
+	convolutionMatrixSize := ConvolutionMatrixSize(nbMatrices*cells, features, filters)
+
+	// Replicates nbMatrices * (cells * filters) + (features/2)*2*filters elements for the rotations and an additional "#filters" element for the complex trick
+	for i := 0; i < convolutionMatrixSize; i++ {
 		values[i] = C.M[i%len(C.M)]
 	}
 

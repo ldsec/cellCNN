@@ -144,7 +144,7 @@ func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes in
 
 	idx += filters * (cells + features + 1)
 
-	if true {
+	if false {
 		fmt.Println("Repacked Plaintext")
 		for i := 0; i < idx; i++{
 			fmt.Println(i, newv[i])
@@ -160,66 +160,74 @@ func DummyBoot(ciphertext *ckks.Ciphertext, cells, features, filters, classes in
 
 }
 
-func RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWprev *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey){
+func RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWprev *ckks.Ciphertext, batchSize, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey){
+
+	denseMatrixSize := DenseMatrixSize(filters, classes)
 
 	// ctU
 	//
-	// [[     classes     ] [ available ] [   garbage  ]]
-	//  | DenseMatrixSize | |           | | filters -1 |
-	//
+	// [[   S0U0   ] ... [   SiU0   ] [   S0U1   ] ... [   SiU1   ] [ available ] [   garbage  ]]
+	//  | features | ... | features | | features | ... | features | |           | | filters -1 |
+	//  |    features * batches     | |    features * batches     |
+	//  |				batches * DenseMatrixSize       	      |
 
 	// ctPpool
 	//
-	// [[    available    ] [ #filters  ...  #filters ] [ available ]]
-	//  | DenseMatrixSize | |    DenseMatrixSize      | |           | 
+	// [[         available         ] [    S0P   ] ... [    S1P   ] [ available ]]
+	//  | batches * DenseMatrixSize | | features | ... | features | |           | 
+	//	                              |    batches * features     |
 	//
 
-	eval.Add(ctU, eval.RotateNew(ctPpool, -classes*filters), ctU)
+	eval.Add(ctU, eval.RotateNew(ctPpool, -batchSize*denseMatrixSize), ctU)
 
 	// ctW
 	//
-	// [[     available     ] [ W transpose row encoded ] [ available ]]
-	//  | 2*DenseMatrixSize | |     DenseMatrixSize     | |           |
+	// [[                available               ] [     W transpose row encoded       ] [ available ]]
+	//  | batches * (DensematrixSize + features) | |    batches *  DenseMatrixSize     | |           |
  	//
 
-	ctWRotate := eval.RotateNew(ctW, -2*classes*filters)
+	ctWRotate := eval.RotateNew(ctW, -2*batchSize*denseMatrixSize)
 	eval.Add(ctU, ctWRotate, ctU)
 
+	// ctDWprev
+	//
+	// [[          available          ] [ W transpose row encoded ] [ available ]]
+	//  | 3*batches * DenseMatrixSize | | batches*DenseMatrixSize | |           |
+ 	//
 
-	if ctDWprev != nil && ctDWprev != nil{
+ 	// ctDCprev
+	//
+	// [[          available          ] [                          C                               ] [ available ]]
+	//  | 4*batches * DenseMatrixSize | | batches * filters + (features/2 -1)*2*filters + filters  | |           |
+ 	//
 
-		// ctDWprev
-		//
-		// [[     available     ] [ W transpose row encoded ] [ available ]]
-		//  | 3*DenseMatrixSize | |    DenseMatrixSize    | |           |
-	 	//
+	eval.Rotate(ctDWprev, -3*batchSize*denseMatrixSize, ctDWprev)
+	eval.Rotate(ctDCprev, -4*batchSize*denseMatrixSize, ctDCprev)
 
-	 	// ctDCprev
-		//
-		// [[     available     ] [ W transpose row encoded ] [ available ]]
-		//  | 4*DenseMatrixSize | |     DenseMatrixSize     | |           |
-	 	//
+	eval.Add(ctDWprev, ctDCprev, ctDWprev)
+	eval.Add(ctU, ctDWprev, ctU)
 
-		eval.Rotate(ctDWprev, -3*classes*filters, ctDWprev)
-		eval.Rotate(ctDCprev, -4*classes*filters, ctDCprev)
-
-		eval.Add(ctDWprev, ctDCprev, ctDWprev)
-		eval.Add(ctU, ctDWprev, ctU)
-	}
+	// CTU : lvl2
+	// CTPool : lvl3
+	// CTW : lvl3
+	// CTWPrev : lvl4
+	// CTCPrev : lvl5
 
 	// Returns
-	//  [=======CTU=======] [=====CTPpool=====] [=======CTW=======] [    prevCTDW     ] [           prevCTDC              ] [available] [   garbage  ]
-	//  | DenseMatrixSize | | DenseMatrixSize | | DenseMatrixSize | | DenseMatrixSize | [classes * ConvolutionMatrixSize] | |         | | filters -1 |
+	//  [            CTU            ] [      CTPpool       ] [             CTW            ] [         prevCTDW           ] [                         prevCTDC                        ] [available] [   garbage  ]
+	//  | batches * DenseMatrixSize | | batches * features | | batches *  DenseMatrixSize | | batches *  DenseMatrixSize | | batches * filters + (features/2 -1)*2*filters + filters | |         | | filters -1 |
 	//
 }
 
-func DummyBootWithPrepool(ciphertext *ckks.Ciphertext, cells, features, filters, classes int, learningRate, momentum float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
+func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, filters, classes int, learningRate, momentum float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
 
-	//  [=======CTU=======] [=====CTPpool=====] [=======CTW=======] [    prevCTDW     ] [           prevCTDC              ] [available] [   garbage  ]
-	//  | DenseMatrixSize | | DenseMatrixSize | | DenseMatrixSize | | DenseMatrixSize | [classes * ConvolutionMatrixSize] | |         | | filters -1 |
+	//  [            CTU            ] [      CTPpool       ] [             CTW            ] [         prevCTDW           ] [                         prevCTDC                        ] [available] [   garbage  ]
+	//  | batches * DenseMatrixSize | | batches * features | | batches *  DenseMatrixSize | | batches *  DenseMatrixSize | | batches * filters + (features/2 -1)*2*filters + filters | |         | | filters -1 |
 	//
 
-	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
+	//DecryptPrint(2*batchSize, filters, true, ciphertext, params, sk)
+
+	convolutionMatrixSize := ConvolutionMatrixSize(batchSize, features, filters)
 	denseMatrixSize := DenseMatrixSize(filters, classes)
 
 	decryptor := ckks.NewDecryptor(params, sk)
@@ -230,39 +238,41 @@ func DummyBootWithPrepool(ciphertext *ckks.Ciphertext, cells, features, filters,
 
 	newv := make([]complex128, params.Slots())
 
-	//[[        U        ][ available ]]
-	// | classes*filters ||           | 
+	//[[            U            ] [ available ]]
+	// | batches*classes*filters | |           | 
 
-	for i := 0; i < classes; i++ {
+	for i := 0; i < batchSize*classes; i++ {
 		c := complex(real(v[i*filters]), 0)
-		for j := 0; j < filters; j++ {
-			newv[i*filters + j] = c
-		}
-	}
-
-	idx := denseMatrixSize
-
-	//[[        U        ][                U                ] [ available ]]
-	// | classes*filters || classes * convolutionMatrixSize | |           | 
-	for i := 0; i < classes; i++ {
-		c := complex(real(v[i*filters]), 0)
-		for j := 0; j < convolutionMatrixSize; j++ {
-			newv[idx + i*convolutionMatrixSize + j] = c
-		}
-	}
-
-	idx += classes * convolutionMatrixSize
-	
-	//[[        U        ][                U                ] [       Ppool        ] [ available ]]
-	// | classes*filters || classes * convolutionMatrixSize | | classes * filters  | |           |
-
-	for i := 0; i < classes; i++ {
 		for j := 0; j < filters; j++{
-			newv[idx + i*filters + j] = complex(real(v[denseMatrixSize + i * filters + j]) * learningRate, 0)
+			newv[i*filters + j] = c
+		}	
+	}
+
+	idx := batchSize*denseMatrixSize
+
+	//[[            U            ] [                     U                     ] [ available ]]
+	// | batches*classes*filters | | batches * classes * convolutionMatrixSize | |           | 
+	for i := 0; i < classes; i++ {
+		c := complex(real(v[i*filters]), 0)
+		for j := 0; j < batchSize * convolutionMatrixSize; j++ {
+			newv[idx + i*convolutionMatrixSize*batchSize + j] = c
 		}
 	}
 
-	idx += classes * filters
+	idx += batchSize * classes * convolutionMatrixSize
+	
+	//[[            U            ] [                     U                     ] [         Ppool           ] [ available ]]
+	// | batches*classes*filters | | batches * classes * convolutionMatrixSize | | batches*classes*filters | |           |
+
+	for i := 0; i < classes; i++ {
+		for k := 0; k < batchSize; k++{
+			for j := 0; j < filters; j++{
+				newv[idx + i*filters*batchSize + k*filters + j] = complex(real(v[batchSize*denseMatrixSize + k*filters + j]) * learningRate, 0)
+			}
+		}
+	}
+
+	idx += batchSize * denseMatrixSize
 
 	//[[        U        ][                U                ] [       Ppool        ] [    W transpose row encoded      ] [ available ]]
 	// | classes*filters || classes * convolutionMatrixSize | | classes * filters  | | classes * convolutionMatrixSize |
@@ -278,9 +288,6 @@ func DummyBootWithPrepool(ciphertext *ckks.Ciphertext, cells, features, filters,
 	}
 
 	idx += classes * convolutionMatrixSize
-
-
-	
 
 
 	//[[        U        ][                U                ] [       Ppool        ] [      W transpose row encoded    ] [  Previous DeltaW  ] [     Previous DeltaC           ] [ available ]]
@@ -299,6 +306,7 @@ func DummyBootWithPrepool(ciphertext *ckks.Ciphertext, cells, features, filters,
 
 	idx += convolutionMatrixSize
 
+	
 	if false {
 		fmt.Println("Repacked Plaintext")
 		for i := 0; i < idx; i++{
@@ -306,10 +314,11 @@ func DummyBootWithPrepool(ciphertext *ckks.Ciphertext, cells, features, filters,
 		}
 	}
 	
-	
 	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(pt, newv, params.LogSlots())
 	newCt := encryptor.EncryptNew(pt)
+
+	//DecryptPrint(2*batchSize, filters, true, newCt, params, sk)
 
 	return newCt
 

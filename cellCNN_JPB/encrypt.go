@@ -6,7 +6,7 @@ import (
 
 
 
-func EncryptRightForNaiveMul(W *ckks.Matrix, params *ckks.Parameters, level int, sk* ckks.SecretKey) (*ckks.Ciphertext){
+func EncryptRightForNaiveMul(W *ckks.Matrix, batchSize int, params *ckks.Parameters, level int, sk* ckks.SecretKey) (*ckks.Ciphertext){
 
 	encoder := ckks.NewEncoder(params)
 	encryptor := ckks.NewEncryptorFromSk(params, sk)
@@ -16,9 +16,12 @@ func EncryptRightForNaiveMul(W *ckks.Matrix, params *ckks.Parameters, level int,
 
 	values := make([]complex128, params.Slots())
 
-	for k, c := range Wt.M {
-		values[k] = c
-	}	
+	for i := 0; i < Wt.Rows(); i++{
+		for j := 0; j < batchSize; j++{
+			idx := i*Wt.Cols()*batchSize
+			copy(values[idx + j*Wt.Cols(): idx + (j+1)*Wt.Cols()], Wt.M[i*Wt.Cols():(i+1)*Wt.Cols()])
+		}
+	}
 
 	ptW := ckks.NewPlaintext(params, level, params.Scale())
 	encoder.EncodeNTT(ptW, values, params.LogSlots())

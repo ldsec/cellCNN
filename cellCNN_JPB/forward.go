@@ -15,18 +15,18 @@ func Forward(ptL []*ckks.Plaintext, ctC, ctW, ctDCPrev, ctDWPrev *ckks.Ciphertex
 	return ctU
 }
 
-func ForwardWithPrepool(ptL []*ckks.Plaintext, ctC, ctW, ctDCprev, ctDWprev *ckks.Ciphertext, cells, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
+func ForwardWithPrepooling(ptL []*ckks.Plaintext, ctC, ctW, ctDCprev, ctDWprev *ckks.Ciphertext, batcheSize, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
 	
 	ctPpool := Convolution(ptL, ctC, features, filters, eval, params, sk)
 
 	// Replicates the values for the second classe
-	tmp := eval.RotateNew(ctPpool, -filters)
+	tmp := eval.RotateNew(ctPpool, -BatcheSize*filters)
 
 	eval.Add(ctPpool, tmp, ctPpool)
 
 	ctU := DenseLayer(ctPpool, ctW, filters, classes, eval)
 
-	RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWprev, cells, filters, classes, eval, params, sk)
+	RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWprev, batcheSize, filters, classes, eval, params, sk)
 	return ctU
 }
 

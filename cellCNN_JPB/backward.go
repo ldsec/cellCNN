@@ -3,6 +3,7 @@ package cellCNN
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
 	"math"
+	"fmt"
 )
 
 func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
@@ -116,7 +117,7 @@ func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes i
 }
 
 
-func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaintext, features, filters, classes int, lastSample bool, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
+func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaintext, batcheSize, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
 
 	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
 	denseMatrixSize := DenseMatrixSize(filters, classes)
@@ -126,16 +127,15 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 	// | DenseMatrixSize || classes*ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize | [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           |
 
 	// Extracts previous DC * momentum and previous DW * momentum
-	if lastSample {
 
-		//[[       Previous DeltaC            ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] ]
-		// [ classes * ConvolutionMatrixSize  ] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] 
-		ctDCPrev = eval.RotateNew(ctBoot, 3*denseMatrixSize + 2*classes * convolutionMatrixSize)
+	//[[       Previous DeltaC            ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] ]
+	// [ classes * ConvolutionMatrixSize  ] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] 
+	ctDCPrev = eval.RotateNew(ctBoot, 3*denseMatrixSize + 2*classes * convolutionMatrixSize)
 
-		//[[ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] ]
-		// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
-		ctDWPrev = eval.RotateNew(ctBoot, 2*denseMatrixSize + 2*classes * convolutionMatrixSize)
-	}
+	//[[ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] ]
+	// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
+	ctDWPrev = eval.RotateNew(ctBoot, 2*denseMatrixSize + 2*classes * convolutionMatrixSize)
+
 
 	// sigma(U) and sigma'(U)
 	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
@@ -148,6 +148,9 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 	if err := eval.Rescale(ctU1, params.Scale(), ctU1); err != nil{
 		panic(err)
 	}
+
+	fmt.Println("E1")
+	DecryptPrint(2*batcheSize, filters, true, ctU1, params, sk)
 
 	// Access the index of the pooling results and upsampled W
 
@@ -174,9 +177,64 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 	return ctDC, ctDW, ctDCPrev, ctDWPrev 
 }
 
-func EncodeCellsForBackwardWithPrepool(level int, L *ckks.Matrix, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
 
-	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
+	//Y.Print()
+
+	convolutionMatrixSize := ConvolutionMatrixSize(Y.Rows(), features, filters)
+
+	encoder := ckks.NewEncoder(params)
+
+	values := make([]complex128, params.Slots())
+
+	
+	for i := 0; i < classes; i++ {
+		for k := 0; k < Y.Rows(); k++{
+			c := Y.M[k*classes + i]
+			for j := 0; j < filters; j++ {
+				values[i*filters*Y.Rows() + k*filters + j] = c
+			}
+		}
+	}
+	
+
+	idx := Y.Rows() * classes * filters
+
+	if false {
+		fmt.Println("Y Plaintext")
+		fmt.Printf("[\n")
+		for i := 0; i < classes*Y.Rows(); i++ {
+			fmt.Printf("[ ")
+			for j := 0; j < filters; j++ {
+				fmt.Printf("%11.8f, ", real(values[i*filters+j]))
+
+			}
+			fmt.Printf("],\n")
+		}
+		fmt.Printf("]\n")
+		fmt.Println()
+	}
+
+	for i := 0; i < classes; i++ {
+		c := Y.M[i]
+		for j := 0; j <  convolutionMatrixSize; j++ {
+			values[idx + i*convolutionMatrixSize + j] = c
+		}
+	}
+
+	idx += classes * convolutionMatrixSize
+
+	
+
+	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
+	encoder.EncodeNTT(pt, values, params.LogSlots())
+
+	return pt
+}
+
+func EncodeCellsForBackwardWithPrepooling(level int, L *ckks.Matrix, batchSize, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+
+	convolutionMatrixSize := ConvolutionMatrixSize(batchSize, features, filters)
 
 	encoder := ckks.NewEncoder(params)
 
@@ -202,32 +260,4 @@ func EncodeCellsForBackwardWithPrepool(level int, L *ckks.Matrix, features, filt
 	return pt
 }
 
-func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
 
-	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
-
-	encoder := ckks.NewEncoder(params)
-
-	values := make([]complex128, params.Slots())
-
-	for i := 0; i < classes; i++ {
-		c := Y.M[i]
-		for j := 0; j < filters; j++ {
-			values[i*filters + j] = c
-		}
-	}
-
-	idx := classes * filters
-
-	for i := 0; i < classes; i++ {
-		c := Y.M[i]
-		for j := 0; j <  convolutionMatrixSize; j++ {
-			values[idx + i*convolutionMatrixSize + j] = c
-		}
-	}
-
-	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
-	encoder.EncodeNTT(pt, values, params.LogSlots())
-
-	return pt
-}

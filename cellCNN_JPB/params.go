@@ -7,19 +7,22 @@ import (
 )
 
 // number of samples
-var Samples = 200
+var Samples = 10
 
 // Number of samples per batch
-var BatcheSize = 50
+var BatcheSize = 5
 
 // number of cells in each batch
+// MUST BE AN EVEN NUMBER
 var Cells = 200
 
-// number of features
-var Features = 38
+// number of features 
+// MUST BE AN EVEN NUMBER
+var Features = 8
 
 // number of filters
-var Filters = 8
+// MUST BE AN EVEN NUMBER
+var Filters = 6
 
 // number of classes
 var Classes = 2
