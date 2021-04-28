@@ -34,7 +34,7 @@ func main() {
 	classes := cellCNN.Classes
 
 	denseMatrixSize := cellCNN.DenseMatrixSize(filters, classes)
-	convolutionMatrixSize := cellCNN.ConvolutionMatrixSize(1, features, filters)
+	convolutionMatrixSize := cellCNN.ConvolutionMatrixSize(batchSize, features, filters)
 
 	learningRate := cellCNN.LearningRate
 	momentum := cellCNN.Momentum
@@ -59,6 +59,8 @@ func main() {
 
 	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(convolutionMatrixSize, classes)...)
 
+	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(batchSize, classes)...)
+
 	// Pre-pool convolution replication
 	rotations = append(rotations, -batchSize*filters)
 
@@ -69,11 +71,12 @@ func main() {
 	rotations = append(rotations, -3*batchSize * denseMatrixSize)
 	rotations = append(rotations, -4*batchSize * denseMatrixSize)
 
-
-	rotations = append(rotations, denseMatrixSize + classes*convolutionMatrixSize)
+	rotations = append(rotations, batchSize*classes*filters + classes * convolutionMatrixSize)
 
 	rotations = append(rotations, 3*denseMatrixSize + 2*classes*convolutionMatrixSize)
 	rotations = append(rotations, 2*denseMatrixSize + 2*classes*convolutionMatrixSize)
+
+	
 
 	rotkeys := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
@@ -154,7 +157,7 @@ func main() {
 	ctDWPrev := ckks.NewCiphertext(params, 1, 4, params.Scale())
 	var ctDCPrevBoot, ctDWPrevBoot *ckks.Ciphertext
 
-	epoch := 2
+	epoch := 1
 	for i := 0; i < epoch; i++{
 
 		fmt.Printf("Epoch[%02d]\n", i)
@@ -195,7 +198,11 @@ func main() {
 			E1Batch.Sub(YBatch, L1Batch)
 			E1Batch.Dot(E1Batch, L1DerivBatch)
 
+			fmt.Println("E1")
 			E1Batch.Print()
+
+			fmt.Println("Pool")
+			PoolBatch.Print()
 
 			// Convolution error
 			E0Batch.MulMat(E1Batch, W.Transpose())
@@ -203,6 +210,9 @@ func main() {
 			// Updated weights
 			DWBatch.MulMat(PoolBatch.Transpose(), E1Batch)
 			DCBatch.MulMat(XBatch.Transpose(), E0Batch)
+
+			fmt.Println("DW")
+			DWBatch.Transpose().Print()
 
 			// Takes the average
 			DWBatch.MultConst(DWBatch, complex(learningRate/float64(batchSize), 0))

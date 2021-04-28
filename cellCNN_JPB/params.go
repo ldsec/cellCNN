@@ -7,10 +7,10 @@ import (
 )
 
 // number of samples
-var Samples = 10
+var Samples = 4
 
 // Number of samples per batch
-var BatcheSize = 5
+var BatcheSize = 4
 
 // number of cells in each batch
 // MUST BE AN EVEN NUMBER

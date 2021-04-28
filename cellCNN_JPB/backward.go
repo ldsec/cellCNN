@@ -117,9 +117,9 @@ func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes i
 }
 
 
-func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaintext, batcheSize, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
+func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaintext, batchSize, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
 
-	convolutionMatrixSize := ConvolutionMatrixSize(1, features, filters)
+	convolutionMatrixSize := ConvolutionMatrixSize(batchSize, features, filters)
 	denseMatrixSize := DenseMatrixSize(filters, classes)
 
 	// ctBoot
@@ -149,20 +149,35 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 		panic(err)
 	}
 
-	fmt.Println("E1")
-	DecryptPrint(2*batcheSize, filters, true, ctU1, params, sk)
+	//fmt.Println("ctE1")
+	//DecryptPrint(classes*batchSize, filters, true, ctU1, params, sk)
 
 	// Access the index of the pooling results and upsampled W
 
 	//[[      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] ]
 	// | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | 
-	ctDW = eval.RotateNew(ctBoot, denseMatrixSize + classes*convolutionMatrixSize)
+	ctDW = eval.RotateNew(ctBoot, batchSize*classes*filters + classes * convolutionMatrixSize)
+
+	//fmt.Println("ctPool")
+	//DecryptPrint(classes*batchSize, filters, true, ctDW, params, sk)
 
 	// Multiplies at the same time pool^t x E1 and upSampled(E1 x W^t)
 	eval.MulRelin(ctDW, ctU1, ctDW)
 	if err := eval.Rescale(ctDW, params.Scale(), ctDW); err != nil{
 		panic(err)
 	}
+
+	
+
+	//DecryptPrint(classes*batchSize, filters, true, ctDW, params, sk)
+
+	// Sums accroses the batches
+	// [        W0       ] [       W1        ] [            Garbage              ]  
+	// | denseMatrixSize | | denseMatrixSize | | 2*(batches-1) * denseMatrixSize | 
+	eval.InnerSum(ctDW, classes*filters, batchSize, ctDW)
+
+	fmt.Println("ctDW")
+	DecryptPrint(classes, filters, true, ctDW, params, sk)
 
 	// Accesses upSampled(E1 x W^t)
 	ctDC = eval.RotateNew(ctDW, denseMatrixSize)
@@ -188,12 +203,10 @@ func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, cl
 	values := make([]complex128, params.Slots())
 
 	
-	for i := 0; i < classes; i++ {
-		for k := 0; k < Y.Rows(); k++{
-			c := Y.M[k*classes + i]
-			for j := 0; j < filters; j++ {
-				values[i*filters*Y.Rows() + k*filters + j] = c
-			}
+	for i := 0; i < len(Y.M); i++ {
+		c := Y.M[i]
+		for j := 0; j < filters; j++ {
+			values[i*filters + j] = c
 		}
 	}
 	
@@ -203,7 +216,7 @@ func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, cl
 	if false {
 		fmt.Println("Y Plaintext")
 		fmt.Printf("[\n")
-		for i := 0; i < classes*Y.Rows(); i++ {
+		for i := 0; i < len(Y.M); i++ {
 			fmt.Printf("[ ")
 			for j := 0; j < filters; j++ {
 				fmt.Printf("%11.8f, ", real(values[i*filters+j]))

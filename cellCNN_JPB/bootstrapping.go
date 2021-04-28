@@ -241,42 +241,72 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 	//[[            U            ] [ available ]]
 	// | batches*classes*filters | |           | 
 
-	for i := 0; i < batchSize*classes; i++ {
-		c := complex(real(v[i*filters]), 0)
-		for j := 0; j < filters; j++{
-			newv[i*filters + j] = c
+	// Reorder the slots (groupes samples together) from
+	//
+	// [ S0U0 ] ... [ SiU0 ] [ S0U1 ] ... [ SiU1 ] ]
+	//
+	// to
+	//
+	// [ S0U0 ] [ S0U1 ] ... [ SiU0 ] ... [ SiU1 ] ]
+	// 
+	for i := 0; i < batchSize; i++ {
+		for j := 0; j < classes; j++{
+			c := complex(real(v[i*filters+j*filters*batchSize]), 0)
+			for k := 0; k < filters; k++{
+				newv[i*filters*classes + j*filters + k] = c
+			}
 		}	
 	}
 
 	idx := batchSize*denseMatrixSize
 
-	//[[            U            ] [                     U                     ] [ available ]]
-	// | batches*classes*filters | | batches * classes * convolutionMatrixSize | |           | 
+	
+
+	//[[            U            ] [                U                ] [ available ]]
+	// | batches*classes*filters | | batches * convolutionMatrixSize | |           | 
 	for i := 0; i < classes; i++ {
 		c := complex(real(v[i*filters]), 0)
-		for j := 0; j < batchSize * convolutionMatrixSize; j++ {
-			newv[idx + i*convolutionMatrixSize*batchSize + j] = c
+		for j := 0; j < convolutionMatrixSize; j++ {
+			newv[idx + i*convolutionMatrixSize + j] = c
 		}
 	}
 
-	idx += batchSize * classes * convolutionMatrixSize
-	
-	//[[            U            ] [                     U                     ] [         Ppool           ] [ available ]]
-	// | batches*classes*filters | | batches * classes * convolutionMatrixSize | | batches*classes*filters | |           |
+	idx += classes * convolutionMatrixSize
 
-	for i := 0; i < classes; i++ {
-		for k := 0; k < batchSize; k++{
-			for j := 0; j < filters; j++{
-				newv[idx + i*filters*batchSize + k*filters + j] = complex(real(v[batchSize*denseMatrixSize + k*filters + j]) * learningRate, 0)
+	
+	
+	//[[            U            ] [                U                ] [         Ppool           ] [ available ]]
+	// | batches*classes*filters | | batches * convolutionMatrixSize | | batches*classes*filters | |           |
+
+	// Reorder the slots (groupes samples together) from
+	//
+	// [ S0P0 ] ... [ SiP0 ] ... [ S0P0 ] ... [ SiP0 ]
+	// to
+	// [ S0P0 ] ... [ S0P0 ] ... [ SiP0 ] ... [ SiP0 ]
+	// | classes * filters | ... | classes * filters |
+	for i := 0; i < batchSize; i++{
+		for j := 0; j < filters; j++ {
+			c := complex(real(v[batchSize*denseMatrixSize + i*filters + j]) * learningRate, 0)
+			for k := 0; k < classes; k++ {
+				newv[idx + i*filters*classes + k*filters + j] = c
 			}
 		}
 	}
+	
 
 	idx += batchSize * denseMatrixSize
 
-	//[[        U        ][                U                ] [       Ppool        ] [    W transpose row encoded      ] [ available ]]
-	// | classes*filters || classes * convolutionMatrixSize | | classes * filters  | | classes * convolutionMatrixSize |
-	
+	if false {
+		fmt.Println("Repacked Plaintext")
+		for i := 0; i < idx; i++{
+			fmt.Println(i, newv[i])
+		}
+	}
+
+
+
+	//[[            U            ] [                U                ] [         Ppool           ] [    W transpose row encoded      ] [ available ]]
+	// | batches*classes*filters | | batches * convolutionMatrixSize | | batches*classes*filters | | classes * convolutionMatrixSize | |           |
 	for i := 0; i < classes; i++ {
 
 		for j := 0; j < convolutionMatrixSize; j++ {
@@ -288,6 +318,8 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 	}
 
 	idx += classes * convolutionMatrixSize
+
+
 
 
 	//[[        U        ][                U                ] [       Ppool        ] [      W transpose row encoded    ] [  Previous DeltaW  ] [     Previous DeltaC           ] [ available ]]
@@ -307,12 +339,7 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 	idx += convolutionMatrixSize
 
 	
-	if false {
-		fmt.Println("Repacked Plaintext")
-		for i := 0; i < idx; i++{
-			fmt.Println(i, newv[i])
-		}
-	}
+	
 	
 	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(pt, newv, params.LogSlots())
