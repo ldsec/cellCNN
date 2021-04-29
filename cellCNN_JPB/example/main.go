@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"time"
+	"math"
 
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/cellCNN/cellCNN_JPB"
@@ -69,23 +70,28 @@ func main() {
 
 	// Repacking of ctPpool before bootstrapping
 
-	rotations = append(rotations,  1*batchSize * denseMatrixSize)
-	rotations = append(rotations, -1*batchSize * denseMatrixSize)
-	rotations = append(rotations, -2*batchSize * denseMatrixSize)
-	rotations = append(rotations, -3*batchSize * denseMatrixSize)
-	rotations = append(rotations, -4*batchSize * denseMatrixSize)
+	rotations = append(rotations,  1*batchSize*denseMatrixSize)
+	rotations = append(rotations, -1*batchSize*denseMatrixSize)
+	rotations = append(rotations, -2*batchSize*denseMatrixSize)
+	rotations = append(rotations, -3*batchSize*denseMatrixSize)
+	rotations = append(rotations, -4*batchSize*denseMatrixSize)
 
-	rotations = append(rotations, batchSize*classes*filters + classes * convolutionMatrixSize)
+	rotations = append(rotations, 1*batchSize*denseMatrixSize + 1*classes*convolutionMatrixSize)
+	rotations = append(rotations, 1*batchSize*denseMatrixSize + 2*classes*convolutionMatrixSize)
+	rotations = append(rotations, 2*batchSize*denseMatrixSize + 2*classes*convolutionMatrixSize)
+	rotations = append(rotations, 3*batchSize*denseMatrixSize + 2*classes*convolutionMatrixSize)
 
-	rotations = append(rotations, 3*denseMatrixSize + 2*classes*convolutionMatrixSize)
-	rotations = append(rotations, 2*denseMatrixSize + 2*classes*convolutionMatrixSize)
+	rotations = append(rotations, -batchSize*filters + filters)
 
+	// Replication of DC
+	rotations = append(rotations, kgen.GenRotationIndexesForReplicate(features*filters, int(math.Ceil(float64(convolutionMatrixSize)/float64(features * filters))))...)
+
+	// Replication of DW
+	rotations = append(rotations, kgen.GenRotationIndexesForReplicate(filters, batchSize)...)
 	
-
 	rotkeys := kgen.GenRotationKeysForRotations(rotations, true, sk)
 
 	eval := ckks.NewEvaluator(params, ckks.EvaluationKey{rlk, rotkeys})
-	_=eval
 
 	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../normalized/", samples, cellCNN.Cells, cellCNN.Features)
 	C := cellCNN.WeightsInit(features, filters, features)
@@ -111,32 +117,43 @@ func main() {
 	maskW := make([]complex128, params.Slots())
 
 	// mask
-	for i := 0; i < classes*filters; i++ {
+	for i := 0; i < batchSize*denseMatrixSize; i++ {
 		maskW[i] = complex(1.0, 0)
 	}
 	maskPtW := ckks.NewPlaintext(params, levelMaskPtW, scaleMaskPtW)
 	encoder.EncodeNTT(maskPtW, maskW, params.LogSlots())
 
-	// mask avg
-	for i := 0; i < classes*filters; i++ {
+	// mask avg w0
+	maskW = make([]complex128, params.Slots())
+	for i := 0; i < denseMatrixSize>>1; i++ {
 		maskW[i] = complex(1.0/float64(batchSize), 0)
+		maskW[i+(denseMatrixSize>>1)] = complex(0, 0)
 	}
-	maskPtWavg := ckks.NewPlaintext(params, levelMaskPtW, scaleMaskPtW)
-	encoder.EncodeNTT(maskPtWavg, maskW, params.LogSlots())
+	maskPtWavg0 := ckks.NewPlaintext(params, levelMaskPtW, scaleMaskPtW)
+	encoder.EncodeNTT(maskPtWavg0, maskW, params.LogSlots())
+
+	// mask avg w1
+	for i := 0; i < denseMatrixSize>>1; i++ {
+		maskW[i] = complex(0, 0)
+		maskW[(denseMatrixSize>>1)+i] = complex(1.0/float64(batchSize), 0)
+	}
+
+	maskPtWavg1 := ckks.NewPlaintext(params, levelMaskPtW, scaleMaskPtW)
+	encoder.EncodeNTT(maskPtWavg1, maskW, params.LogSlots())
 
 	// Mask C
 	maskC := make([]complex128, params.Slots())
 
 	// mask
-	for i := 0; i < cells * filters + (features/2 -1)*2*filters + filters; i++ {
+	for i := 0; i < convolutionMatrixSize; i++ {
 		maskC[i] = complex(1.0, 0)
 	}
 	maskPtC := ckks.NewPlaintext(params, levelMaskPtC, scaleMaskPtC)
 	encoder.EncodeNTT(maskPtC, maskC, params.LogSlots())
 
-	// mask with avg
-	for i := 0; i < cells * filters + (features/2 -1)*2*filters + filters; i++ {
-		maskC[i] = complex(1.0/float64(batchSize), 0)
+	// mask with avg and 0.5 factor for the imaginary part removal
+	for i := 0; i < convolutionMatrixSize; i++ {
+		maskC[i] = complex(1.0/float64(batchSize)*0.5, 0)
 	}
 	maskPtCavg := ckks.NewPlaintext(params, levelMaskPtC, scaleMaskPtC)
 	encoder.EncodeNTT(maskPtCavg, maskC, params.LogSlots())
@@ -207,12 +224,6 @@ func main() {
 			DWBatch.MulMat(PoolBatch.Transpose(), E1Batch)
 			DCBatch.MulMat(XBatch.Transpose(), E0Batch)
 
-			fmt.Println("DW")
-			DWBatch.Transpose().Print()
-
-			fmt.Println("DC")
-			DCBatch.Print()
-
 			// Takes the average
 			DWBatch.MultConst(DWBatch, complex(learningRate/float64(batchSize), 0))
 			DCBatch.MultConst(DCBatch, complex(learningRate/float64(batchSize), 0))
@@ -245,21 +256,45 @@ func main() {
 
 			ctDC, ctDW, ctDCPrevBoot, ctDWPrevBoot = cellCNN.BackwardWithPrePooling(ctBoot, ptY, ptLBackward, batchSize, features, filters, classes, params, eval, sk)
 
-			// Masks DW and DC
+
+
+			// Cleans the imaginary part
+			eval.Add(ctDC, eval.ConjugateNew(ctDC), ctDC)
+
+			// Replicates ctDC so that it is at least as large as convolutionMatrixSize
+			eval.Replicate(ctDC, features*filters, int(math.Ceil(float64(convolutionMatrixSize)/float64(features * filters))), ctDC)
+
+			// Divides by the average and learning rate and cleans the non-desired slots
 			ctDCAvg := eval.MulNew(ctDC, maskPtCavg)
-			ctDWAvg := eval.MulNew(ctDW, maskPtWavg)
+
+			// Divides by the average, masks the values and extract the first and second classe
+			ctDW0Avg := eval.MulNew(ctDW, maskPtWavg0)
+			ctDW1Avg := eval.MulNew(ctDW, maskPtWavg1)
+
+			// Replicates DW batch times (no masking needed as it is a multiple of filters)
+			eval.Rotate(ctDW1Avg, -batchSize*filters + filters, ctDW1Avg)
+			ctDWAvg := eval.AddNew(ctDW0Avg, ctDW1Avg)
+			eval.Replicate(ctDWAvg, filters, batchSize, ctDWAvg)
 
 			// Mask DWPrev*momentum and DCPrev*momentum
 			eval.Mul(ctDCPrevBoot, maskPtC, ctDCPrevBoot)
 			eval.Mul(ctDWPrevBoot, maskPtW, ctDWPrevBoot)
 
 			// Adds DW with DWPrev*momentum 
-			//eval.Add(ctDCAvg, ctDCPrevBoot, ctDCAvg)
-			//eval.Add(ctDWAvg, ctDWPrevBoot, ctDWAvg)
+			eval.Add(ctDCAvg, ctDCPrevBoot, ctDCAvg)
+			eval.Add(ctDWAvg, ctDWPrevBoot, ctDWAvg)
 
 			// Rescales
 			eval.Rescale(ctDCAvg, params.Scale(), ctDCAvg)
 			eval.Rescale(ctDWAvg, params.Scale(), ctDWAvg)
+
+			fmt.Println("DC")
+			DCBatch.Print()
+			cellCNN.DecryptPrint(convolutionMatrixSize/filters+1, filters, true, ctDCAvg, params, sk)
+
+			fmt.Println("DW")
+			DWBatch.Transpose().Print()
+			cellCNN.DecryptPrint(batchSize*classes+1, filters, true, ctDWAvg, params, sk)
 
 			// Stores DW + DWPrev*momentum 
 			ctDCPrev = ctDCAvg.CopyNew().Ciphertext()
@@ -270,9 +305,6 @@ func main() {
 			eval.Sub(ctW, ctDWAvg, ctW)
 
 			fmt.Printf("Batch[%02d-|%02d-%02d] : %s\n", k, k*batchSize, (k+1)*batchSize, time.Since(start))
-
-			//cellCNN.DecryptPrintMatrix(C, true, ctC, params, sk)
-			//cellCNN.DecryptPrintMatrix(W.Transpose(), true, ctW, params, sk)
 		}
 	}
 }

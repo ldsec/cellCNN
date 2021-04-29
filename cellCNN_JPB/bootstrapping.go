@@ -201,11 +201,11 @@ func RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWpr
 	//  | 4*batches * DenseMatrixSize | | batches * filters + (features/2 -1)*2*filters + filters  | |           |
  	//
 
-	//eval.Rotate(ctDWprev, -3*batchSize*denseMatrixSize, ctDWprev)
-	//eval.Rotate(ctDCprev, -4*batchSize*denseMatrixSize, ctDCprev)
+	eval.Rotate(ctDWprev, -3*batchSize*denseMatrixSize, ctDWprev)
+	eval.Rotate(ctDCprev, -4*batchSize*denseMatrixSize, ctDCprev)
 
-	//eval.Add(ctDWprev, ctDCprev, ctDWprev)
-	//eval.Add(ctU, ctDWprev, ctU)
+	eval.Add(ctDWprev, ctDCprev, ctDWprev)
+	eval.Add(ctU, ctDWprev, ctU)
 
 	// CTU : lvl2
 	// CTPool : lvl3
@@ -214,7 +214,7 @@ func RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWpr
 	// CTCPrev : lvl5
 
 	// Returns
-	//  [            CTU            ] [      CTPpool       ] [             CTW            ] [         prevCTDW           ] [                         prevCTDC                        ] [available] [   garbage  ]
+	//  [            CTU            ] [     CTPpool       ] [             CTW            ] [         prevCTDW           ] [                         prevCTDC                        ] [available] [   garbage  ]
 	//  | batches * DenseMatrixSize | | batches * filters | | batches *  DenseMatrixSize | | batches *  DenseMatrixSize | | batches * filters + (features/2 -1)*2*filters + filters | |         | | filters -1 |
 	//
 }
@@ -260,8 +260,6 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 
 	idx := batchSize*denseMatrixSize
 
-	
-
 	// Reorders slots (groupes samples tougether)
 	//[[            U            ] [                U                ] [ available ]]
 	// | batches*classes*filters | | classes * convolutionMatrixSize | |           | 
@@ -290,16 +288,8 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 		}
 	}
 
-	fmt.Println(idx)
 	idx += classes * convolutionMatrixSize
 
-
-	if false {
-		fmt.Println("Repacked Plaintext")
-		for i := 0; i < idx; i++{
-			fmt.Println(i, newv[i])
-		}
-	}
 
 	//[[            U            ] [                U                ] [         Ppool           ] [ available ]]
 	// | batches*classes*filters | | classes * convolutionMatrixSize | | batches*classes*filters | |           |
@@ -319,7 +309,6 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 		}
 	}
 	
-
 	idx += batchSize * denseMatrixSize
 
 	//[[            U            ] [                U                ] [         Ppool           ] [    W transpose row encoded      ] [ available ]]
@@ -334,36 +323,31 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, batchSize, features, f
 
 	idx += classes * convolutionMatrixSize
 
-
-
-	fmt.Println(idx)
-
-	//[[        U        ][                U                ] [       Ppool        ] [      W transpose row encoded    ] [  Previous DeltaW  ] [     Previous DeltaC           ] [ available ]]
-	// | classes*filters || classes * ConvolutionMatrixSize | | classes * filters  | | classes * convolutionMatrixSize | [ classes * filters ] [classes * convolutionMatrixSize]
-	
-
-	/*
-	for i := 0; i < classes * filters; i++ {
-		newv[idx + i] = complex(real(v[3*denseMatrixSize+i])*momentum, 0)
+	// Copies the previous weights and multiples them by the momemtum
+	//[[             U           ] [                U                ] [          Ppool           ] [      W transpose row encoded    ] [     Previous DeltaW     ] [   Previous DeltaC     ] [ available ]]
+	// | batches*classes*filters | | classes * convolutionMatrixSize | | batches*classes*filters  | | classes * convolutionMatrixSize | | batches*classes*filters | | convolutionMatrixSize |
+	for i := 0; i < batchSize * denseMatrixSize; i++ {
+		newv[idx + i] = complex(real(v[3*batchSize*denseMatrixSize+i])*momentum, 0)
 	}
 
-	idx += denseMatrixSize
+	idx += batchSize * denseMatrixSize
 
-	for i := 0; i < filters * (features + 2); i++ {
-		newv[idx + i] = complex(real(v[4*denseMatrixSize+i])*momentum, 0)
+	for i := 0; i < convolutionMatrixSize; i++ {
+		newv[idx + i] = complex(real(v[4*batchSize*denseMatrixSize+i])*momentum, 0)
 	}
 
 	idx += convolutionMatrixSize
-	*/
 
-	
-	
-	
+	if false {
+		fmt.Println("Repacked Plaintext")
+		for i := 0; i < idx; i++{
+			fmt.Println(i, newv[i])
+		}
+	}
+
 	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(pt, newv, params.LogSlots())
 	newCt := encryptor.EncryptNew(pt)
-
-	//DecryptPrint(2*batchSize, filters, true, newCt, params, sk)
 
 	return newCt
 

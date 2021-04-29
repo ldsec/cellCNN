@@ -8,11 +8,11 @@ import (
 
 // number of samples
 // MUST BE AN EVEN NUMBER
-var Samples = 82
+var Samples = 40
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatcheSize = 82
+var BatcheSize = 10
 
 // number of cells in each batch
 // MUST BE AN EVEN NUMBER
@@ -30,10 +30,10 @@ var Filters = 8
 var Classes = 2
 
 // learning rate
-var LearningRate = 1.0
+var LearningRate = 0.1
 
 // momentum
-var Momentum = 0.0
+var Momentum = 0.9
 
 // ring dimension
 var LogN = 15
@@ -46,7 +46,7 @@ var Levels = 10
 // number of special primes for the key-switching
 var NbPi = 2
 
-func ConvolutionMatrixSize(cells, filters, features int) int {
+func ConvolutionMatrixSize(cells, features, filters int) int {
 	//     original result   additional rotations padd   complex trick
 	return cells * filters + (features/2 -1)*2*filters + filters
 }

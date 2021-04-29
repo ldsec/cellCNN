@@ -130,11 +130,11 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y*ckks.Plaintext, ptLBackwa
 
 	//[[       Previous DeltaC            ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] ]
 	// [ classes * ConvolutionMatrixSize  ] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] 
-	ctDCPrev = eval.RotateNew(ctBoot, 3*denseMatrixSize + 2*classes * convolutionMatrixSize)
+	ctDCPrev = eval.RotateNew(ctBoot, 3*batchSize*denseMatrixSize + 2*classes*convolutionMatrixSize)
 
 	//[[ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] ]
 	// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
-	ctDWPrev = eval.RotateNew(ctBoot, 2*denseMatrixSize + 2*classes * convolutionMatrixSize)
+	ctDWPrev = eval.RotateNew(ctBoot, 2*batchSize*denseMatrixSize + 2*classes*convolutionMatrixSize)
 
 	// sigma(U) and sigma'(U)
 	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
@@ -152,8 +152,7 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y*ckks.Plaintext, ptLBackwa
 
 	//[[      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] ]
 	// | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | 
-	ctDW = eval.RotateNew(ctBoot, batchSize*denseMatrixSize + classes * convolutionMatrixSize)
-
+	ctDW = eval.RotateNew(ctBoot, batchSize*denseMatrixSize + classes*convolutionMatrixSize)
 
 	// Multiplies at the same time pool^t x E1 and upSampled(E1 x W^t)
 	eval.MulRelin(ctDW, ctU1, ctDW)
@@ -164,14 +163,10 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y*ckks.Plaintext, ptLBackwa
 	// Accesses upSampled(E1 x W^t)
 	ctDC = eval.RotateNew(ctDW, batchSize*denseMatrixSize)
 
-
 	// Sums accroses the batches
 	// [        W0       ] [       W1        ] [            Garbage              ]  
 	// | denseMatrixSize | | denseMatrixSize | | 2*(batches-1) * denseMatrixSize | 
 	eval.InnerSum(ctDW, classes*filters, batchSize, ctDW)
-
-	fmt.Println("ctDW")
-	DecryptPrint(classes, filters, true, ctDW, params, sk)
 
 	// Sums accrosses the classes
 	eval.InnerSum(ctDC, convolutionMatrixSize, classes, ctDC)
@@ -179,9 +174,6 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y*ckks.Plaintext, ptLBackwa
 	//  DC = Ltranspose x E0
 	ctDC = MulMatrixLeftPtWithRightCt(ptLBackward, ctDC, batchSize, filters, eval, params, sk)
 	
-	fmt.Println("ctDC")
-	DecryptPrint(features, filters, true, ctDC, params, sk)
-
 	return ctDC, ctDW, ctDCPrev, ctDWPrev 
 }
 
