@@ -117,7 +117,7 @@ func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes i
 }
 
 
-func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaintext, batchSize, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
+func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y*ckks.Plaintext, ptLBackward []*ckks.Plaintext, batchSize, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDC, ctDW, ctDCPrev, ctDWPrev  *ckks.Ciphertext){
 
 	convolutionMatrixSize := ConvolutionMatrixSize(batchSize, features, filters)
 	denseMatrixSize := DenseMatrixSize(filters, classes)
@@ -136,7 +136,6 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 	// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
 	ctDWPrev = eval.RotateNew(ctBoot, 2*denseMatrixSize + 2*classes * convolutionMatrixSize)
 
-
 	// sigma(U) and sigma'(U)
 	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
 
@@ -149,17 +148,12 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 		panic(err)
 	}
 
-	//fmt.Println("ctE1")
-	//DecryptPrint(classes*batchSize, filters, true, ctU1, params, sk)
-
 	// Access the index of the pooling results and upsampled W
 
 	//[[      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] ]
 	// | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | 
-	ctDW = eval.RotateNew(ctBoot, batchSize*classes*filters + classes * convolutionMatrixSize)
+	ctDW = eval.RotateNew(ctBoot, batchSize*denseMatrixSize + classes * convolutionMatrixSize)
 
-	//fmt.Println("ctPool")
-	//DecryptPrint(classes*batchSize, filters, true, ctDW, params, sk)
 
 	// Multiplies at the same time pool^t x E1 and upSampled(E1 x W^t)
 	eval.MulRelin(ctDW, ctU1, ctDW)
@@ -167,9 +161,9 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 		panic(err)
 	}
 
-	
+	// Accesses upSampled(E1 x W^t)
+	ctDC = eval.RotateNew(ctDW, batchSize*denseMatrixSize)
 
-	//DecryptPrint(classes*batchSize, filters, true, ctDW, params, sk)
 
 	// Sums accroses the batches
 	// [        W0       ] [       W1        ] [            Garbage              ]  
@@ -179,22 +173,19 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y, ptLBackward *ckks.Plaint
 	fmt.Println("ctDW")
 	DecryptPrint(classes, filters, true, ctDW, params, sk)
 
-	// Accesses upSampled(E1 x W^t)
-	ctDC = eval.RotateNew(ctDW, denseMatrixSize)
-
-	// Finishes the computation of E0 = upSampled(E1 x W^t) by summing all the rows
+	// Sums accrosses the classes
 	eval.InnerSum(ctDC, convolutionMatrixSize, classes, ctDC)
-
+	
 	//  DC = Ltranspose x E0
-	eval.Mul(ctDC, ptLBackward, ctDC)
-	eval.Rescale(ctDC, params.Scale(), ctDC)
+	ctDC = MulMatrixLeftPtWithRightCt(ptLBackward, ctDC, batchSize, filters, eval, params, sk)
+	
+	fmt.Println("ctDC")
+	DecryptPrint(features, filters, true, ctDC, params, sk)
 
 	return ctDC, ctDW, ctDCPrev, ctDWPrev 
 }
 
 func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
-
-	//Y.Print()
 
 	convolutionMatrixSize := ConvolutionMatrixSize(Y.Rows(), features, filters)
 
@@ -229,15 +220,18 @@ func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, cl
 	}
 
 	for i := 0; i < classes; i++ {
-		c := Y.M[i]
+		pos := 0
 		for j := 0; j <  convolutionMatrixSize; j++ {
+			c := Y.M[((pos*classes)%len(Y.M))+i]
+
+			if (j+1)%filters == 0{
+				pos++
+			}
 			values[idx + i*convolutionMatrixSize + j] = c
 		}
 	}
 
 	idx += classes * convolutionMatrixSize
-
-	
 
 	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(pt, values, params.LogSlots())

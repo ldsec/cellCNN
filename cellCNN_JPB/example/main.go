@@ -47,12 +47,13 @@ func main() {
 	levelC := 2 + 2
 
 	// Convolution rotations
-	rotHoisted := []int{}
 	for i := 1; i < features>>1; i++ {
-		rotHoisted = append(rotHoisted, 2*filters*i)
+		rotations = append(rotations, 2*filters*i)
 	}
 
-	rotations = append(rotations, rotHoisted...)
+	for i := 1; i < batchSize>>1; i++ {
+		rotations = append(rotations, 2*filters*i)
+	}
 
 	// Dense layer rotations
 	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(1, filters)...)
@@ -61,11 +62,14 @@ func main() {
 
 	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(batchSize, classes)...)
 
+	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(classes*filters, batchSize)...)
+
 	// Pre-pool convolution replication
 	rotations = append(rotations, -batchSize*filters)
 
 	// Repacking of ctPpool before bootstrapping
 
+	rotations = append(rotations,  1*batchSize * denseMatrixSize)
 	rotations = append(rotations, -1*batchSize * denseMatrixSize)
 	rotations = append(rotations, -2*batchSize * denseMatrixSize)
 	rotations = append(rotations, -3*batchSize * denseMatrixSize)
@@ -188,8 +192,6 @@ func main() {
 			// Dense
 			UBatch.MulMat(PoolBatch, W)
 
-			UBatch.Print()
-
 			// Activations
 			L1Batch.Func(UBatch, cellCNN.Activation)
 			L1DerivBatch.Func(UBatch, cellCNN.ActivationDeriv)
@@ -197,12 +199,6 @@ func main() {
 			// Dense error
 			E1Batch.Sub(YBatch, L1Batch)
 			E1Batch.Dot(E1Batch, L1DerivBatch)
-
-			fmt.Println("E1")
-			E1Batch.Print()
-
-			fmt.Println("Pool")
-			PoolBatch.Print()
 
 			// Convolution error
 			E0Batch.MulMat(E1Batch, W.Transpose())
@@ -214,6 +210,9 @@ func main() {
 			fmt.Println("DW")
 			DWBatch.Transpose().Print()
 
+			fmt.Println("DC")
+			DCBatch.Print()
+
 			// Takes the average
 			DWBatch.MultConst(DWBatch, complex(learningRate/float64(batchSize), 0))
 			DCBatch.MultConst(DCBatch, complex(learningRate/float64(batchSize), 0))
@@ -222,7 +221,7 @@ func main() {
 			// W_i = learning_rate * Wt + W_i-1 * momentum
 			DWBatch.Add(DWBatch, DWPrevBatch)
 			DCBatch.Add(DCBatch, DCPrevBatch)
-			
+
 			// Stores the current weights
 			// W_i = learning_rate * Wt + W_i-1 * momentum
 			DWPrevBatch.MultConst(DWBatch, complex(momentum, 0))
@@ -232,12 +231,11 @@ func main() {
 			W.Sub(W, DWBatch)
 			C.Sub(C, DCBatch)
 
-
 			// === Ciphertext === 
 
 			ptL := cellCNN.EncodeLeftForPtMul(XBatch, filters, 1.0, params)
 			ptY := cellCNN.EncodeLabelsForBackwardWithPrepooling(YBatch, features, filters, classes, params)
-			ptLBackward := cellCNN.EncodeCellsForBackwardWithPrepooling(levelMaskPtW, XBatch.Transpose(), batchSize, features, filters, classes, learningRate, params)
+			ptLBackward := cellCNN.EncodeLeftForPtMul(XBatch.Transpose(), filters, learningRate, params) //cellCNN.EncodeCellsForBackwardWithPrepooling(levelMaskPtW, XBatch.Transpose(), batchSize, features, filters, classes, learningRate, params)
 
 			start := time.Now()
 
@@ -256,8 +254,8 @@ func main() {
 			eval.Mul(ctDWPrevBoot, maskPtW, ctDWPrevBoot)
 
 			// Adds DW with DWPrev*momentum 
-			eval.Add(ctDCAvg, ctDCPrevBoot, ctDCAvg)
-			eval.Add(ctDWAvg, ctDWPrevBoot, ctDWAvg)
+			//eval.Add(ctDCAvg, ctDCPrevBoot, ctDCAvg)
+			//eval.Add(ctDWAvg, ctDWPrevBoot, ctDWAvg)
 
 			// Rescales
 			eval.Rescale(ctDCAvg, params.Scale(), ctDCAvg)
