@@ -12,7 +12,7 @@ import (
 )
 
 const learn_rate = 0.1
-const batchSize = 200
+const batchSize = 5
 const write = false // write accuracy values to file
 
 func ComputeGradient(i int, j int, v float64, y []float64) float64 {
@@ -62,6 +62,8 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		defer f.Close()
 	}
 
+	niter = 2
+
 	for i := 1; i <= niter; i++ {
 
 		// make a new batch
@@ -71,6 +73,7 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 			randi := rand.Intn(len(X))
 			newBatch[j] = X[randi]
 			newBatchLabels[j] = y[randi]
+			fmt.Println(y[randi])
 		}
 
 		// forward pass
@@ -88,7 +91,7 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		gradient.Apply(compute_grad, out2)
 		//fmt.Println("gradient is", gradient)
 		//	os.Exit(0)
-		if i == 1 || i%100 == 0 {
+		if i == 1 || i%batchSize == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
 				utils.Print_train_stats_cellCNN(out2, newBatchLabels)

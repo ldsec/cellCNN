@@ -17,7 +17,7 @@ func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Pl
 	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
 
 	// Y - sigma(U)
-	eval.Sub(Y, ctU1, ctU1)
+	eval.Sub(ctU1, Y, ctU1)
 
 	// E1 = sigma'(U) * (Y - sigma(U))
 	eval.MulRelin(ctU1, ctU1Deriv, ctU1)
@@ -140,7 +140,7 @@ func BackwardWithPrePooling(ctBoot *ckks.Ciphertext, Y*ckks.Plaintext, ptLBackwa
 	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
 
 	// Y - sigma(U)
-	eval.Sub(Y, ctU1, ctU1)
+	eval.Sub(ctU1, Y, ctU1)
 
 	// E1 = sigma'(U) * (Y - sigma(U))
 	eval.MulRelin(ctU1, ctU1Deriv, ctU1)
