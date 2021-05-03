@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ldsec/cellCNN/celcnnPoseidon/layers"
-	"github.com/ldsec/cellCNN/celcnnPoseidon/utils"
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )

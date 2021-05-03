@@ -1,7 +1,7 @@
 package layers
 
 import (
-	"github.com/ldsec/cellCNN/celcnnPoseidon/claire/utils"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/claire/utils"
 	"gonum.org/v1/gonum/mat"
 )
 

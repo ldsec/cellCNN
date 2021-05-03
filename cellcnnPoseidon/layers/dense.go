@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/ldsec/cellCNN/celcnnPoseidon/approx/leastsquares"
-	"github.com/ldsec/cellCNN/celcnnPoseidon/utils"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/approx/leastsquares"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 

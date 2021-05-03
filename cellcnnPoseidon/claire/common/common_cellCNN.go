@@ -6,8 +6,8 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/ldsec/cellCNN/celcnnPoseidon/claire/utils"
 	"github.com/ldsec/cellCNN/cellCNN_clear/layers"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/claire/utils"
 	"go.dedis.ch/onet/v3/log"
 	"gonum.org/v1/gonum/mat"
 )

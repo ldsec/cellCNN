@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ldsec/cellCNN/celcnnPoseidon/layers"
-	"github.com/ldsec/cellCNN/celcnnPoseidon/utils"
 	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )
@@ -45,7 +45,7 @@ func TestOne(t *testing.T) {
 	nfilters := 15
 	nclasses := 2
 	var sigDegree uint = 3
-	sigInterval := 7
+	sigInterval := 3
 	maxM1N2Ratio := 8.0
 
 	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
@@ -358,7 +358,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	nfilters := 2
 	nclasses := 2
 	var sigDegree uint = 3
-	sigInterval := 7
+	sigInterval := 3
 	maxM1N2Ratio := 8.0
 
 	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
@@ -481,6 +481,8 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	utils.DebugWithDense(params, model.conv1d.GetWeights()[1], nwfilters, decryptor, encoder, 10, []int{1}, false)
 	fmt.Println("######## Check the backward gradient for dense #########")
 	utils.DebugWithDense(params, model.dense.GetWeights(), nwdense, decryptor, encoder, 10, []int{0, 1}, false)
+
+	// start at level 9 and scaled gradient end at level 3
 
 	// fmt.Println("######## Check the backward gradient for filter0 #########")
 	// utils.DebugWithDense(params, model.conv1d.GetGradient()[0], dConv, decryptor, encoder, 10, []int{0}, false)

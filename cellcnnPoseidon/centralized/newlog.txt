@@ -333,19 +333,19 @@ github.com/ldsec/lattigo/v2/ckks.(*evaluator).permuteNTT(0xc000382450, 0xc035f10
 	D:/EPFL/CS-438/project/pkg/mod/github.com/ldsec/lattigo/v2@v2.1.2-0.20210319113928-dc63674f9a10/ckks/evaluator.go:1579 +0x1d3
 github.com/ldsec/lattigo/v2/ckks.(*evaluator).Rotate(0xc000382450, 0xc035f10080, 0xffffffffffffffff, 0xc035f10080)
 	D:/EPFL/CS-438/project/pkg/mod/github.com/ldsec/lattigo/v2@v2.1.2-0.20210319113928-dc63674f9a10/ckks/evaluator.go:1541 +0xb1
-github.com/ldsec/cellCNN/celcnnPoseidon/layers.(*Conv1D).Forward(0xc000384ae0, 0xc035e282e0, 0x0, 0x0, 0x0, 0xc00001aff0, 0xcbe880, 0xc000382450, 0xc000054550, 0xc035e28580, ...)
+github.com/ldsec/cellCNN/cellcnnPoseidon/layers.(*Conv1D).Forward(0xc000384ae0, 0xc035e282e0, 0x0, 0x0, 0x0, 0xc00001aff0, 0xcbe880, 0xc000382450, 0xc000054550, 0xc035e28580, ...)
 	D:/EPFL/Semester_Project/src/spindle/semester_project_shufan/layers/conv1D.go:99 +0x2ae
-github.com/ldsec/cellCNN/celcnnPoseidon/centralized.(*CellCNN).ForwardOne(0xc00019df18, 0xc035e282e0, 0x0, 0x0, 0x0, 0x0, 0xc035e28580, 0xc00019da60, 0xc00012c198, 0xc00038c1e0, ...)
+github.com/ldsec/cellCNN/cellcnnPoseidon/centralized.(*CellCNN).ForwardOne(0xc00019df18, 0xc035e282e0, 0x0, 0x0, 0x0, 0x0, 0xc035e28580, 0xc00019da60, 0xc00012c198, 0xc00038c1e0, ...)
 	D:/EPFL/Semester_Project/src/spindle/semester_project_shufan/centralized/cellCNN.go:152 +0x537
-github.com/ldsec/cellCNN/celcnnPoseidon/centralized.(*CellCNN).ForwardBatch(0xc00019df18, 0xc035c5a400, 0x32, 0x40, 0xc035c5a400, 0x32, 0x40, 0xa9, 0x0, 0x0)
+github.com/ldsec/cellCNN/cellcnnPoseidon/centralized.(*CellCNN).ForwardBatch(0xc00019df18, 0xc035c5a400, 0x32, 0x40, 0xc035c5a400, 0x32, 0x40, 0xa9, 0x0, 0x0)
 	D:/EPFL/Semester_Project/src/spindle/semester_project_shufan/centralized/cellCNN.go:195 +0x525
-github.com/ldsec/cellCNN/celcnnPoseidon/centralized.(*CellCNN).MockTrain(0xc00019df18, 0xa, 0xc00018a000, 0x7c9, 0x7c9, 0xc000182000, 0x7c9, 0x7c9, 0x32, 0x0, ...)
+github.com/ldsec/cellCNN/cellcnnPoseidon/centralized.(*CellCNN).MockTrain(0xc00019df18, 0xa, 0xc00018a000, 0x7c9, 0x7c9, 0xc000182000, 0x7c9, 0x7c9, 0x32, 0x0, ...)
 	D:/EPFL/Semester_Project/src/spindle/semester_project_shufan/centralized/cellCNN.go:242 +0x1b9
-github.com/ldsec/cellCNN/celcnnPoseidon/centralized.TestBatch(0xc00003f500)
+github.com/ldsec/cellCNN/cellcnnPoseidon/centralized.TestBatch(0xc00003f500)
 	D:/EPFL/Semester_Project/src/spindle/semester_project_shufan/centralized/cellCNN_test.go:194 +0x94f
 testing.tRunner(0xc00003f500, 0xc49f80)
 	D:/Go/src/testing/testing.go:1127 +0xef
 created by testing.(*T).Run
 	D:/Go/src/testing/testing.go:1178 +0x397
 exit status 2
-FAIL	github.com/ldsec/cellCNN/celcnnPoseidon/centralized	604.543s
+FAIL	github.com/ldsec/cellCNN/cellcnnPoseidon/centralized	604.543s

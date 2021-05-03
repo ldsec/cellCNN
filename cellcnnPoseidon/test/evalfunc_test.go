@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/ldsec/cellCNN/celcnnPoseidon/utils"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
