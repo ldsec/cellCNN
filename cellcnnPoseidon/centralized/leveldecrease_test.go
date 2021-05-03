@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ldsec/cellCNN/semester_project_shufan/utils"
+	"github.com/ldsec/cellCNN/celcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 

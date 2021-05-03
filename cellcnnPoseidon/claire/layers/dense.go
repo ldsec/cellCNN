@@ -1,9 +1,9 @@
 package layers
 
 import (
+	"github.com/ldsec/cellCNN/celcnnPoseidon/approx"
+	"github.com/ldsec/cellCNN/celcnnPoseidon/claire/utils"
 	"github.com/ldsec/cellCNN/internal/leastsquares"
-	"github.com/ldsec/cellCNN/semester_project_shufan/approx"
-	"github.com/ldsec/cellCNN/semester_project_shufan/claire/utils"
 	"gonum.org/v1/gonum/mat"
 )
 

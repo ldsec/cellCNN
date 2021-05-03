@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/ldsec/cellCNN/semester_project_shufan/approx/leastsquares"
+	"github.com/ldsec/cellCNN/cellcnnPoseidon/approx/leastsquares"
 )
 
 //SigmoidApproxClear approximates the sigmoid function within interval [-a,a] with a polynomial degree degree

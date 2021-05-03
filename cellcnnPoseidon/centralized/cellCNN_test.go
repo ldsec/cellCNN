@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ldsec/cellCNN/celcnnPoseidon/layers"
+	"github.com/ldsec/cellCNN/celcnnPoseidon/utils"
 	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
-	"github.com/ldsec/cellCNN/semester_project_shufan/layers"
-	"github.com/ldsec/cellCNN/semester_project_shufan/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )

@@ -6,7 +6,7 @@ package test
 // 	"testing"
 
 // 	"github.com/ldsec/lattigo/v2/ckks"
-// 	"github.com/ldsec/cellCNN/semester_project_shufan/layers"
+// 	"github.com/ldsec/cellCNN/celcnnPoseidon/layers"
 // )
 
 // func PrintDebug(params *ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
