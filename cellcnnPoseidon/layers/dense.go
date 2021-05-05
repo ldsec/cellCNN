@@ -72,10 +72,11 @@ func (dense *Dense) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 
 	// Dense Forward
 	// 1. for replicate the input mutiple times
-	Frep := make([]int, 0)
-	for i := 1; i < nclasses; i++ {
-		Frep = append(Frep, -i*nfilters)
-	}
+	// Frep := make([]int, 0)
+	// for i := 1; i < nclasses; i++ {
+	// 	Frep = append(Frep, -i*nfilters)
+	// }
+	Frep := kgen.GenRotationIndexesForInnerSum(-sts.Nfilters, sts.Nclasses)
 	// 2. for input weights matrix mult
 	Fmult := kgen.GenRotationIndexesForInnerSum(1, nfilters)
 	// 3. for collect the result into the left most slots
@@ -89,9 +90,11 @@ func (dense *Dense) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 	// 	err mult input
 	// 	rotation keys required: -1 ~ -(k-1)
 	// 	rotation keys required: -k ~ -k*(theta-1)
-	rot1 := utils.NegativeSlice(utils.NewSlice(1, sts.Nfilters-1, 1))
-	rot2 := utils.NegativeSlice(utils.NewSlice(sts.Nfilters, sts.Nfilters*(sts.Nclasses-1), sts.Nfilters))
+	rot1 := kgen.GenRotationIndexesForInnerSum(-1, sts.Nfilters)
+	rot2 := kgen.GenRotationIndexesForInnerSum(-sts.Nfilters, sts.Nclasses)
+	rot3 := kgen.GenRotationIndexesForInnerSum(-sts.Nclasses, sts.Nfilters)
 	rotAll := append(rot1, rot2...)
+	rotAll = append(rotAll, rot3...)
 
 	// 	transpose
 	inRowPacked := false
@@ -122,16 +125,13 @@ func (dense *Dense) Forward(
 	}
 
 	// records the last input for backward
-	dense.lastInput = input
+	dense.lastInput = input.CopyNew().Ciphertext()
 
-	var inputRep, tmp, output *ckks.Ciphertext
+	var inputRep, output *ckks.Ciphertext
 	inputRep = input
 
 	// 1. replicate the input by Nclasses times
-	for i := 1; i < sts.Nclasses; i++ {
-		tmp = evaluator.RotateNew(input, -i*sts.Nfilters)
-		evaluator.Add(inputRep, tmp, inputRep)
-	}
+	evaluator.InnerSum(inputRep, -sts.Nfilters, sts.Nclasses, inputRep)
 
 	// 2. mul the weights and the input representation
 	inputRep = evaluator.MulRelinNew(inputRep, dense.weights)
@@ -243,26 +243,13 @@ func (dense *Dense) Backward(
 	}
 	// fmt.Printf("b-1 " + utils.PrintCipherLevel(mErr, params))
 
-	rotIndsErr := utils.NegativeSlice(utils.NewSlice(0, sts.Nfilters-1, 1))
-	rotMapErr := evaluator.RotateHoisted(mErr, rotIndsErr)
-
-	// sums up the rotated ciphertexts
-	repErr := rotMapErr[0]
-	for i := 1; i < sts.Nfilters; i++ {
-		evaluator.Add(repErr, rotMapErr[-i], repErr)
-	}
+	evaluator.InnerSum(mErr, -1, sts.Nfilters, mErr)
+	repErr := mErr
 
 	// 4. replicate the last input theta times
 	// rotation keys required: -k ~ -k*(theta-1)
-
-	rotIndsInput := utils.NegativeSlice(utils.NewSlice(0, sts.Nfilters*(sts.Nclasses-1), sts.Nfilters))
-	rotMapInput := evaluator.RotateHoisted(dense.lastInput, rotIndsInput)
-
-	// sums up the rotated ciphertexts
-	repInput := rotMapInput[0]
-	for i := 1; i < sts.Nclasses-1; i++ {
-		evaluator.Add(repInput, rotMapInput[-sts.Nfilters*i], repInput)
-	}
+	repInput := dense.lastInput
+	evaluator.InnerSum(repInput, -sts.Nfilters, sts.Nclasses, repInput)
 
 	// 5. mult the err and the input get the derivative for the dense weights
 	// ------- min{b-2, input-1} level
@@ -318,13 +305,8 @@ func (dense *Dense) Backward(
 	}
 
 	// replicate the err k times and mult with weightsT
-	rotIndsRep := utils.NegativeSlice(utils.NewSlice(0, (sts.Nfilters-1)*sts.Nclasses, sts.Nclasses))
-	rotMapRep := evaluator.RotateHoisted(mErrCollect, rotIndsRep)
-
-	mErrRep := rotMapRep[0]
-	for i := 1; i < sts.Nfilters; i++ {
-		evaluator.Add(mErrRep, rotMapRep[-i*sts.Nclasses], mErrRep)
-	}
+	mErrRep := mErrCollect
+	evaluator.InnerSum(mErrRep, -sts.Nclasses, sts.Nfilters, mErrRep)
 
 	// ------- min{u-5, inErr-3, b-3} level
 	outErr := evaluator.MulRelinNew(mErrRep, weightsT)

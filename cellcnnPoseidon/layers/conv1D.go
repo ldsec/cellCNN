@@ -1,6 +1,9 @@
 package layers
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
@@ -68,20 +71,34 @@ func (conv *Conv1D) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 
 	//Conv1D Backward
 	// 3. for replicate the err for each filter
-	Brep := make([]int, 0)
-	for i := 0; i < sts.Nfilters; i++ {
-		extInds := utils.GenExtentionInds(i*sts.Nclasses, utils.NewSlice(0, sts.Ncells*sts.Nmakers-1, 1))
-		Brep = append(Brep, extInds...)
-	}
+	// ---------------------------------------
+	// Brep := make([]int, 0)
+	// for i := 0; i < sts.Nfilters; i++ {
+	// 	extInds := utils.GenExtentionInds(i*sts.Nclasses, utils.NewSlice(0, sts.Ncells*sts.Nmakers-1, 1))
+	// 	Brep = append(Brep, extInds...)
+	// }
+	// ---------------------------------------
+	// +++++++++++++++++++++++++++++++++++++++
+	Brep1 := utils.NewSlice(0, (sts.Nfilters-1)*sts.Nclasses, sts.Nclasses)
+	Brep2 := kgen.GenRotationIndexesForInnerSum(-1, sts.Ncells*sts.Nmakers)
+	Brep := append(Brep1, Brep2...)
+	// +++++++++++++++++++++++++++++++++++++++
+
 	// 4. left collect gradient
 	Bcol := make([]int, sts.Nmakers)
 	for i := 0; i < sts.Nmakers; i++ {
 		Bcol[i] = sts.Ncells*i - i
 	}
 	// 5. replicate gradient
-	Brepg := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
+	// ++++++++++++++++++++++++++++
+	Brepg := kgen.GenRotationIndexesForInnerSum(-sts.Nmakers, sts.Ncells)
+	B0 := kgen.GenRotationIndexesForInnerSum(1, sts.Ncells)
+	// ----------------------------
+	// Brepg := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
+	// ----------------------------
 	Binds := append(Brep, Bcol...)
 	Binds = append(Binds, Brepg...)
+	Binds = append(Binds, B0...)
 
 	Inds := append(Finds, Binds...)
 
@@ -171,6 +188,8 @@ func (conv *Conv1D) Backward(
 	// 1. mult the dActv with the income err
 	// currently dActv = 1, skip this part
 
+	tx0 := time.Now()
+
 	// 2. extend the input err, pack each slot of err to length ncells*nmakers, with a factor of 1/n
 	maskedErrSlice := make([]*ckks.Ciphertext, sts.Nfilters)
 
@@ -191,21 +210,47 @@ func (conv *Conv1D) Backward(
 		// }
 	}
 
+	ty0 := time.Since(tx0)
+
+	fmt.Printf("> Time comsumed in point0 is: %v\n", ty0.Seconds())
+
+	tx1 := time.Now()
+
 	//  2.2 rotate to extend one slots to ncells*nmakers, need to generate new rotation keys
+	// e.g.
+	// from:
+	//     [a, 0, 0, 0, 0,...]
+	// to:
+	//     [a, a, a, a, 0,...]
 	extErrSlice := make([]*ckks.Ciphertext, sts.Nfilters)
 	for i, mErr := range maskedErrSlice {
-		extInds := utils.GenExtentionInds(i*sts.Nclasses, utils.NewSlice(0, sts.Ncells*sts.Nmakers-1, 1))
-		rotMap := evaluator.RotateHoisted(mErr, extInds)
-		extErrSlice[i] = utils.AddHoistedMap(rotMap, evaluator)
+		// left rotate once and right replicate
+		leftMostTmp := evaluator.RotateNew(mErr, i*sts.Nclasses)
+		evaluator.InnerSum(leftMostTmp, -1, sts.Ncells*sts.Nmakers, leftMostTmp)
+		extErrSlice[i] = leftMostTmp
 	}
+
+	ty1 := time.Since(tx1) // 18 seconds
+
+	fmt.Printf("> Time comsumed in point1 is: %v\n", ty1.Seconds())
 
 	// 3. mult the extended err with the transposed last input
 	dwSlice := make([]*ckks.Ciphertext, sts.Nfilters)
+
+	tx2 := time.Now()
+
 	inputT := conv.TransposeInput(sts, conv.lastInput, params)
+
+	ty2 := time.Since(tx2)
+
+	fmt.Printf("> Time comsumed in point2 is: %v\n", ty2.Seconds())
 
 	batch := 1
 	n := sts.Ncells
+
+	tx := time.Now()
 	for i, extErr := range extErrSlice {
+		tpart1 := time.Now()
 		dwSlice[i] = evaluator.MulRelinNew(inputT, extErr)
 		if err := evaluator.Rescale(dwSlice[i], params.Scale(), dwSlice[i]); err != nil {
 			panic("fail to rescale, conv backward, inputT mult extErr")
@@ -216,16 +261,28 @@ func (conv *Conv1D) Backward(
 
 		// 4. innerSum to get the result in the correct place, valid at: (0~m-1)*n
 		evaluator.InnerSum(dwSlice[i], batch, n, dwSlice[i])
+		tpart2 := time.Now()
+		ts1 := time.Since(tpart1).Seconds()
 
 		// 5. mask & rotate to sum the result in the left most slots
 		// require new rotation ids
 		dwSlice[i] = utils.MaskAndCollectToLeft(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers)
 
+		tpart3 := time.Now()
+		ts2 := time.Since(tpart2).Seconds()
 		// 6. replicate ncells times
-		extInds := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
-		extMap := evaluator.RotateHoisted(dwSlice[i], extInds)
-		dwSlice[i] = utils.AddHoistedMap(extMap, evaluator)
+		evaluator.InnerSum(dwSlice[i], -sts.Nmakers, sts.Ncells, dwSlice[i])
+		ts3 := time.Since(tpart3).Seconds()
+		tsum := time.Since(tpart1).Seconds()
+		if i == 0 {
+			fmt.Printf("Sum: %v, part1: %v(%v), part2: %v(%v), part3: %v(%v)\n",
+				tsum, ts1, ts1/tsum, ts2, ts2/tsum, ts3, ts3/tsum,
+			)
+		}
 	}
+	ty := time.Since(tx)
+
+	fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
 
 	conv.gradient = dwSlice
 

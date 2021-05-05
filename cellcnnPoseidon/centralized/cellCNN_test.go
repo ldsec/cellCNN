@@ -288,40 +288,43 @@ func TestInnerSum(t *testing.T) {
 	// use predefined weights
 	slots := params.Slots()
 	filter1 := make([]complex128, slots)
-	filter2 := make([]complex128, slots)
+	// filter2 := make([]complex128, slots)
 
-	for i, _ := range filter1 {
-		if i >= ncells*nmakers {
-			break
-		}
-		filter1[i] = complex(float64(i%nmakers), 0)
-		filter2[i] = complex(float64(i%nmakers+1), 0)
-	}
+	// for i, _ := range filter1 {
+	// 	if i >= nmakers {
+	// 		break
+	// 	}
+	// 	filter1[i] = complex(float64(i*2+1), 0)
+	// 	// filter2[i] = complex(float64(i%nmakers+1), 0)
+	// }
+
+	filter1[0] = complex(1.5, 0)
+	// filter1[1] = complex(2, 0)
 
 	EncodeFilter1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
-	EncodeFilter2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
+	// EncodeFilter2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
 
 	encFilter1 := encryptor.EncryptNew(EncodeFilter1)
-	encFilter2 := encryptor.EncryptNew(EncodeFilter2)
+	// encFilter2 := encryptor.EncryptNew(EncodeFilter2)
 
 	fmt.Println("weights1: ", filter1[:nmakers*ncells+5])
-	fmt.Println("weights2: ", filter2[:nmakers*ncells+5])
+	// fmt.Println("weights2: ", filter2[:nmakers*ncells+5])
 
-	fmt.Println("Conduct innersum on filter1, filter2")
-	ind := kgen.GenRotationIndexesForInnerSum(1, ncells*nmakers)
+	fmt.Println("Conduct innersum on filter1")
+	// encFilter1 is ciphertext with slots: [1,0,0,0...]
+	ind := kgen.GenRotationIndexesForInnerSum(-1, 5)
 	rks := kgen.GenRotationKeysForRotations(ind, false, sk)
-
 	evaluator := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
 
-	evaluator.InnerSum(encFilter2, 1, nmakers*ncells, encFilter2)
+	evaluator.InnerSum(encFilter1, -1, 5, encFilter1)
 	// evaluator = ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
-	evaluator.ShallowCopy().InnerSum(encFilter1, 1, nmakers*ncells, encFilter1)
+	// evaluator.ShallowCopy().InnerSum(encFilter1, -2, 1, encFilter1)
 
 	valuesTest1 := encoder.Decode(decryptor.DecryptNew(encFilter1), params.LogSlots())
-	valuesTest2 := encoder.Decode(decryptor.DecryptNew(encFilter2), params.LogSlots())
+	// valuesTest2 := encoder.Decode(decryptor.DecryptNew(encFilter2), params.LogSlots())
 
 	fmt.Println("inner filter1: ", valuesTest1[:nmakers*ncells+5])
-	fmt.Println("inner filter2: ", valuesTest2[:nmakers*ncells+5])
+	// fmt.Println("inner filter2: ", valuesTest2[:nmakers*ncells+5])
 }
 
 func TestWithPlainNetBwOne(t *testing.T) {
@@ -576,9 +579,9 @@ func TestTimeForwardBackward(t *testing.T) {
 	// decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 20
-	nmakers := 8
-	nfilters := 7
+	ncells := 200
+	nmakers := 37
+	nfilters := 8
 	nclasses := 2
 	var sigDegree uint = 3
 	sigInterval := 7
