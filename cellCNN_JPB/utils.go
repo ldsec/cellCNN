@@ -42,6 +42,26 @@ func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*ckks.
 	return X, Y
 }
 
+func LoadValidDataFrom(path string, samples, cells, features int) (X, Y []*ckks.Matrix) {
+	y := String_to_float(Load_file(path+"y_valid.txt", samples))
+	X = make([]*ckks.Matrix, samples)
+	Y = make([]*ckks.Matrix, samples)
+	var fname string
+	for i := 0; i < samples; i++{
+		fname = fmt.Sprintf("X_valid/%d.txt", i)
+		X[i] = Convert_X_cellCNN(Load_file(path+fname, cells), cells, features)
+
+		Y[i] = ckks.NewMatrix(1, 2)
+
+		if y[i] == 1{
+			Y[i].M[0] = 1
+		}else{
+			Y[i].M[1] = 1
+		}
+	}
+	return X, Y
+}
+
 
 func Convert_X_cellCNN(X []string, cells, features int) (XMat *ckks.Matrix) {
 

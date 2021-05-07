@@ -5,15 +5,12 @@ import (
 	"github.com/ldsec/lattigo/v2/utils"
 )
 
-func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, params *ckks.Parameters) ([]*ckks.Plaintext){
-
-	encoder := ckks.NewEncoder(params)
+func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, ptL []*ckks.Plaintext, encoder ckks.Encoder, params *ckks.Parameters) {
 
 	rows := L.Rows()
 	cols := L.Cols()
 
 	// Diagonalized samples encoding (plaintext)
-	ptL := make([]*ckks.Plaintext, cols>>1)
 	var values []complex128
 	for i := 0; i < cols>>1; i++{
 		values = make([]complex128, params.Slots())
@@ -25,7 +22,6 @@ func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, params *ckks
 			idx0 := j*cols 
 			idx1 := i*2 + j*cols + j
 
-
 			cReal := real(m[idx0 + idx1%cols])
 			cImag := real(m[idx0 + (idx1+1)%cols])
 
@@ -35,13 +31,8 @@ func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, params *ckks
 			}
 		}
 
-		//fmt.Println(values[:features*cells])
-
-		ptL[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Qi()[params.MaxLevel()-1]))
 		encoder.EncodeNTT(ptL[i], values, params.LogSlots())
 	}
-
-	return ptL
 }
 
 func EncryptRightForPtMul(C *ckks.Matrix, nbMatrices, cells int, params *ckks.Parameters, level int, sk *ckks.SecretKey) (*ckks.Ciphertext){
@@ -68,7 +59,7 @@ func EncryptRightForPtMul(C *ckks.Matrix, nbMatrices, cells int, params *ckks.Pa
 	return ctC
 }
 
-func MulMatrixLeftPtWithRightCt(A []*ckks.Plaintext, B *ckks.Ciphertext, BRows, BCols int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (AB *ckks.Ciphertext){
+func MulMatrixLeftPtWithRightCt(A []*ckks.Plaintext, B *ckks.Ciphertext, BRows, BCols int, eval ckks.Evaluator) (AB *ckks.Ciphertext){
 
 	level := utils.MinInt(A[0].Level(), B.Level())
 

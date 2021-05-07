@@ -6,13 +6,15 @@ import (
 	"fmt"
 )
 
-// number of samples
-// MUST BE AN EVEN NUMBER
-var Samples = 2000
+
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatcheSize = 100
+var BatchSize = 200
+
+// number of samples
+// MUST BE AN EVEN NUMBER
+var Samples = 2000
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER

@@ -4,6 +4,7 @@ import(
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
+/*
 func Forward(ptL []*ckks.Plaintext, ctC, ctW, ctDCPrev, ctDWPrev *ckks.Ciphertext, cells, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
 	ctP := Convolution(ptL, ctC, features, filters, eval, params, sk)
 
@@ -14,21 +15,7 @@ func Forward(ptL []*ckks.Plaintext, ctC, ctW, ctDCPrev, ctDWPrev *ckks.Ciphertex
 	RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDCPrev, ctDWPrev, cells, filters, classes, eval, params, sk)
 	return ctU
 }
-
-func ForwardWithPrepooling(ptL []*ckks.Plaintext, ctC, ctW, ctDCprev, ctDWprev *ckks.Ciphertext, batcheSize, features, filters, classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext) {
-	
-	ctPpool := Convolution(ptL, ctC, features, filters, eval, params, sk)
-
-	// Replicates the values for the second classe
-	tmp := eval.RotateNew(ctPpool, -BatcheSize*filters)
-
-	eval.Add(ctPpool, tmp, ctPpool)
-
-	ctU := DenseLayer(ctPpool, ctW, filters, classes, eval)
-
-	RepackBeforeBootstrappingWithPrepooling(ctU, ctPpool, ctW, ctDCprev, ctDWprev, batcheSize, filters, classes, eval, params, sk)
-	return ctU
-}
+*/
 
 // =====================
 // ==== Convolution ====
@@ -39,8 +26,8 @@ func ForwardWithPrepooling(ptL []*ckks.Plaintext, ctC, ctW, ctDCprev, ctDWprev *
 // [[ P = L X C row encoded ] [        available        ]]
 //  |    cells * filters    | | Slots - cells * filters | 
 //
-func Convolution(L0 []*ckks.Plaintext, C *ckks.Ciphertext, features, filters int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
-	return  MulMatrixLeftPtWithRightCt(L0, C, features, filters, eval, params, sk)
+func Convolution(L0 []*ckks.Plaintext, C *ckks.Ciphertext, features, filters int, eval ckks.Evaluator) (*ckks.Ciphertext){
+	return  MulMatrixLeftPtWithRightCt(L0, C, features, filters, eval)
 }
 
 
