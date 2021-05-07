@@ -248,12 +248,15 @@ func (dense *Dense) Backward(
 
 	// 4. replicate the last input theta times
 	// rotation keys required: -k ~ -k*(theta-1)
-	repInput := dense.lastInput
+	repInput := dense.lastInput.CopyNew().Ciphertext()
 	evaluator.InnerSum(repInput, -sts.Nfilters, sts.Nclasses, repInput)
 
 	// 5. mult the err and the input get the derivative for the dense weights
 	// ------- min{b-2, input-1} level
-	repInput = evaluator.MultByConstNew(repInput, 0.5)
+	repInput = evaluator.MultByConstNew(repInput, 1.0/float64(sts.Ncells))
+	if err := evaluator.Rescale(repInput, params.Scale(), repInput); err != nil {
+		panic("fail to rescale, dense backward repInput")
+	}
 	dense.gradient = evaluator.MulRelinNew(repInput, repErr)
 	if err := evaluator.Rescale(dense.gradient, params.Scale(), dense.gradient); err != nil {
 		panic("fail to rescale, dense backward dw")

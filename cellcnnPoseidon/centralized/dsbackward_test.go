@@ -363,7 +363,7 @@ func TestModelForwardBackwardOne(t *testing.T) {
 		if i >= ncells*nmakers {
 			break
 		}
-		filter1[i] = complex(float64(i%nmakers)/20, 0)
+		filter1[i] = complex(float64(i%nmakers)/4, 0)
 	}
 
 	filter2 := make([]complex128, slots)
@@ -371,7 +371,7 @@ func TestModelForwardBackwardOne(t *testing.T) {
 		if i >= ncells*nmakers {
 			break
 		}
-		filter2[i] = complex((float64(i%nmakers)+1.0)/20, 0)
+		filter2[i] = complex((float64(i%nmakers)+1.0)/4, 0)
 	}
 
 	weights := make([]complex128, slots)
@@ -379,7 +379,7 @@ func TestModelForwardBackwardOne(t *testing.T) {
 		if i >= nfilters*nclasses {
 			break
 		}
-		weights[i] = complex(float64(i%3)/20, 0)
+		weights[i] = complex(float64(i%3)/4, 0)
 	}
 
 	ef1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
@@ -408,7 +408,7 @@ func TestModelForwardBackwardOne(t *testing.T) {
 		if i >= ncells*nmakers {
 			break
 		}
-		plainInput[i] = complex(float64(i)/20, 0)
+		plainInput[i] = complex(float64(i)/5, 0)
 	}
 	encodeInput := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plainInput, params.LogSlots())
 

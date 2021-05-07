@@ -68,6 +68,7 @@ func (conv *Conv1D) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 		Fshift = append(Fshift, -i)
 	}
 	Finds := append(Fmult, Fshift...)
+	fmt.Printf("Fshift: %v, Finds: %v\n", Fshift, Finds)
 
 	//Conv1D Backward
 	// 3. for replicate the err for each filter
@@ -93,12 +94,15 @@ func (conv *Conv1D) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 	// ++++++++++++++++++++++++++++
 	Brepg := kgen.GenRotationIndexesForInnerSum(-sts.Nmakers, sts.Ncells)
 	B0 := kgen.GenRotationIndexesForInnerSum(1, sts.Ncells)
+	Bcollect := kgen.GenRotationIndexesForInnerSum(sts.Ncells-1, sts.Nmakers)
+	// eval.InnerSum(mct, step-1, num, mct)
 	// ----------------------------
 	// Brepg := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
 	// ----------------------------
 	Binds := append(Brep, Bcol...)
 	Binds = append(Binds, Brepg...)
 	Binds = append(Binds, B0...)
+	Binds = append(Binds, Bcollect...)
 
 	Inds := append(Finds, Binds...)
 
@@ -266,12 +270,12 @@ func (conv *Conv1D) Backward(
 
 		// 5. mask & rotate to sum the result in the left most slots
 		// require new rotation ids
-		dwSlice[i] = utils.MaskAndCollectToLeft(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers)
+		dwSlice[i] = utils.MaskAndCollectToLeftFast(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers)
 
 		tpart3 := time.Now()
 		ts2 := time.Since(tpart2).Seconds()
 		// 6. replicate ncells times
-		evaluator.InnerSum(dwSlice[i], -sts.Nmakers, sts.Ncells, dwSlice[i])
+		// evaluator.InnerSum(dwSlice[i], -sts.Nmakers, sts.Ncells, dwSlice[i])
 		ts3 := time.Since(tpart3).Seconds()
 		tsum := time.Since(tpart1).Seconds()
 		if i == 0 {
@@ -280,6 +284,10 @@ func (conv *Conv1D) Backward(
 			)
 		}
 	}
+
+	fmt.Println("check level of dwSlice")
+	fmt.Println(utils.PrintCipherLevel(dwSlice[0], params))
+
 	ty := time.Since(tx)
 
 	fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
@@ -287,6 +295,42 @@ func (conv *Conv1D) Backward(
 	conv.gradient = dwSlice
 
 	return dwSlice
+}
+
+func (conv *Conv1D) StepWithRep(
+	lr float64, momentum float64, eval ckks.Evaluator,
+	encoder ckks.Encoder, sts *CellCnnSettings, params *ckks.Parameters,
+) bool {
+	// create mask with scale
+	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
+	mask := utils.GenSliceWithAnyAt(params.Slots(), maskInds, lr)
+	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
+	if conv.gradient != nil {
+		for i := range conv.filters {
+			// 1. mask and scale
+			// 2. replicate ncell times
+			update := eval.MulRelinNew(conv.gradient[i], maskPlain)
+			if err := eval.Rescale(update, params.Scale(), update); err != nil {
+				panic("fail to rescale, conv.gradient[i]")
+			}
+			eval.InnerSum(update, -sts.Nmakers, sts.Ncells, update)
+			// if use momentum
+			if conv.isMomentum {
+				if conv.vt == nil {
+					conv.vt[i] = update.CopyNew().Ciphertext()
+				} else {
+					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
+					conv.vt[i] = eval.AddNew(conv.vt[i], update)
+				}
+				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
+			} else {
+				// else use only gradient
+				conv.filters[i] = eval.SubNew(conv.filters[i], update)
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (conv *Conv1D) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {

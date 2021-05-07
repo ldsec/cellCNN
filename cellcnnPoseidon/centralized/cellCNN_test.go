@@ -12,6 +12,25 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+func CustomizedParams() *ckks.Parameters {
+	LogN := 15
+	LogSlots := 14
+	// logN=15: max 881 logQP
+	LogModuli := ckks.LogModuli{
+		LogQi: []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
+		LogPi: []int{61, 61, 61},                             //90
+	}
+	// sum of first 3 logQi == Scale +128
+	Scale := float64(1 << 52)
+	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+	if err != nil {
+		panic(err)
+	}
+	params.SetScale(Scale)
+	params.SetLogSlots(LogSlots)
+	return params
+}
+
 func TestOne(t *testing.T) {
 
 	LogN := 14
@@ -283,23 +302,26 @@ func TestInnerSum(t *testing.T) {
 	encoder := ckks.NewEncoder(params)
 
 	ncells := 2
-	nmakers := 5
+	nmakers := 6
 
 	// use predefined weights
 	slots := params.Slots()
 	filter1 := make([]complex128, slots)
 	// filter2 := make([]complex128, slots)
 
-	// for i, _ := range filter1 {
-	// 	if i >= nmakers {
-	// 		break
-	// 	}
-	// 	filter1[i] = complex(float64(i*2+1), 0)
-	// 	// filter2[i] = complex(float64(i%nmakers+1), 0)
-	// }
+	for i, _ := range filter1 {
+		if i >= nmakers {
+			break
+		}
+		filter1[i] = complex(float64(i*2+1), 0)
+		// filter2[i] = complex(float64(i%nmakers+1), 0)
+	}
 
-	filter1[0] = complex(1.5, 0)
+	// filter1[0] = complex(1.5, 0)
 	// filter1[1] = complex(2, 0)
+	// filter1[0] = 1
+	// filter1[4] = 2
+	// filter1[8] = 3
 
 	EncodeFilter1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
 	// EncodeFilter2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
@@ -312,15 +334,17 @@ func TestInnerSum(t *testing.T) {
 
 	fmt.Println("Conduct innersum on filter1")
 	// encFilter1 is ciphertext with slots: [1,0,0,0...]
-	ind := kgen.GenRotationIndexesForInnerSum(-1, 5)
+	ind := kgen.GenRotationIndexesForInnerSum(2, 3)
 	rks := kgen.GenRotationKeysForRotations(ind, false, sk)
 	evaluator := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
 
-	evaluator.InnerSum(encFilter1, -1, 5, encFilter1)
+	cout := encFilter1.CopyNew().Ciphertext()
+
+	evaluator.InnerSum(encFilter1, 2, 3, cout)
 	// evaluator = ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
 	// evaluator.ShallowCopy().InnerSum(encFilter1, -2, 1, encFilter1)
 
-	valuesTest1 := encoder.Decode(decryptor.DecryptNew(encFilter1), params.LogSlots())
+	valuesTest1 := encoder.Decode(decryptor.DecryptNew(cout), params.LogSlots())
 	// valuesTest2 := encoder.Decode(decryptor.DecryptNew(encFilter2), params.LogSlots())
 
 	fmt.Println("inner filter1: ", valuesTest1[:nmakers*ncells+5])
@@ -342,7 +366,8 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	// }
 	// params.SetScale(Scale)
 	// params.SetLogSlots(LogSlots)
-	params := ckks.DefaultParams[ckks.PN14QP438]
+	params := CustomizedParams()
+	// params := ckks.DefaultParams[ckks.PN14QP438]
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -356,12 +381,12 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 2
-	nmakers := 4
+	ncells := 5
+	nmakers := 2
 	nfilters := 2
 	nclasses := 2
 	var sigDegree uint = 3
-	sigInterval := 3
+	sigInterval := 7
 	maxM1N2Ratio := 8.0
 
 	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
@@ -450,7 +475,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	encOut, _ := model.ForwardOne(encodeInput, nil, nil, nil, nil)
 	plainOut := pNet.ForwardBatch([]*mat.Dense{plainInDense}, cw, dw)
 	fmt.Println("######## Check the forward output #########")
-	utils.DebugWithDense(params, encOut, plainOut, decryptor, encoder, 10, []int{0}, true)
+	utils.DebugWithDense(params, encOut, plainOut, decryptor, encoder, 20, []int{0}, true)
 
 	// validSlotsInds := utils.NewSlice(0, (nclasses-1)*nfilters, nfilters)
 
@@ -472,21 +497,21 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	errDense.Sub(plainOut, labelsDense)
 
 	model.BackwardOne(err0)
-	pNet.Backward(errDense, 0.6, 0)
+	pNet.Backward(errDense, 1, 0)
 	nwfilters := pNet.conv.GetWeights()
 	nwdense := pNet.dense.GetWeights()
 
-	model.Step(0.6)
+	// model.Step(1)
+	model.conv1d.StepWithRep(1, 0, model.evaluator, encoder, model.cnnSettings, params)
 
 	fmt.Println("######## Check the backward gradient for filter0 #########")
-	utils.DebugWithDense(params, model.conv1d.GetWeights()[0], nwfilters, decryptor, encoder, 10, []int{0}, false)
+	utils.DebugWithDense(params, model.conv1d.GetWeights()[0], nwfilters, decryptor, encoder, 20, []int{0}, false)
 	fmt.Println("######## Check the backward gradient for filter1 #########")
-	utils.DebugWithDense(params, model.conv1d.GetWeights()[1], nwfilters, decryptor, encoder, 10, []int{1}, false)
+	utils.DebugWithDense(params, model.conv1d.GetWeights()[1], nwfilters, decryptor, encoder, 20, []int{1}, false)
 	fmt.Println("######## Check the backward gradient for dense #########")
-	utils.DebugWithDense(params, model.dense.GetWeights(), nwdense, decryptor, encoder, 10, []int{0, 1}, false)
+	utils.DebugWithDense(params, model.dense.GetWeights(), nwdense, decryptor, encoder, 20, []int{0, 1}, false)
 
 	// start at level 9 and scaled gradient end at level 3
-
 	// fmt.Println("######## Check the backward gradient for filter0 #########")
 	// utils.DebugWithDense(params, model.conv1d.GetGradient()[0], dConv, decryptor, encoder, 10, []int{0}, false)
 	// fmt.Println("######## Check the backward gradient for filter1 #########")
@@ -496,7 +521,8 @@ func TestWithPlainNetBwOne(t *testing.T) {
 }
 
 func TestLargeScale(t *testing.T) {
-	params := ckks.DefaultParams[ckks.PN14QP438]
+	params := CustomizedParams()
+	// params := ckks.DefaultParams[ckks.PN14QP438]
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -565,7 +591,8 @@ func TestLargeScale(t *testing.T) {
 }
 
 func TestTimeForwardBackward(t *testing.T) {
-	params := ckks.DefaultParams[ckks.PN14QP438]
+	params := CustomizedParams()
+	// params := ckks.DefaultParams[ckks.PN14QP438]
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")

@@ -54,19 +54,26 @@ func TestLevel(t *testing.T) {
 	encryptInput := encryptor.EncryptNew(encodeInput)
 
 	fmt.Println("=> Initial operand:")
-	utils.PrintCipherLevel(encryptWeights, params)
+	fmt.Println(utils.PrintCipherLevel(encryptWeights, params))
 
 	fmt.Println("==> After Multiplication:")
 	mt1 := eval.MulRelinNew(encryptWeights, encryptInput)
 	if err := eval.Rescale(mt1, params.Scale(), mt1); err != nil {
 		panic("fail to rescale")
 	}
-	utils.PrintCipherLevel(mt1, params)
+	fmt.Println(utils.PrintCipherLevel(mt1, params))
 
 	fmt.Println("==> After Masking:")
 	mt2 := eval.MulRelinNew(encryptWeights, encodeInput)
 	if err := eval.Rescale(mt2, params.Scale(), mt2); err != nil {
 		panic("fail to rescale")
 	}
-	utils.PrintCipherLevel(mt2, params)
+	fmt.Println(utils.PrintCipherLevel(mt2, params))
+
+	fmt.Println("==> After mult with const:")
+	mt3 := eval.MultByConstNew(encryptWeights, 0.6)
+	if err := eval.Rescale(mt3, params.Scale(), mt3); err != nil {
+		panic("fail to rescale")
+	}
+	fmt.Println(utils.PrintCipherLevel(mt3, params))
 }
