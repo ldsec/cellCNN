@@ -29,22 +29,9 @@ func main() {
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
 
-	batchSize := cellCNN.BatchSize
-	samples := cellCNN.Samples
-	cells := cellCNN.Cells
-	features := cellCNN.Features
-	filters := cellCNN.Filters
-	classes := cellCNN.Classes
-
-	denseMatrixSize := cellCNN.DenseMatrixSize(filters, classes)
-	convolutionMatrixSize := cellCNN.ConvolutionMatrixSize(batchSize, features, filters)
-
-	slotUsage := 3*batchSize*denseMatrixSize + (2*classes+1) * convolutionMatrixSize
+	slotUsage := 3*cellCNN.BatchSize*cellCNN.Filters*cellCNN.Classes + (2*cellCNN.Classes+1) * cellCNN.ConvolutionMatrixSize(cellCNN.BatchSize, cellCNN.Features, cellCNN.Filters)
 
 	fmt.Printf("Slots Usage : %d/%d \n", slotUsage, params.Slots()) 
-
-	learningRate := cellCNN.LearningRate
-	momentum := cellCNN.Momentum
 
 
 	fmt.Println("Loading Data ...")
@@ -52,38 +39,23 @@ func main() {
 	XValid, YValid := cellCNN.LoadValidDataFrom("../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
 	fmt.Println("Done")
 
-	XPrePool := new(ckks.Matrix)
-	PoolBatch := new(ckks.Matrix)
-	UBatch := new(ckks.Matrix)
-	L1Batch := new(ckks.Matrix)
-	L1DerivBatch := new(ckks.Matrix)
-	E0Batch := new(ckks.Matrix)
-	E1Batch := new(ckks.Matrix)
-	DCBatch := new(ckks.Matrix)
-	DWBatch := new(ckks.Matrix)
-	
-	DCPrevBatch := ckks.NewMatrix(features, filters)
-	DWPrevBatch := ckks.NewMatrix(filters, classes)
-
-
+	fmt.Println("Generating Keys")
 	cellCNNProtocol := cellCNN.NewCellCNNProtocol(params, sk)
-
-	C, W := cellCNNProtocol.C, cellCNNProtocol.W
+	fmt.Println("Done")
 
 	epoch := 15
-	niter := epoch * samples / batchSize
-
-	niter = 4
+	niter := epoch * cellCNN.Samples / cellCNN.BatchSize
 
 	fmt.Printf("#Iters : %d\n", niter)
 
 	for i := 0; i < niter; i++{
 
-		XBatch := ckks.NewMatrix(batchSize, features)
-		YBatch := ckks.NewMatrix(batchSize, classes)
+		XPrePool := new(ckks.Matrix)
+		XBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
+		YBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
 
 		// Pre-pools the cells
-		for j := 0; j < batchSize; j++ {
+		for j := 0; j < cellCNN.BatchSize; j++ {
 
 			randi := rand.Intn(2000)
 
@@ -91,7 +63,7 @@ func main() {
 			Y := YTrain[randi]
 
 			XPrePool.SumColumns(X)
-			XPrePool.MultConst(XPrePool, complex(1.0/float64(cells), 0))
+			XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
 
 			XBatch.SetRow(j, XPrePool.M)
 			YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
@@ -99,44 +71,9 @@ func main() {
 
 		// === Plaintext ===
 
-		// Convolution
-		PoolBatch.MulMat(XBatch, C)
-
-		// Dense
-		UBatch.MulMat(PoolBatch, W)
-
-		// Activations
-		L1Batch.Func(UBatch, cellCNN.Activation)
-		L1DerivBatch.Func(UBatch, cellCNN.ActivationDeriv)
-
-		// Dense error
-		E1Batch.Sub(L1Batch, YBatch)
-		E1Batch.Dot(E1Batch, L1DerivBatch)
-
-		// Convolution error
-		E0Batch.MulMat(E1Batch, W.Transpose())
-
-		// Updated weights
-		DWBatch.MulMat(PoolBatch.Transpose(), E1Batch)
-		DCBatch.MulMat(XBatch.Transpose(), E0Batch)
-
-		// Takes the average
-		DWBatch.MultConst(DWBatch, complex(learningRate, 0))
-		DCBatch.MultConst(DCBatch, complex(learningRate, 0))
-
-		// Adds the previous weights
-		// W_i = learning_rate * Wt + W_i-1 * momentum
-		DWBatch.Add(DWBatch, DWPrevBatch)
-		DCBatch.Add(DCBatch, DCPrevBatch)
-
-		// Stores the current weights
-		// W_i = learning_rate * Wt + W_i-1 * momentum
-		DWPrevBatch.MultConst(DWBatch, complex(momentum, 0))
-		DCPrevBatch.MultConst(DCBatch, complex(momentum, 0))
-		
-		// Updates the matrices
-		W.Sub(W, DWBatch)
-		C.Sub(C, DCBatch)
+		cellCNNProtocol.ForwardPlain(XBatch)
+		cellCNNProtocol.BackWardPlain(XBatch, YBatch)
+		cellCNNProtocol.UpdatePlain()
 
 		// === Ciphertext === 
 		if trainEncrypted{
@@ -145,59 +82,79 @@ func main() {
 
 			cellCNNProtocol.Forward(XBatch)
 			cellCNNProtocol.Refresh()
-			cellCNNProtocol.Backward(YBatch, XBatch.Transpose())
-			cellCNNProtocol.Update()
+			cellCNNProtocol.Backward(XBatch, YBatch)
 
+
+			/*
+			fmt.Println("DC")
+			cellCNNProtocol.DC.Print()
+			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, cellCNNProtocol.CtDC(), params, sk)
+
+			fmt.Println("DW")
+			cellCNNProtocol.DW.Transpose().Print()
+			for i := 0; i < cellCNN.Classes; i++{
+				cellCNN.DecryptPrint(1, cellCNN.Filters, true, cellCNNProtocol.Eval().RotateNew(cellCNNProtocol.CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), params, sk)
+			}
+			*/
+
+			cellCNNProtocol.Update(cellCNNProtocol.CtDC(), cellCNNProtocol.CtDW())
 			fmt.Printf("Iter[%02d] : %s\n", i, time.Since(start))
 		}
 	}
 
-	ctDC, ctDW := cellCNNProtocol.UpdatedWeights()
-
-	// Visual comparison between plaintext and ciphertext model (should match ~8 decimal digits)
-	if trainEncrypted {
-		fmt.Println("DC")
-		DCBatch.Print()
-		cellCNN.DecryptPrint(features, filters, true, ctDC, params, sk)
-
-		fmt.Println("DW")
-		DWBatch.Transpose().Print()
-		for i := 0; i < classes; i++{
-			cellCNN.DecryptPrint(1, filters, true, cellCNNProtocol.Eval().RotateNew(ctDW, i*batchSize*filters), params, sk)
-		}
-	}
+	cellCNNProtocol.PrintCtWPrecision()
+	cellCNNProtocol.PrintCtCPrecision()
 
 	// Tests resuls :
-
+ 
 	err := 0
-	var v int
-	nTests := 2000
-	for i := 0; i < nTests; i++{
-		X := XValid[i]
-		Y := YValid[i]
+	for i := 0; i < 2000/cellCNN.BatchSize; i++{
 
-		XPrePool.SumColumns(X)
-		XPrePool.MultConst(XPrePool, complex(1.0/float64(cells), 0))
+		XPrePool := new(ckks.Matrix)
+		XBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
+		YBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
 
-		// Convolution
-		PoolBatch.MulMat(XPrePool, C)
-		// Dense
-		UBatch.MulMat(PoolBatch, W)
-		// Activations
-		L1Batch.Func(UBatch, cellCNN.Activation)
+		for j := 0; j < cellCNN.BatchSize; j++ {
 
-		if real(L1Batch.M[0]) > real(L1Batch.M[1]){
-			v = 1
-		}else{
-			v = 0
+			randi := rand.Intn(2000)
+
+			X := XValid[randi]
+			Y := YValid[randi]
+
+			XPrePool.SumColumns(X)
+			XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
+
+			XBatch.SetRow(j, XPrePool.M)
+			YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
 		}
 
-		if v != int(real(Y.M[1])){
-			err++
+		v := cellCNNProtocol.PredictPlain(XBatch)
+
+		if trainEncrypted {
+			v.Print()
+			ctv := cellCNNProtocol.Predict(XBatch)
+			ctv.Print()
+			precisionStats := ckks.GetPrecisionStats(params, cellCNNProtocol.Encoder(), nil, v.M, ctv.M, 0)
+			fmt.Printf("Batch[%2d]", i)
+			fmt.Println(precisionStats.String())
+		}
+		
+		var y int
+		for i := 0; i < cellCNN.BatchSize; i++{
+
+			if real(v.M[i*2]) > real(v.M[i*2+1]){
+				y = 1
+			}else{
+				y = 0
+			}
+
+			if y != int(real(YBatch.M[i*2])){
+				err++
+			}
 		}
 	}
 
-	fmt.Println("error : ", float64(err)/float64(nTests))
+	fmt.Println("error : ", float64(err)/float64(2000))
 
 }
 
