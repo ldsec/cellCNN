@@ -5,7 +5,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/decentralized"
-	libunlynx "github.com/ldsec/unlynx/lib"
+	"github.com/ldsec/unlynx/lib"
 	"github.com/pelletier/go-toml"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"

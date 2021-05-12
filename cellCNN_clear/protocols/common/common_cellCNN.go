@@ -84,7 +84,7 @@ func LoadCellCnnTrainData() CnnDataset {
 	var fname string
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_train/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(DATA_FOLDER+fname, NCELLS), NCELLS, NFEATURES)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(DATA_FOLDER+fname, NCELLS), NCELLS, NFEATURES, false)
 	}
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
@@ -95,19 +95,19 @@ func LoadTrainDataFrom(path string) CnnDataset {
 	var fname string
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_train/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(path+fname, NCELLS), NCELLS, NFEATURES)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(path+fname, NCELLS), NCELLS, NFEATURES, false)
 	}
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
 
 func LoadSplitCellCnnTrainData(hostNumber int) ([]*mat.Dense, []float64) {
 	dataFolder := SPLIT_DATA_FOLDER + fmt.Sprintf("host%d/", hostNumber)
-	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_train.txt", NSAMPLES))
-	X_tr := make([]*mat.Dense, NSAMPLES)
+	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_train.txt", NSAMPLES_DIST))
+	X_tr := make([]*mat.Dense, NSAMPLES_DIST)
 	var fname string
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_train/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(dataFolder+fname, NCELLS), NCELLS, NFEATURES)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(dataFolder+fname, NCELLS), NCELLS, NFEATURES, false)
 	}
 	return X_tr, y_tr
 }
@@ -118,7 +118,19 @@ func LoadCellCnnValidData() CnnDataset {
 	var fname string
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_valid/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(DATA_FOLDER+fname, NCELLS), NCELLS, NFEATURES)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(DATA_FOLDER+fname, NCELLS), NCELLS, NFEATURES, false)
+	}
+	return CnnDataset{X: X_tr, Y: y_tr}
+}
+func LoadCellCnnTestAll() CnnDataset {
+	samples_test := 6
+	ncell := testAllCell
+	y_tr := utils.String_to_float(utils.Load_file(DATA_FOLDER+"y_test_all.txt", samples_test))
+	X_tr := make([]*mat.Dense, samples_test)
+	var fname string
+	for i := range X_tr {
+		fname = fmt.Sprintf("X_test_all/%d.txt", i)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file_Big(DATA_FOLDER+fname, ncell), ncell, NFEATURES, true)
 	}
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
@@ -138,6 +150,28 @@ func RunCnnClearPredictionTest(w WeightsVector, x []*mat.Dense, y []float64) (fl
 	return accuracy, precision, recall, fscore
 }
 
+// RunCnnClearPredictionTest returns the accuracy, precision, recall given the weights for all test donors (phenotype prediction)
+func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset) (float64, float64, float64, float64) {
+	x := dataset.X
+	y := dataset.Y
+
+	conv, pool, dense := InitCellCnn()
+	out1 := conv.Forward(x, w[0])
+	//fmt.Println(out1)
+
+	out2 := pool.Forward(out1)
+	fmt.Printf(" %v\n", mat.Formatted(out2, mat.Prefix(" "), mat.Excerpt(3)))
+
+	output := dense.Forward(out2, w[1])
+	fmt.Printf(" %v\n", mat.Formatted(output, mat.Prefix(" "), mat.Excerpt(3)))
+
+	classified := utils.ClassifyCellCNN(output)
+	accuracy := utils.ComputeAccuracy(classified, y)
+	precision, recall := utils.ComputePrecisionRecall(classified, y)
+	fscore := 2 * precision * recall / (precision + recall)
+
+	return accuracy, precision, recall, fscore
+}
 func InitCellCnn() (layers.Conv1D, layers.Pool, layers.Dense_n) {
 	conv := layers.Conv1D{Nfilters: NFILTERS}
 	pool := layers.Pool{}
@@ -147,6 +181,7 @@ func InitCellCnn() (layers.Conv1D, layers.Pool, layers.Dense_n) {
 
 // SplitData splits the dataset in multiple chunks each assigned to a different node and calculates the necessary number
 // of global iterations needed to process the data <nbrDatasetUsed> times with a given number of local iterations (<nbrLocalIter>) and batch size (<nodeBatchSize>)
+
 func SplitData(trainX []*mat.Dense, trainY []float64, nbrNodes int, index, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoot bool) ([]*mat.Dense, []float64, int) {
 	dataRecordsAtEachNode := len(trainX) / nbrNodes
 	dataNodeIndex := dataRecordsAtEachNode * index
@@ -158,6 +193,7 @@ func SplitData(trainX []*mat.Dense, trainY []float64, nbrNodes int, index, nbrDa
 	}
 
 	if isRoot {
+
 		log.Lvl2("Each node has ", dataRecordsAtEachNode, " records")
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
@@ -185,7 +221,7 @@ func printS() {
 	println("")
 }
 func LoadSplitData(nbrNodes int, index, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoot bool) ([]*mat.Dense, []float64, int) {
-	dataRecordsAtEachNode := 2000
+	dataRecordsAtEachNode := 400
 
 	maxIterations := 0
 	maxIterations = int(math.Ceil(float64(nbrDatasetUsed*dataRecordsAtEachNode) / float64(nbrLocalIter*nodeBatchSize)))
@@ -194,6 +230,7 @@ func LoadSplitData(nbrNodes int, index, nbrDatasetUsed, nbrLocalIter, nodeBatchS
 	}
 
 	if isRoot {
+		log.LLvl2("nbrDatasetUsed is", nbrDatasetUsed)
 		log.Lvl2("Each node has ", dataRecordsAtEachNode, " records")
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}

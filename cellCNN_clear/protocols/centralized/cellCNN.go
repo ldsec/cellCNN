@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-const learn_rate = 0.1
-const batchSize = 5
+const learn_rate = 0.02
+const batchSize = 200
 const write = false // write accuracy values to file
 
 func ComputeGradient(i int, j int, v float64, y []float64) float64 {
@@ -62,8 +62,6 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		defer f.Close()
 	}
 
-	niter = 2
-
 	for i := 1; i <= niter; i++ {
 
 		// make a new batch
@@ -73,7 +71,7 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 			randi := rand.Intn(len(X))
 			newBatch[j] = X[randi]
 			newBatchLabels[j] = y[randi]
-			fmt.Println(y[randi])
+			//fmt.Println(y[randi])
 		}
 
 		// forward pass
@@ -89,8 +87,7 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 
 		var gradient mat.Dense
 		gradient.Apply(compute_grad, out2)
-		//fmt.Println("gradient is", gradient)
-		//	os.Exit(0)
+
 		if i == 1 || i%batchSize == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
@@ -130,10 +127,15 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 func cellCNN(nepochs int, timing bool) {
 	niter := nepochs * common.NSAMPLES / batchSize
 	fmt.Printf("%d epochs -> %d iterations (with batch size %d)\n", nepochs, niter, batchSize)
-
 	startLoad := time.Now()
 	trainData := common.LoadCellCnnTrainData()
 	validData := common.LoadCellCnnValidData()
+	testAllData := common.LoadCellCnnTestAll()
+
+	fmt.Println("loaded")
+	//fmt.Println(reflect.TypeOf(A))
+	//fmt.Println(A[0])
+
 	timeLoad := time.Since(startLoad)
 
 	startTrain := time.Now()
@@ -146,7 +148,7 @@ func cellCNN(nepochs int, timing bool) {
 	}
 
 	if !timing {
-		testSize := 1000
+		testSize := 2000
 		//fmt.Print(len(validData.X))
 		newBatch := make([]*mat.Dense, testSize)
 		newBatchLabels := make([]float64, testSize)
@@ -157,6 +159,9 @@ func cellCNN(nepochs int, timing bool) {
 		}
 		fmt.Println("new batch testing")
 		accuracy, precision, recall, fscore := common.RunCnnClearPredictionTest(weights, newBatch, newBatchLabels)
-		fmt.Printf("\nValidation\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
+		fmt.Printf("\nTest\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
+		accuracy, precision, recall, fscore = common.RunCnnClearPredictionTestAll(weights, testAllData)
+		fmt.Printf("\nTest All\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
+
 	}
 }

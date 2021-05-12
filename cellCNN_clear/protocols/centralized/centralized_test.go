@@ -5,7 +5,7 @@ import (
 )
 
 func TestCellCnn(t *testing.T) {
-	nepochs := 5
+	nepochs := 20
 	cellCNN(nepochs, false)
 }
 

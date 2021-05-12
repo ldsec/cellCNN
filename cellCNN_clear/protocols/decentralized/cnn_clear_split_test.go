@@ -1,13 +1,13 @@
 package decentralized
 
 import (
-	"fmt"
+	//	"fmt"
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"os"
+	//	"os"
 	"testing"
 )
 
@@ -16,7 +16,7 @@ var Suite = edwards25519.NewBlakeSHA256Ed25519()
 func TestCnnSplit(t *testing.T) {
 	log.SetDebugVisible(2)
 
-	common.TrainData = common.LoadCellCnnTrainData()
+	//common.TrainData = common.LoadCellCnnTrainData()
 
 	// Suite is the type of keys used to secure communication in Onet
 
@@ -38,6 +38,7 @@ func TestCnnSplit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+/*
 func TestCnnSplitEval(t *testing.T) {
 	if !eval {
 		return
@@ -54,7 +55,7 @@ func TestCnnSplitEval(t *testing.T) {
 	defer f.Close()
 	f.WriteString("hosts,n_local_iter,batch_size,epochs,kfolds,accuracy,precision,recall,fscore\n")
 
-	common.TrainData = common.LoadCellCnnTrainData()
+	//common.TrainData = common.LoadCellCnnTrainData()
 
 	for _, nLocalIter := range local_iter_eval {
 		for _, nEpochs := range epochs_eval {
@@ -64,7 +65,7 @@ func TestCnnSplitEval(t *testing.T) {
 			defer local.CloseAll()
 
 			CnnClearTestRegister := func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-				return NewCNNClearTest(tni, common.TrainData, nLocalIter, nEpochs, DEBUG)
+				return NewCnnSplitTest(tni, NBR_LOCAL_ITER, NBR_EPOCHS, DEBUG)
 			}
 
 			for _, s := range servers {
@@ -82,3 +83,4 @@ func TestCnnSplitEval(t *testing.T) {
 
 	require.NoError(t, err)
 }
+*/

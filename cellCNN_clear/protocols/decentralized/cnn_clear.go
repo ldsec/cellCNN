@@ -94,11 +94,12 @@ type CnnClearProtocol struct {
 	LearningRate float64
 	momentum     float64
 	NFilters     int
+	FirstMoment  bool
 
 	//deltas for batch averaging
 	EOut, EHidden []common.WeightsVector
 	// Last change in weights for momentum
-	DeltaOut, DeltaHidden []common.WeightsVector
+	ChangeMoment common.WeightsVector
 
 	BatchSize            int
 	LocalIterationNumber int
@@ -191,8 +192,22 @@ func (p *CnnClearProtocol) Dispatch() error {
 
 				//update weights
 				for i := range p.Weights {
+
 					p.Weights[i].Sub(p.Weights[i], totalChange[i])
+
+					if p.momentum > 0 {
+						if p.FirstMoment == false {
+							p.ChangeMoment[i] = totalChange[i]
+						} else {
+							p.ChangeMoment[i].Scale(p.momentum, p.ChangeMoment[i])
+							p.ChangeMoment[i].Add(p.ChangeMoment[i], totalChange[i])
+						}
+						p.Weights[i].Sub(p.Weights[i], p.ChangeMoment[i])
+					} else {
+						p.Weights[i].Sub(p.Weights[i], totalChange[i])
+					}
 				}
+				p.FirstMoment = true
 
 				// send updated weights
 				newIterationMessage := IterationMessage{p.IterationNumber, p.Weights}
@@ -338,6 +353,8 @@ func (p *CnnClearProtocol) backPropagation(labels []float64, output *mat.Dense) 
 
 func (p *CnnClearProtocol) InitWeights() {
 	_, nmarkers := p.X[0].Dims()
+	p.ChangeMoment = []*mat.Dense{mat.NewDense(nmarkers, p.Conv.Nfilters, utils.WeightsInit(nmarkers*p.Conv.Nfilters, float64(nmarkers))),
+		mat.NewDense(p.Conv.Nfilters, p.Dense.Nclasses, utils.WeightsInit(p.Conv.Nfilters*p.Dense.Nclasses, float64(p.Conv.Nfilters)))}
 	p.Weights = []*mat.Dense{mat.NewDense(nmarkers, p.Conv.Nfilters, utils.WeightsInit(nmarkers*p.Conv.Nfilters, float64(nmarkers))),
 		mat.NewDense(p.Conv.Nfilters, p.Dense.Nclasses, utils.WeightsInit(p.Conv.Nfilters*p.Dense.Nclasses, float64(p.Conv.Nfilters)))}
 }

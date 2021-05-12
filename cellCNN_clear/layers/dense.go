@@ -3,7 +3,6 @@ package layers
 import (
 	"github.com/ldsec/cellCNN/cellCNN_clear/utils"
 	"gonum.org/v1/gonum/mat"
-	"fmt"
 )
 
 // dense output layer for classification (nclasses > 1)
@@ -25,12 +24,13 @@ type Dense_n struct {
 func (dense *Dense_n) Forward(input *mat.Dense, newWeights *mat.Dense) *mat.Dense {
 
 	nsamples, nfilters := input.Dims()
-	coeffsSigmoid := []float64{0.5, 0.6997, 0, -0.2649}
+	coeffsSigmoid := []float64{0.5, 0.6997, 0, -0.2649} //coeffs for interval 3
+	//coeffsSigmoid :=[]float64{0.5, 1.2010, 0, -0.8156} //coeffs for interval 8
 	if dense.weights == nil || dense.last_input == nil {
 		dense.firstMoment = false
 		dense.vt = mat.NewDense(nfilters, dense.Nclasses, nil)
-		c :=[]float64{0.270457, -0.004343, 0.290110, 0.172072, -0.184941, -0.075417, 0.334569, 0.362849, -0.001117, -0.172576, 0.388567, -0.038715}
-		//c := utils.WeightsInit(nfilters*dense.Nclasses, float64(nfilters))
+		//c :=[]float64{0.270457, -0.004343, 0.290110, 0.172072, -0.184941, -0.075417, 0.334569, 0.362849, -0.001117, -0.172576, 0.388567, -0.038715}
+		c := utils.WeightsInit(nfilters*dense.Nclasses, float64(nfilters))
 		dense.weights = mat.NewDense(nfilters, dense.Nclasses, c)
 		dense.last_input = mat.NewDense(nsamples, nfilters, nil)
 		dense.u = mat.NewDense(nsamples, dense.Nclasses, nil)
@@ -71,7 +71,6 @@ func (dense *Dense_n) Forward(input *mat.Dense, newWeights *mat.Dense) *mat.Dens
 func (dense *Dense_n) Backward(error *mat.Dense, learn_rate, momentum float64) (*mat.Dense, *mat.Dense) {
 	r, c := dense.weights.Dims()
 
-
 	dense.u.Apply(utils.ToApply(dense.d_activation), dense.u)
 	error.MulElem(dense.u, error)
 
@@ -98,8 +97,7 @@ func (dense *Dense_n) Backward(error *mat.Dense, learn_rate, momentum float64) (
 		dense.weights.Sub(dense.weights, scaledDW)
 	}
 
-	fmt.Printf(" %v\n", mat.Formatted(dense.weights, mat.Prefix(" "), mat.Excerpt(3)))
-	
+	//fmt.Printf(" %v\n", mat.Formatted(dense.weights, mat.Prefix(" "), mat.Excerpt(3)))
 
 	return next_error, scaledDW
 }

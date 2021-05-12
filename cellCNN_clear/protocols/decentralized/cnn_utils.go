@@ -73,6 +73,7 @@ func InitCnnClearProtocolVars(p *CnnClearProtocol, learnRate, momentum float64, 
 	p.LocalIterationNumber = nbrLocalIter
 	p.BatchSize = batchSize
 	p.momentum = momentum
+	p.FirstMoment = false
 
 	return nil
 }
@@ -118,8 +119,10 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 		}
 
 		w = runCnnClear(rootInstance, w)
+		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
 
-		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
+		testAllData := common.LoadCellCnnTestAll()
+		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData)
 		log.LLvl1(accuracyTmp, precisionTmp, recallTmp, fscoreTmp)
 		accuracy += accuracyTmp
 		precision += precisionTmp
