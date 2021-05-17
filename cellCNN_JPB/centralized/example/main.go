@@ -10,7 +10,9 @@ import (
 )
 
 
-
+type Party struct{
+	cellCNN.CellCNNProtocol
+}
 
 func main() {
 

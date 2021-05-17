@@ -2,6 +2,9 @@ package cellCNN
 
 import(
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/dckks"
+	"github.com/ldsec/lattigo/v2/drlwe"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"math"
 	"fmt"
 )
@@ -10,9 +13,15 @@ import(
 // for the cellCNN protocol
 type CellCNNProtocol struct{
 
+
 	params *ckks.Parameters
 
 	sk *ckks.SecretKey
+	pk *ckks.PublicKey
+	rlk *ckks.RelinearizationKey
+	rotKey *ckks.RotationKeySet
+
+	rotKeyIndex []int
 
 	encryptor ckks.Encryptor
 	decryptor ckks.Decryptor
@@ -33,11 +42,45 @@ type CellCNNProtocol struct{
 
 	ptL []*ckks.Plaintext
 	ptLTranspose []*ckks.Plaintext
+
+	ckgProtocol *dckks.CKGProtocol
+	rkgProtocol *dckks.RKGProtocol
+	rtgProtocol *dckks.RTGProtocol
+	cksProtocol *dckks.CKSProtocol
+
+	ckgShare    *drlwe.CKGShare
+	rkgEphemSk  *rlwe.SecretKey
+	rkgShareOne *drlwe.RKGShare
+	rkgShareTwo *drlwe.RKGShare
+	rtgShare    *drlwe.RTGShare
+	cksShare    dckks.CKSShare
+}
+
+
+func (c *CellCNNProtocol) PK() (*ckks.PublicKey){
+	return c.pk
+}
+
+func (c *CellCNNProtocol) SK() (*ckks.SecretKey){
+	return c.sk
+}
+
+func (c *CellCNNProtocol) RotKeyIndex() []int{
+	return c.rotKeyIndex
+}
+
+func (c *CellCNNProtocol) HasRotKey(galEl uint64) bool{
+	_, ok := c.rotKey.Keys[galEl]
+	return ok
 }
 
 // W returns the dense layer matrix
 func (c *CellCNNProtocol) CtW() (*ckks.Ciphertext){
 	return c.ctW
+}
+
+func (c *CellCNNProtocol) EvaluatorInit(){
+	c.eval = ckks.NewEvaluator(c.params, ckks.EvaluationKey{c.rlk, c.rotKey})
 }
 
 // C returns the convolution matrix
@@ -107,20 +150,21 @@ func (c *CellCNNProtocol) PrintCtCPrecision(){
 }
 
 // NewCellCNNProtocol creates a new cellCNN protocol
-func NewCellCNNProtocol(params *ckks.Parameters, sk *ckks.SecretKey) (c *CellCNNProtocol){
+func NewCellCNNProtocol(params *ckks.Parameters) (c *CellCNNProtocol){
 	c = new(CellCNNProtocol)
 
-	c.params = params.Copy()
+	c.params = params
 
-	c.sk = sk
+	kgen := ckks.NewKeyGenerator(params)
 
-	rlk, rotKey := GenPublicKeys(params, sk)
+	c.sk = kgen.GenSecretKey()
 
-	c.encryptor = ckks.NewEncryptorFromSk(params, sk)
-	c.decryptor = ckks.NewDecryptor(params, sk)
+	c.rotKeyIndex = GetRotationKeysIndex(kgen)
+
+	
+	c.decryptor = ckks.NewDecryptor(params, c.sk)
 	c.encoder = ckks.NewEncoder(params)
-	c.eval = ckks.NewEvaluator(params, ckks.EvaluationKey{rlk, rotKey})
-
+	
 	c.mask = c.genPlaintextMaskForTrainingWithPrePooling(params)
 
 	c.ptL = make([]*ckks.Plaintext, int(math.Ceil(float64(Features)*0.5)))
@@ -133,21 +177,30 @@ func NewCellCNNProtocol(params *ckks.Parameters, sk *ckks.SecretKey) (c *CellCNN
 		c.ptLTranspose[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Qi()[params.MaxLevel()-1]))
 	}
 
-	c.C = WeightsInit(Features, Filters, Features)
-	c.W = WeightsInit(Filters, Classes, Filters) 
-
 	c.DW = new(ckks.Matrix)
 	c.DC = new(ckks.Matrix)
 	c.P = new(ckks.Matrix)
 	c.U = new(ckks.Matrix)
+	return
+}
 
-	c.ctC = EncryptRightForPtMul(c.C, BatchSize, 1, c.params, 4, sk)
+
+func (c *CellCNNProtocol) SetWeights(C, W *ckks.Matrix){
+	c.C = C.Copy()
+	c.W = W.Copy()
+}
+
+func (c *CellCNNProtocol) EncryptWeights(){
+
+	c.encryptor = ckks.NewEncryptorFromPk(c.params, c.pk)
+
+	c.ctC = EncryptRightForPtMul(c.C, BatchSize, 1, c.params, 4, c.encoder, c.encryptor)
 	// [[ W transpose row encoded ] [         available         ]]
 	//  |    classes * filters    | | Slots - classes * filters | 
 	//
-	c.ctW = EncryptRightForNaiveMul(c.W, BatchSize, c.params, 3, sk)
+	c.ctW = EncryptRightForNaiveMul(c.W, BatchSize, c.params, 3, c.encoder, c.encryptor)
 
-	return
+	c.encryptor = nil
 }
 
 func (c *CellCNNProtocol) genPlaintextMaskForTrainingWithPrePooling(params *ckks.Parameters) []*ckks.Plaintext{
@@ -241,10 +294,7 @@ func (c *CellCNNProtocol) BackWardPlain(XBatch, YBatch *ckks.Matrix){
 	// Updated weights
 	c.DW.MulMat(c.P.Transpose(), E1Batch)
 	c.DC.MulMat(XBatch.Transpose(), E0Batch)
-}
 
-func (c *CellCNNProtocol) UpdatePlain(){
-	// Takes the average
 	c.DW.MultConst(c.DW, complex(LearningRate, 0))
 	c.DC.MultConst(c.DC, complex(LearningRate, 0))
 
@@ -265,10 +315,12 @@ func (c *CellCNNProtocol) UpdatePlain(){
 	// W_i = learning_rate * Wt + W_i-1 * momentum
 	c.DWPrev.MultConst(c.DW, complex(Momentum, 0))
 	c.DCPrev.MultConst(c.DC, complex(Momentum, 0))
-	
+}
+
+func (c *CellCNNProtocol) UpdatePlain(DC, DW *ckks.Matrix){
 	// Updates the matrices
-	c.W.Sub(c.W, c.DW)
-	c.C.Sub(c.C, c.DC)
+	c.W.Sub(c.W, DW)
+	c.C.Sub(c.C, DC)
 }
 
 // Forward applies a forward pass on the given batch of samples and stores the result in ctBoot
@@ -596,14 +648,12 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, params *ckks.Parameter
 
 
 
-func GenPublicKeys(params *ckks.Parameters, sk *ckks.SecretKey) (rlk *ckks.RelinearizationKey, rotKey *ckks.RotationKeySet){
-
-	kgen := ckks.NewKeyGenerator(params)
+func GetRotationKeysIndex(kgen ckks.KeyGenerator) (rotations []int){
 
 	denseMatrixSize := DenseMatrixSize(Filters, Classes)
 	convolutionMatrixSize := ConvolutionMatrixSize(BatchSize, Features, Filters)
 
-	rotations := []int{}
+	rotations = []int{}
 
 	rotations = append(rotations, Filters)
 
@@ -652,5 +702,5 @@ func GenPublicKeys(params *ckks.Parameters, sk *ckks.SecretKey) (rlk *ckks.Relin
 		rotations = append(rotations, i*BatchSize*Filters)
 	}
 
-	return kgen.GenRelinearizationKey(sk), kgen.GenRotationKeysForRotations(rotations, true, sk)
+	return rotations
 }

@@ -35,10 +35,7 @@ func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, ptL []*ckks.
 	}
 }
 
-func EncryptRightForPtMul(C *ckks.Matrix, nbMatrices, cells int, params *ckks.Parameters, level int, sk *ckks.SecretKey) (*ckks.Ciphertext){
-
-	encoder := ckks.NewEncoder(params)
-	encryptor := ckks.NewEncryptorFromSk(params, sk)
+func EncryptRightForPtMul(C *ckks.Matrix, nbMatrices, cells int, params *ckks.Parameters, level int, encoder ckks.Encoder, encryptor ckks.Encryptor) (*ckks.Ciphertext){
 
 	features := C.Rows()
 	filters := C.Cols()
