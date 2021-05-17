@@ -10,7 +10,7 @@ import (
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 20
+var BatchSize = 200
 
 // number of samples
 // MUST BE AN EVEN NUMBER
@@ -22,7 +22,7 @@ var Cells = 200
 
 // number of features 
 // MUST BE AN EVEN NUMBER
-var Features = 8
+var Features = 38
 
 // number of filters
 // MUST BE AN EVEN NUMBER
