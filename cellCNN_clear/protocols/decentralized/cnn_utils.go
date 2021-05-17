@@ -82,7 +82,7 @@ func InitCnnClearProtocolVars(p *CnnClearProtocol, learnRate, momentum float64, 
 func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *onet.Tree, local, timing bool, name string,
 	kFold uint, loader common.Loader) (error, string) {
 
-	var accuracy, precision, recall, fscore float64
+	var accuracy, precision, recall, fscore, accuracyMulti, precisionMulti, recallMulti, fscoreMulti float64
 	nbrRuns := kFold
 
 	// if we wish to record the time we only need to run the protocol once
@@ -122,12 +122,24 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
 
 		testAllData := common.LoadCellCnnTestAll()
+		testMultiData := common.LoadCellCnnValidData()
+		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData)
+		log.Lvlf2("Multi-cell test data results:")
+		log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)
+
+		log.Lvlf2("All test data results:")
 		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData)
 		log.LLvl1(accuracyTmp, precisionTmp, recallTmp, fscoreTmp)
 		accuracy += accuracyTmp
 		precision += precisionTmp
 		recall += recallTmp
 		fscore += fscoreTmp
+
+		accuracyMulti += accuracyTmpMulti
+		precisionMulti += precisionTmpMulti
+		recallMulti += recallTmpMulti
+		fscoreMulti += fscoreTmpMulti
+
 	}
 
 	accuracy = accuracy / float64(nbrRuns)
@@ -135,11 +147,23 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 	recall = recall / float64(nbrRuns)
 	fscore = fscore / float64(nbrRuns)
 
+	accuracyMulti = accuracyMulti / float64(nbrRuns)
+	precisionMulti = precisionMulti / float64(nbrRuns)
+	recallMulti = recallMulti / float64(nbrRuns)
+	fscoreMulti = fscoreMulti / float64(nbrRuns)
+	log.Lvlf2("All test data results:")
 	log.Lvlf2("accuracy: %.2f", accuracy)
 	log.Lvlf2("precision: %.2f", precision)
 	log.Lvlf2("recall: %.2f", recall)
 	log.Lvlf2("fscore: %.2f", fscore)
 
+	log.Lvlf2("Multi-cell test data results:")
 	s := fmt.Sprintf("%.2f,%.2f,%.2f,%.2f\n", accuracy, precision, recall, fscore)
+	log.Lvlf2("accuracy: %.2f", accuracyMulti)
+	log.Lvlf2("precision: %.2f", precisionMulti)
+	log.Lvlf2("recall: %.2f", recallMulti)
+	log.Lvlf2("fscore: %.2f", fscoreMulti)
+
+	s = fmt.Sprintf("%.2f,%.2f,%.2f,%.2f\n", accuracy, precision, recall, fscore)
 	return nil, s
 }

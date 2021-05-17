@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"go.dedis.ch/onet/v3/log"
 	"math"
 	"math/rand"
 )
@@ -19,6 +20,24 @@ func Add(a []float64, b []float64) []float64 {
 		c[i] = a[i] + b[i]
 	}
 	return c
+}
+
+// Relu is the original (non-approximated) relu (rectifier) function: max(0,x)
+func Relu(x float64) float64 {
+	return math.Max(0, x)
+}
+
+// ReluD is the derivative of the Relu function
+// {0: if x < 0, 1: if x > 0
+func ReluD(x float64) float64 {
+	if x > 0 {
+		return 1.0
+	} else if x < 0 {
+		return 0.0
+	} else {
+		log.Warn("ReluD is undefined for x==0")
+		return 0.0
+	}
 }
 
 //SigmoidApproxClear approximates the sigmoid function within interval [-a,a] with a polynomial degree degree
@@ -127,6 +146,7 @@ func WeightsInit(length int, inputs float64) []float64 {
 	a := make([]float64, length)
 	for i := range a {
 		a[i] = Random(-1, 1) / math.Sqrt(inputs)
+		//a[i] = Random(-0.05, 0.05)
 	}
 	return a
 }
@@ -149,8 +169,19 @@ func Mean(a []float64) float64 {
 	return c / float64(len(a))
 }
 
-func Relu(x float64) float64 {
-	return math.Max(x, 0)
+// SoftMax activation function (non-approximated)
+func Softmax(x []float64) []float64 {
+	out := make([]float64, len(x))
+	var sum float64
+	max := Max(x)
+	for i, y := range x {
+		out[i] = math.Exp(y - max)
+		sum += out[i]
+	}
+	for i := range out {
+		out[i] /= sum
+	}
+	return out
 }
 
 // ********************************** ACTIVATION FUNCTIONS **********************************
