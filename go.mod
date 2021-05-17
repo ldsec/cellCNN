@@ -2,8 +2,7 @@ module github.com/ldsec/cellCNN
 
 go 1.14
 
-replace github.com/ldsec/lattigo/v2 => C:\Users\Zybeline\go\src\github.com\ldsec\lattigo
-
+//
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/daviddengcn/go-colortext v1.0.0 // indirect
@@ -18,6 +17,8 @@ require (
 	gonum.org/v1/gonum v0.8.1
 	gonum.org/v1/plot v0.8.0
 )
+
+replace github.com/ldsec/lattigo/v2 => /Users/sav/GolandProjects/lattigo-private
 
 //replace go.dedis.ch/onet/v3 => ../../../go.dedis.ch/onet
 

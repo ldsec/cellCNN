@@ -6,6 +6,7 @@ import (
 )
 
 func ComputeAccuracy(c []float64, y []float64) float64 {
+
 	accuracy := 0.
 	for i := range y {
 		if c[i] == y[i] {
@@ -45,17 +46,35 @@ func classifyDTI(x float64) float64 {
 	return 1
 }
 
-func ClassifyCellCNN(scores *mat.Dense) []float64 {
+func ClassifyCellCNN(scores *mat.Dense, nclass int) []float64 {
 	nsamples, _ := scores.Dims()
 	class := make([]float64, nsamples)
-	for r := range class {
-		if scores.At(r, 0) < scores.At(r, 1) {
-			class[r] = 1
-		} else {
-			class[r] = 0
+	if nclass == 2 {
+
+		for r := range class {
+			if scores.At(r, 0) < scores.At(r, 1) {
+				class[r] = 1
+			} else {
+				class[r] = 0
+			}
+		}
+		return class
+	}
+	if nclass == 3 {
+		for r := range class {
+			if scores.At(r, 0) < scores.At(r, 1) && scores.At(r, 2) < scores.At(r, 1) {
+				class[r] = 1
+			}
+			if scores.At(r, 1) < scores.At(r, 0) && scores.At(r, 2) < scores.At(r, 0) {
+				class[r] = 0
+			}
+			if scores.At(r, 1) < scores.At(r, 2) && scores.At(r, 0) < scores.At(r, 2) {
+				class[r] = 2
+			}
 		}
 	}
 	return class
+
 }
 
 func Print_train_stats_dti(scores []float64, y []float64) []float64 {
@@ -72,8 +91,8 @@ func Print_train_stats_dti(scores []float64, y []float64) []float64 {
 	return classified
 }
 
-func Print_train_stats_cellCNN(scores *mat.Dense, y []float64) {
-	classified := ClassifyCellCNN(scores)
+func Print_train_stats_cellCNN(scores *mat.Dense, y []float64, nclass int) {
+	classified := ClassifyCellCNN(scores, nclass)
 	accuracy := ComputeAccuracy(classified, y)
 	precision, recall := ComputePrecisionRecall(classified, y)
 

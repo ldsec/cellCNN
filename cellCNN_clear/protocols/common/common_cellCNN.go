@@ -138,11 +138,13 @@ func LoadCellCnnTestAll() CnnDataset {
 // RunCnnClearPredictionTest returns the accuracy, precision, recall given the weights
 func RunCnnClearPredictionTest(w WeightsVector, x []*mat.Dense, y []float64) (float64, float64, float64, float64) {
 	conv, pool, dense := InitCellCnn()
+	println(x[0])
+
 	out1 := conv.Forward(x, w[0])
 	out2 := pool.Forward(out1)
 	output := dense.Forward(out2, w[1])
 
-	classified := utils.ClassifyCellCNN(output)
+	classified := utils.ClassifyCellCNN(output, NCLASSES)
 	accuracy := utils.ComputeAccuracy(classified, y)
 	precision, recall := utils.ComputePrecisionRecall(classified, y)
 	fscore := 2 * precision * recall / (precision + recall)
@@ -165,7 +167,7 @@ func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset) (float64,
 	output := dense.Forward(out2, w[1])
 	fmt.Printf(" %v\n", mat.Formatted(output, mat.Prefix(" "), mat.Excerpt(3)))
 
-	classified := utils.ClassifyCellCNN(output)
+	classified := utils.ClassifyCellCNN(output, NCLASSES)
 	accuracy := utils.ComputeAccuracy(classified, y)
 	precision, recall := utils.ComputePrecisionRecall(classified, y)
 	fscore := 2 * precision * recall / (precision + recall)
@@ -221,7 +223,7 @@ func printS() {
 	println("")
 }
 func LoadSplitData(nbrNodes int, index, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoot bool) ([]*mat.Dense, []float64, int) {
-	dataRecordsAtEachNode := 400
+	dataRecordsAtEachNode := NSAMPLES_DIST
 
 	maxIterations := 0
 	maxIterations = int(math.Ceil(float64(nbrDatasetUsed*dataRecordsAtEachNode) / float64(nbrLocalIter*nodeBatchSize)))

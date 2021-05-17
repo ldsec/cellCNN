@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-const learn_rate = 0.02
-const batchSize = 200
+const learn_rate = common.LEARN_RATE
+const batchSize = common.BATCH_SIZE
 const write = false // write accuracy values to file
 
 func ComputeGradient(i int, j int, v float64, y []float64) float64 {
@@ -26,6 +26,13 @@ func ComputeGradient(i int, j int, v float64, y []float64) float64 {
 		}
 	}
 	if int(y[i]) == 1 {
+		if int(y[i]) != j {
+			return v
+		} else {
+			return v - 1
+		}
+	}
+	if int(y[i]) == 2 {
 		if int(y[i]) != j {
 			return v
 		} else {
@@ -78,20 +85,51 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		out1 = conv.Forward(newBatch, nil)
 		out2 = pool.Forward(out1)
 		out2 = dense.Forward(out2, nil)
-		//fmt.Println("out is" , out2)
-		//	fmt.Println("labels are,",newBatchLabels)
-		//compute loss gradient + print accuracy
+
 		compute_grad := func(i int, j int, v float64) float64 {
 			return ComputeGradient(i, j, v, newBatchLabels)
 		}
+		//for lab:=0; lab<len(newBatchLabels);lab++{
+		//	if newBatchLabels[lab] == 0{
+		//		changeIn := out2.At(lab,0)
+		//	}
+		//	if newBatchLabels[lab] == 1{
+		//		changeIn := out2.At(lab,1)
+		//	}
+		//	if newBatchLabels[lab] == 2{
+		//		changeIn := out2.At(lab,2)
+		//	}
+		//}
 
 		var gradient mat.Dense
 		gradient.Apply(compute_grad, out2)
-
+		//fmt.Println("newBatchLabels:")
+		//fmt.Println(newBatchLabels[0])
+		//fmt.Println(newBatchLabels[1])
+		//fmt.Println(newBatchLabels[2])
+		//m:=gradient
+		//_, c := m.Dims()
+		//fmt.Println("Gradients:")
+		//for i := 0; i < 3; i++ {
+		//	for j := 0; j < c; j++ {
+		//		print(m.At(i, j), "\t")
+		//	}
+		//	println("")
+		//}
+		//println("")
+		//
+		//_, c = out2.Dims()
+		//fmt.Println("Outs:")
+		//for i := 0; i < 3; i++ {
+		//	for j := 0; j < c; j++ {
+		//		print(out2.At(i, j), "\t")
+		//	}
+		//	println("")
+		//}
 		if i == 1 || i%batchSize == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
-				utils.Print_train_stats_cellCNN(out2, newBatchLabels)
+				utils.Print_train_stats_cellCNN(out2, newBatchLabels, common.NCLASSES)
 			}
 		}
 
@@ -140,7 +178,7 @@ func cellCNN(nepochs int, timing bool) {
 
 	startTrain := time.Now()
 	weights := make(common.WeightsVector, 2)
-	weights[0], weights[1] = Train(trainData, validData, 2, niter, learn_rate, timing)
+	weights[0], weights[1] = Train(trainData, validData, common.NCLASSES, niter, learn_rate, timing)
 	timeTrain := time.Since(startTrain)
 
 	if timing {
@@ -148,7 +186,7 @@ func cellCNN(nepochs int, timing bool) {
 	}
 
 	if !timing {
-		testSize := 2000
+		testSize := 2250
 		//fmt.Print(len(validData.X))
 		newBatch := make([]*mat.Dense, testSize)
 		newBatchLabels := make([]float64, testSize)
@@ -157,11 +195,11 @@ func cellCNN(nepochs int, timing bool) {
 			newBatch[j] = validData.X[randi]
 			newBatchLabels[j] = validData.Y[randi]
 		}
-		fmt.Println("new batch testing")
+		fmt.Println("Test acc. on multi-cell inputs with 200 cells each")
 		accuracy, precision, recall, fscore := common.RunCnnClearPredictionTest(weights, newBatch, newBatchLabels)
 		fmt.Printf("\nTest\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
+		fmt.Println("Test acc. on 6 patients with >5000 cells each")
 		accuracy, precision, recall, fscore = common.RunCnnClearPredictionTestAll(weights, testAllData)
 		fmt.Printf("\nTest All\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
-
 	}
 }
