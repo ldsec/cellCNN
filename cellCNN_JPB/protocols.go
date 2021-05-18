@@ -313,11 +313,12 @@ func (c *CellCNNProtocol) BackWardPlain(XBatch, YBatch *ckks.Matrix, nParties in
 
 	// Adds the previous weights
 	// W_i = learning_rate * Wt + W_i-1 * momentum
-	c.DW.Add(c.DW, c.DWPrev)
-	c.DC.Add(c.DC, c.DCPrev)
 }
 
 func (c *CellCNNProtocol) UpdatePlain(DC, DW *ckks.Matrix){
+
+	c.DW.Add(c.DW, c.DWPrev)
+	c.DC.Add(c.DC, c.DCPrev)
 
 	// Stores the current weights
 	// W_i = learning_rate * Wt + W_i-1 * momentum
@@ -463,16 +464,6 @@ func (c *CellCNNProtocol) Backward(XBatch, YBatch *ckks.Matrix, nbParties int) {
 	//  DC = Ltranspose x E0
 	c.ctDC = MulMatrixLeftPtWithRightCt(c.ptLTranspose, c.ctDC, BatchSize, Filters, c.eval)
 
-	// Extracts previous DC * momentum and previous DW * momentum
-
-	//[[       Previous DeltaC            ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] ]
-	// [ classes * ConvolutionMatrixSize  ] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] 
-	c.ctDCPrev = eval.RotateNew(c.ctBoot, 3*BatchSize*denseMatrixSize + 2*Classes*convolutionMatrixSize)
-
-	//[[ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] ]
-	// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
-	c.ctDWPrev = eval.RotateNew(c.ctBoot, 2*BatchSize*denseMatrixSize + 2*Classes*convolutionMatrixSize)
-
 	// Cleans the imaginary part
 	eval.Add(c.ctDC, eval.ConjugateNew(c.ctDC), c.ctDC)
 
@@ -490,16 +481,6 @@ func (c *CellCNNProtocol) Backward(XBatch, YBatch *ckks.Matrix, nbParties int) {
 	eval.Add(c.ctDW, ctDWtmp, c.ctDW)
 	eval.Replicate(c.ctDW, Filters, BatchSize, c.ctDW)
 
-	// Mask DWPrev*momentum and DCPrev*momentum
-	eval.Mul(c.ctDCPrev, c.mask[3], c.ctDCPrev)
-	eval.Mul(c.ctDWPrev, c.mask[0], c.ctDWPrev)
-
-	eval.Rescale(c.ctDCPrev, params.Scale(), c.ctDCPrev)
-
-	// Adds DW with DWPrev*momentum 
-	eval.Add(c.ctDC, c.ctDCPrev, c.ctDC)
-	eval.Add(c.ctDW, c.ctDWPrev, c.ctDW)
-
 	// Rescales
 	eval.Rescale(c.ctDW, params.Scale(), c.ctDW)
 }
@@ -511,6 +492,32 @@ func (c *CellCNNProtocol) Refresh(sk *ckks.SecretKey, nbParties int){
 
 // Update stores the input DC and DW, and updated the weights of the convolution and dense matrix
 func (c *CellCNNProtocol) Update(DC, DW *ckks.Ciphertext){
+
+	eval := c.eval
+	params := c.params
+
+	convolutionMatrixSize := ConvolutionMatrixSize(BatchSize, Features, Filters)
+	denseMatrixSize := DenseMatrixSize(Filters, Classes)
+
+	// Extracts previous DC * momentum and previous DW * momentum
+
+	//[[       Previous DeltaC            ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] [ Previous DeltaW ] ]
+	// [ classes * ConvolutionMatrixSize  ] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| [ DenseMatrixSize ] 
+	c.ctDCPrev = eval.RotateNew(c.ctBoot, 3*BatchSize*denseMatrixSize + 2*Classes*convolutionMatrixSize)
+
+	//[[ Previous DeltaW ] [     Previous DeltaC           ] [ available ] [        U        ][                U                ] [      Ppool       ] [     W transpose row encoded    ] ]
+	// [ DenseMatrixSize ] [classes * ConvolutionMatrixSize] |           | | DenseMatrixSize || classes * ConvolutionMatrixSize | | DenseMatrixSize  | | classes * ConvolutionMatrixSize| 
+	c.ctDWPrev = eval.RotateNew(c.ctBoot, 2*BatchSize*denseMatrixSize + 2*Classes*convolutionMatrixSize)
+
+	// Mask DWPrev*momentum and DCPrev*momentum
+	eval.Mul(c.ctDCPrev, c.mask[3], c.ctDCPrev)
+	eval.Mul(c.ctDWPrev, c.mask[0], c.ctDWPrev)
+
+	eval.Rescale(c.ctDCPrev, params.Scale(), c.ctDCPrev)
+	eval.Rescale(c.ctDWPrev, params.Scale(), c.ctDWPrev)
+
+	eval.Add(c.ctDC, c.ctDCPrev, c.ctDC)
+	eval.Add(c.ctDW, c.ctDWPrev, c.ctDW)
 
 	c.ctDCPrev = DC.CopyNew().Ciphertext()
 	c.ctDWPrev = DW.CopyNew().Ciphertext()
@@ -650,7 +657,6 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, params *ckks.Parameter
 	newCt := encryptor.EncryptNew(pt)
 
 	return newCt
-
 }
 
 

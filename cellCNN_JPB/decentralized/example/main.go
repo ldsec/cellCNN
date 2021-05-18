@@ -234,7 +234,6 @@ func main() {
 
 		v := P[0].PredictPlain(XBatch)
 
-
 		if trainEncrypted {
 			v.Print()
 			ctv := P[0].Predict(XBatch, masterSk)
