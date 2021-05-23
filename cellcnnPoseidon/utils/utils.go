@@ -92,3 +92,15 @@ func ClearRotInds(inds []int, mod int) []int {
 	}
 	return res
 }
+
+func CiphertextsToBytes(ct []*ckks.Ciphertext) [][]byte {
+	data := make([][]byte, len(ct))
+	var err error
+	for i := 0; i < len(ct); i++ {
+		data[i], err = ct[i].MarshalBinary()
+		if err != nil {
+			panic("fail to marshall ciphertext")
+		}
+	}
+	return data
+}

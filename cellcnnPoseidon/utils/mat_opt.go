@@ -1,6 +1,9 @@
 package utils
 
-import "gonum.org/v1/gonum/mat"
+import (
+	"github.com/ldsec/lattigo/v2/ckks"
+	"gonum.org/v1/gonum/mat"
+)
 
 func RetrieveCol(arr *mat.Dense, ind int) []complex128 {
 	r, _ := arr.Dims()
@@ -18,4 +21,24 @@ func RetrieveRow(arr *mat.Dense, ind int) []complex128 {
 		res[i] = complex(arr.At(ind, i), 0)
 	}
 	return res
+}
+
+func Batch2PlainSlice(inputs []*mat.Dense, params *ckks.Parameters, encoder ckks.Encoder) []*ckks.Plaintext {
+	result := make([]*ckks.Plaintext, 0)
+	for _, each := range inputs {
+		result = append(result, Matrix2Plaintext(each, params, encoder))
+	}
+	return result
+}
+
+func Matrix2Plaintext(rawData *mat.Dense, params *ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
+	// shape of each input: 200 * 37 (ncells = 200, nmakers = 37)
+	row, col := rawData.Dims()
+	value := make([]complex128, params.Slots())
+	for i := 0; i < row; i++ {
+		for j := 0; j < col; j++ {
+			value[i*col+j] = complex(rawData.At(i, j), 0)
+		}
+	}
+	return encoder.EncodeNTTAtLvlNew(params.MaxLevel(), value, params.LogSlots())
 }

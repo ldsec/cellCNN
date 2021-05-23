@@ -36,6 +36,22 @@ func NewDense(weights *ckks.Ciphertext) *Dense {
 	}
 }
 
+func (dense *Dense) Marshall() []byte {
+	data, err := dense.weights.MarshalBinary()
+	if err != nil {
+		panic("fail to marshall dense weights")
+	}
+	return data
+}
+
+func (dense *Dense) Unmarshall(data []byte) {
+	nw := new(ckks.Ciphertext)
+	if err := nw.UnmarshalBinary(data); err != nil {
+		panic("fail to unmarshall conv filter weights")
+	}
+	dense.weights = nw
+}
+
 // ################# Debug Functions ####################
 func (dense *Dense) WithWeights(weights *ckks.Ciphertext) {
 	dense.weights = weights
@@ -51,6 +67,18 @@ func (dense *Dense) WithEncoder(encoder ckks.Encoder) {
 
 func (dense *Dense) GetGradient() *ckks.Ciphertext {
 	return dense.gradient
+}
+
+func (dense *Dense) GetGradientBinary() []byte {
+	data, err := dense.gradient.MarshalBinary()
+	if err != nil {
+		panic("fail to marshall dense weights")
+	}
+	return data
+}
+
+func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator) {
+	eval.Add(dense.weights, g, dense.weights)
 }
 
 func (dense *Dense) GetWeights() *ckks.Ciphertext {

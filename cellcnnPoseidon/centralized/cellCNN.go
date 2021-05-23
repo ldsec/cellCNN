@@ -13,6 +13,58 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+type Gradients struct {
+	filters []*ckks.Ciphertext
+	dense   *ckks.Ciphertext
+}
+
+func (g *Gradients) NewGradient(data [][]byte) {
+	g.filters = make([]*ckks.Ciphertext, len(data)-1)
+	for i, each := range data[:len(data)-1] {
+		g.filters[i] = new(ckks.Ciphertext)
+		if err := g.filters[i].UnmarshalBinary(each); err != nil {
+			panic("fail to unmarshall Gradients")
+		}
+	}
+	g.dense = new(ckks.Ciphertext)
+	if err := g.dense.UnmarshalBinary(data[len(data)-1]); err != nil {
+		panic("fail to unmarshall conv filter weights")
+	}
+}
+
+// aggregate data to self
+func (g *Gradients) Aggregate(data [][]byte, eval ckks.Evaluator) {
+	// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
+	for i, each := range data[:len(data)-1] {
+		tmpFilter := new(ckks.Ciphertext)
+		if err := tmpFilter.UnmarshalBinary(each); err != nil {
+			panic("fail to unmarshall Gradients Aggregate")
+		}
+		eval.Add(g.filters[i], tmpFilter, g.filters[i])
+	}
+	tmpDense := new(ckks.Ciphertext)
+	if err := tmpDense.UnmarshalBinary(data[len(data)-1]); err != nil {
+		panic("fail to unmarshall conv filter weights")
+	}
+	eval.Add(g.dense, tmpDense, g.dense)
+}
+
+func (g *Gradients) Marshall() [][]byte {
+	res := make([][]byte, len(g.filters)+1)
+	var err error = nil
+	for i, each := range g.filters {
+		res[i], err = each.MarshalBinary()
+		if err != nil {
+			panic("err in marshall Gradients")
+		}
+	}
+	res[len(res)-1], err = g.dense.MarshalBinary()
+	if err != nil {
+		panic("err in marshall Gradients")
+	}
+	return res
+}
+
 type CellCNN struct {
 	// network settings
 	cnnSettings *layers.CellCnnSettings
@@ -74,6 +126,39 @@ func NewCellCNN(
 		encryptor:   encryptor,
 	}
 	return model
+}
+
+func (c *CellCNN) UpdateWithGradients(g *Gradients) {
+	c.conv1d.UpdateWithGradients(g.filters, c.evaluator)
+	c.dense.UpdateWithGradients(g.dense, c.evaluator)
+}
+
+func (c *CellCNN) Marshall() (data [][]byte) {
+	filterData := c.conv1d.Marshall()
+	denseData := c.dense.Marshall()
+	// milestone = len(filterData)
+	data = append(filterData, denseData)
+	return
+}
+
+func (c *CellCNN) Unmarshall(data [][]byte) {
+	nfilters := len(data) - 1
+	c.conv1d.Unmarshall(data[:nfilters])
+	c.dense.Unmarshall(data[nfilters])
+}
+
+// return the the graident
+func (c *CellCNN) GetGradient() []*ckks.Ciphertext {
+	filters := c.conv1d.GetGradient()
+	dense := c.dense.GetGradient()
+	return append(filters, dense)
+}
+
+// return the byte representation of the graident
+func (c *CellCNN) GetGradientBinary() [][]byte {
+	dConv := c.conv1d.GetGradientBinary()
+	dDense := c.dense.GetGradientBinary()
+	return append(dConv, dDense)
 }
 
 func (c *CellCNN) WithEvaluator(eval ckks.Evaluator) {
