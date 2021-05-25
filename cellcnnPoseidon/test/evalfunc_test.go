@@ -80,6 +80,52 @@ func DebugPlaintextMatrix(original []complex128, r, c int, inRowPacked bool, ouR
 	return mt, vc
 }
 
+func TestMarshallUnmarshall(t *testing.T) {
+	params := ckks.DefaultParams[ckks.PN14QP438]
+	fmt.Println()
+	fmt.Println("=========================================")
+	fmt.Println("         INSTANTIATING SCHEME            ")
+	fmt.Println("=========================================")
+	fmt.Println()
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	// rlk := kgen.GenRelinearizationKey(sk)
+	encryptor := ckks.NewEncryptorFromSk(params, sk)
+	decryptor := ckks.NewDecryptor(params, sk)
+	encoder := ckks.NewEncoder(params)
+
+	slots := params.Slots()
+	plainWeights := make([]complex128, slots)
+	for i, _ := range plainWeights {
+		if i >= 10 {
+			break
+		}
+		plainWeights[i] = complex(float64(i%5), 0)
+	}
+	encodeWeights := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plainWeights, params.LogSlots())
+	encryptWeights := encryptor.EncryptNew(encodeWeights)
+
+	data, err := encryptWeights.MarshalBinary()
+	if err != nil {
+		panic("err in marshall")
+	}
+
+	// var out *ckks.Ciphertext
+	out := new(ckks.Ciphertext)
+	err = out.UnmarshalBinary(data)
+	if err != nil {
+		panic("err in unmarshall")
+	}
+
+	valuesBefore := encoder.Decode(decryptor.DecryptNew(encryptWeights), params.LogSlots())
+	valuesAfter := encoder.Decode(decryptor.DecryptNew(out), params.LogSlots())
+
+	fmt.Printf("before marshall: %v ...\n", valuesBefore[:10])
+	fmt.Printf("after marshall: %v ...\n", valuesAfter[:10])
+
+}
+
 // TestForward test forward in conv1d and avg pool
 func TestLinearTransform(t *testing.T) {
 	LogN := 14
