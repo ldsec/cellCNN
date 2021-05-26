@@ -1,9 +1,20 @@
 package utils
 
 import (
+	"math/rand"
+
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )
+
+// Generate a r×c matrix of random values.
+func GenRandomMatrix(r, c int) *mat.Dense {
+	data := make([]float64, r*c)
+	for i := range data {
+		data[i] = rand.NormFloat64()
+	}
+	return mat.NewDense(r, c, data)
+}
 
 func RetrieveCol(arr *mat.Dense, ind int) []complex128 {
 	r, _ := arr.Dims()

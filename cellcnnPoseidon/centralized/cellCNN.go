@@ -65,6 +65,17 @@ func (g *Gradients) Marshall() [][]byte {
 	return res
 }
 
+func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
+	res := make([]*ckks.Ciphertext, len(data))
+	for i, each := range data {
+		res[i] = new(ckks.Ciphertext)
+		if err := res[i].UnmarshalBinary(each); err != nil {
+			panic("fail to unmarshall Gradients")
+		}
+	}
+	return res
+}
+
 type CellCNN struct {
 	// network settings
 	cnnSettings *layers.CellCnnSettings
@@ -114,16 +125,17 @@ func NewPlainCircuit(filters [][]complex128, weights []complex128, input []compl
 }
 
 func NewCellCNN(
-	sts *layers.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
-	encoder ckks.Encoder, encryptor ckks.Encryptor,
+	// sts *layers.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
+	// encoder ckks.Encoder, encryptor ckks.Encryptor,
+	sts *layers.CellCnnSettings, cryptoParams *utils.CryptoParams,
 ) *CellCNN {
 
 	model := &CellCNN{
 		cnnSettings: sts,
-		params:      params,
-		relikey:     rlk,
-		encoder:     encoder,
-		encryptor:   encryptor,
+		params:      cryptoParams.Params,
+		relikey:     cryptoParams.Rlk,
+		encoder:     cryptoParams.GetEncoder(),
+		encryptor:   cryptoParams.GetEncryptor(),
 	}
 	return model
 }
@@ -248,16 +260,23 @@ func (c *CellCNN) InitWeights(
 }
 
 func (c *CellCNN) InitEvaluator(
-	kgen ckks.KeyGenerator,
-	sk *ckks.SecretKey,
-	encoder ckks.Encoder,
-	params *ckks.Parameters,
+	// kgen ckks.KeyGenerator,
+	// sk *ckks.SecretKey,
+	// encoder ckks.Encoder,
+	// params *ckks.Parameters,
+	cryptoParams *utils.CryptoParams,
 	maxM1N2Ratio float64,
-) {
+) ckks.Evaluator {
+
+	kgen := cryptoParams.Kgen
+	encoder := cryptoParams.GetEncoder()
+	params := cryptoParams.Params
+	sk := cryptoParams.Sk
+
 	t1 := time.Now()
+
 	Cinds := c.conv1d.InitRotationInds(c.cnnSettings, kgen)
 	Dinds := c.dense.InitRotationInds(c.cnnSettings, kgen, c.params, encoder, maxM1N2Ratio)
-
 	Rinds := utils.ClearRotInds(append(Cinds, Dinds...), params.Slots())
 
 	rks := kgen.GenRotationKeysForRotations(Rinds, false, sk)
@@ -266,8 +285,11 @@ func (c *CellCNN) InitEvaluator(
 
 	c.evaluator = ckks.NewEvaluator(c.params, ckks.EvaluationKey{Rlk: c.relikey, Rtks: rks})
 
+	cryptoParams.SetEvaluator(c.evaluator)
+
 	fmt.Printf("==> CellCNN successfully creating evaluator\n")
 	fmt.Printf("    with %v to generate rotation keys\n", t2)
+	return c.evaluator
 }
 
 func (c *CellCNN) GenerateMaskMap() map[int]*ckks.Plaintext {

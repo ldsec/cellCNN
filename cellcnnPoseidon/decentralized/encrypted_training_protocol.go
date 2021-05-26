@@ -107,14 +107,14 @@ type NNEncryptedProtocol struct {
 	ChildUpdatedLocalGradientsChannel chan []childUpdatedLocalGradientsStruct
 	SyncChannel                       chan SyncStruct
 
-	Weights *ckks.Ciphertext // global initial weights
+	// Weights *ckks.Ciphertext // global initial weights
 
 	model *centralized.CellCNN
 
 	MaxIterations   int
 	IterationNumber int
 
-	CryptoParams *ckks.Parameters
+	CryptoParams *utils.CryptoParams
 
 	// Debug libspindle.Debug
 
@@ -342,7 +342,7 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 
 func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) ([][]byte, error) {
 	// make a new batch
-	X, y := GetRandomBatch(p.TrainSet, p.BatchSize, p.CryptoParams, p.encoder)
+	X, y := GetRandomBatch(p.TrainSet, p.BatchSize, p.CryptoParams.Params, p.encoder, p.CellCNNSettings)
 
 	// accumulate gradients in a batch
 	var res []*ckks.Ciphertext
@@ -371,17 +371,27 @@ func (p *NNEncryptedProtocol) UpdateRootWeights(gradientsAggr *centralized.Gradi
 	p.model.UpdateWithGradients(gradientsAggr)
 }
 
-func GetRandomBatch(dataset *common.CnnDataset, batchSize int, params *ckks.Parameters, encoder ckks.Encoder) ([]*ckks.Plaintext, []float64) {
-	X := dataset.X
-	y := dataset.Y
+func GetRandomBatch(
+	dataset *common.CnnDataset, batchSize int, params *ckks.Parameters, encoder ckks.Encoder,
+	sts *layers.CellCnnSettings,
+) ([]*ckks.Plaintext, []float64) {
+	// X := dataset.X
+	// y := dataset.Y
 
-	// make a new batch
+	// // make a new batch
+	// newBatch := make([]*mat.Dense, batchSize)
+	// newBatchLabels := make([]float64, batchSize)
+	// for j := 0; j < len(newBatch); j++ {
+	// 	randi := rand.Intn(len(X))
+	// 	newBatch[j] = X[randi]
+	// 	newBatchLabels[j] = y[randi]
+	// }
 	newBatch := make([]*mat.Dense, batchSize)
 	newBatchLabels := make([]float64, batchSize)
-	for j := 0; j < len(newBatch); j++ {
-		randi := rand.Intn(len(X))
-		newBatch[j] = X[randi]
-		newBatchLabels[j] = y[randi]
+
+	for i := 0; i < batchSize; i++ {
+		newBatch[i] = utils.GenRandomMatrix(sts.Ncells, sts.Nmakers)
+		newBatchLabels[i] = float64(rand.Intn(sts.Nclasses))
 	}
 
 	plaintextSlice := utils.Batch2PlainSlice(newBatch, params, encoder)
