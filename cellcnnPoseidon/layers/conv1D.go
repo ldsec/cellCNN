@@ -181,7 +181,11 @@ func (conv *Conv1D) Forward(
 	batch := 1                    // only the left most
 	n := sts.Nmakers * sts.Ncells // num of slots to add together
 
-	actvs := make([]*ckks.Ciphertext, len(conv.filters)) // activations for each filter
+	actvs := make([]*ckks.Ciphertext, len(conv.filters)) // activations for each filter\
+
+	leftMostMask := make([]complex128, params.Slots())
+	leftMostMask[0] = complex(1.0/float64(sts.Ncells), 0)
+	poolMask := conv.encoder.EncodeNTTAtLvlNew(params.MaxLevel(), leftMostMask, params.LogSlots())
 
 	// wg := sync.WaitGroup{}
 	// loop over all filters
@@ -200,7 +204,7 @@ func (conv *Conv1D) Forward(
 		eval.InnerSum(actvs[i], batch, n, actvs[i])
 
 		// 3. mask the ouput to keep only the left most element
-		eval.MulRelin(actvs[i], mask, actvs[i])
+		eval.MulRelin(actvs[i], poolMask, actvs[i])
 
 		eval.Rescale(actvs[i], params.Scale(), actvs[i])
 

@@ -503,6 +503,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 
 	// model.Step(1)
 	model.conv1d.StepWithRep(1, 0, model.evaluator, encoder, model.cnnSettings, params)
+	model.dense.Step(1, 0, model.evaluator)
 
 	fmt.Println("######## Check the backward gradient for filter0 #########")
 	utils.DebugWithDense(params, model.conv1d.GetWeights()[0], nwfilters, decryptor, encoder, 20, []int{0}, false)
