@@ -72,6 +72,28 @@ type CryptoParamsForNetwork struct {
 // #------------ INIT ------------------#
 // #------------------------------------#
 
+func NewCryptoPlaceHolder(
+	params *ckks.Parameters, kgen ckks.KeyGenerator,
+	sk *ckks.SecretKey, rlk *ckks.RelinearizationKey,
+	encoder ckks.Encoder, encryptor ckks.Encryptor,
+) *CryptoParams {
+
+	encoders := make(chan ckks.Encoder, 1)
+	encoders <- encoder
+
+	encryptors := make(chan ckks.Encryptor, 1)
+	encryptors <- encryptor
+
+	return &CryptoParams{
+		Params:     params,
+		Sk:         sk,
+		Rlk:        rlk,
+		Kgen:       kgen,
+		encoders:   encoders,
+		encryptors: encryptors,
+	}
+}
+
 // NewCryptoParams initializes CryptoParams with the given values
 func NewCryptoParams(params *ckks.Parameters, kgen ckks.KeyGenerator, sk, aggregateSk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey) *CryptoParams {
 	evaluators := make(chan ckks.Evaluator, ThreadsCount)
@@ -287,7 +309,10 @@ func (cp *CryptoParams) GetEncoder() ckks.Encoder {
 }
 
 func (cp *CryptoParams) GetEncryptor() ckks.Encryptor {
-	return ckks.NewEncryptorFromPk(cp.Params, cp.Pk)
+	// return ckks.NewEncryptorFromPk(cp.Params, cp.Pk)
+	tmp := <-cp.encryptors
+	cp.encryptors <- tmp
+	return tmp
 }
 
 func (cp *CryptoParams) GetEvaluator() ckks.Evaluator {

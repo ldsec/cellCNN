@@ -111,7 +111,7 @@ func (conv *Conv1D) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 		Fshift = append(Fshift, -i)
 	}
 	Finds := append(Fmult, Fshift...)
-	fmt.Printf("Fshift: %v, Finds: %v\n", Fshift, Finds)
+	// fmt.Printf("Fshift: %v, Finds: %v\n", Fshift, Finds)
 
 	//Conv1D Backward
 	// 3. for replicate the err for each filter

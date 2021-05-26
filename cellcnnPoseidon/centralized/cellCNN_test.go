@@ -78,9 +78,11 @@ func TestOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -165,9 +167,11 @@ func TestBatch(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -238,9 +242,15 @@ func TestWithPlainNetForward(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	eNet := NewCellCNN(cnnSettings, cryptoParams)
 	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
-	eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// cw, dw := eNet.InitWeights(nil, nil, nil, nil)
+	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -386,7 +396,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	nfilters := 2
 	nclasses := 2
 	var sigDegree uint = 3
-	sigInterval := 7
+	sigInterval := 3
 	maxM1N2Ratio := 8.0
 
 	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
@@ -433,9 +443,15 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	ecf2 := encryptor.EncryptNew(ef2)
 	ecw := encryptor.EncryptNew(ew)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	cw, dw := model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, append(filter1[:nmakers], filter2[:nmakers]...), weights[:nfilters*nclasses])
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// cw, dw := model.InitWeights()
+	// model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
 	model.sk = sk
 
@@ -556,9 +572,15 @@ func TestLargeScale(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	eNet := NewCellCNN(cnnSettings, cryptoParams)
 	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
-	eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// cw, dw := eNet.InitWeights(nil, nil, nil, nil)
+	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -626,9 +648,15 @@ func TestTimeForwardBackward(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	eNet := NewCellCNN(cnnSettings, cryptoParams)
 	eNet.InitWeights(nil, nil, nil, nil)
-	eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// eNet.InitWeights(nil, nil, nil, nil)
+	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 	eNet.sk = sk
 
 	fmt.Println()

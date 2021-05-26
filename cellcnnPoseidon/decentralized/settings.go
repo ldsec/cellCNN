@@ -8,15 +8,15 @@ func GetSuit() *edwards25519.SuiteEd25519 {
 }
 
 const approximationDegree uint = 3
-const interval float64 = 7
+const interval float64 = 3
 const maxM1N2Ratio float64 = 8.0
-const ncells int = 300
-const nfilters int = 7
-const nmakers int = 16
+const ncells int = 5
+const nfilters int = 3
+const nmakers int = 2
 const nclasses int = 2
 const nodeBatchSize int = 8
 const learningRate float64 = 0.1
-const maxIterations int = 10
+const maxIterations int = 1
 
 // const NCELLS = 300
 // const NFEATURES = 16

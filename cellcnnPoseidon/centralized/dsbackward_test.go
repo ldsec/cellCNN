@@ -44,9 +44,15 @@ func TestDenseBackwardOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// model.InitWeights(nil, nil, nil, nil)
+	// model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -153,9 +159,15 @@ func TestConv1dBackwardOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// model.InitWeights(nil, nil, nil, nil)
+	// model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -251,9 +263,15 @@ func TestConv1dForwardOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// model.InitWeights(nil, nil, nil, nil)
+	// model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
 	fmt.Println()
 	fmt.Println("=========================================")
@@ -389,10 +407,16 @@ func TestModelForwardBackwardOne(t *testing.T) {
 	ecf2 := encryptor.EncryptNew(ef2)
 	ecw := encryptor.EncryptNew(ew)
 
-	model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+
+	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, nil, nil)
-	model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
-	model.conv1d.WithEncoder(encoder)
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+	// model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+	// model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, nil, nil)
+	// model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	// model.conv1d.WithEncoder(encoder)
 
 	model.sk = sk
 
