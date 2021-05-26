@@ -39,6 +39,8 @@ func (p *NNEncryptedProtocol) Init(
 
 	p.CryptoParams = CustomizedParams()
 
+	p.encoder = p.CryptoParams.GetEncoder()
+
 	p.Version = version
 
 	p.CellCNNSettings = layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, approximationDegree, interval)
@@ -56,6 +58,9 @@ func (p *NNEncryptedProtocol) Init(
 	p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams)
 	p.model.InitWeights(nil, nil, nil, nil)
 	p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
+
+	// use sk for bootstrapping
+	p.model.WithSk(p.CryptoParams.Sk)
 
 	return nil
 }

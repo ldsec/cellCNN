@@ -2,6 +2,7 @@ package decentralized
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
@@ -234,6 +235,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 
 	newEncryptedIterationMessage := NewEncryptedIterationMessage{}
 	for p.IterationNumber < p.MaxIterations { // protocol iterations
+		fmt.Println("enter iteration: ", p.IterationNumber)
 		// 1. Announcement phase
 		finished := false
 
@@ -349,6 +351,7 @@ func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) ([][]byte, err
 	for i := range X {
 		encOut, _ := p.model.ForwardOne(X[i], nil, nil, nil, nil)
 		err0 := p.model.ComputeLossOne(encOut, y[i])
+		fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, p.CryptoParams.Params))
 		p.model.BackwardOne(err0)
 		if i == 0 {
 			res = p.model.GetGradient()

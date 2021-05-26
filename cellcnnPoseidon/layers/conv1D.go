@@ -302,13 +302,15 @@ func (conv *Conv1D) Backward(
 	tx := time.Now()
 	for i, extErr := range extErrSlice {
 		tpart1 := time.Now()
+
+		if i == 0 {
+			fmt.Printf("decentralized check level: " + utils.PrintCipherLevel(extErr, params))
+		}
+
 		dwSlice[i] = evaluator.MulRelinNew(inputT, extErr)
 		if err := evaluator.Rescale(dwSlice[i], params.Scale(), dwSlice[i]); err != nil {
 			panic("fail to rescale, conv backward, inputT mult extErr")
 		}
-		// if i == 0 {
-		// 	fmt.Printf("inErr - 2 " + utils.PrintCipherLevel(dwSlice[i], params))
-		// }
 
 		// 4. innerSum to get the result in the correct place, valid at: (0~m-1)*n
 		evaluator.InnerSum(dwSlice[i], batch, n, dwSlice[i])

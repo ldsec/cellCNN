@@ -507,6 +507,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	// labels := make([]float64, 4)
 	var label float64 = 1
 	err0 := model.ComputeLossOne(encOut, label)
+	fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, params))
 
 	labelsDense := mat.NewDense(1, nclasses, []float64{0, 1})
 	errDense := mat.NewDense(1, nclasses, nil)

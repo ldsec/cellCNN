@@ -177,6 +177,10 @@ func (c *CellCNN) WithEvaluator(eval ckks.Evaluator) {
 	c.evaluator = eval
 }
 
+func (c *CellCNN) WithSk(sk *ckks.SecretKey) {
+	c.sk = sk
+}
+
 func (c *CellCNN) SetMomentum() {
 	if c.conv1d != nil {
 		c.conv1d.SetMomentum()

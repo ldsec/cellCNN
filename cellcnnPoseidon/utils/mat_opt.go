@@ -45,11 +45,13 @@ func Batch2PlainSlice(inputs []*mat.Dense, params *ckks.Parameters, encoder ckks
 func Matrix2Plaintext(rawData *mat.Dense, params *ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
 	// shape of each input: 200 * 37 (ncells = 200, nmakers = 37)
 	row, col := rawData.Dims()
+	// fmt.Println("row, col: ", row, col)
 	value := make([]complex128, params.Slots())
 	for i := 0; i < row; i++ {
 		for j := 0; j < col; j++ {
 			value[i*col+j] = complex(rawData.At(i, j), 0)
 		}
 	}
+
 	return encoder.EncodeNTTAtLvlNew(params.MaxLevel(), value, params.LogSlots())
 }
