@@ -11,10 +11,10 @@ const approximationDegree uint = 3
 const interval float64 = 3
 const maxM1N2Ratio float64 = 8.0
 const ncells int = 5
-const nfilters int = 3
+const nfilters int = 2
 const nmakers int = 2
 const nclasses int = 2
-const nodeBatchSize int = 4
+const nodeBatchSize int = 1
 const learningRate float64 = 0.1
 const maxIterations int = 2
 

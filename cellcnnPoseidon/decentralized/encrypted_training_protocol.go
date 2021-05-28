@@ -210,12 +210,16 @@ func (p *NNEncryptedProtocol) Start() error {
 		return err
 	}
 
+	fmt.Println("Start")
+
 	return nil
 }
 
 // Dispatch is called at each node and handles incoming messages.
 func (p *NNEncryptedProtocol) Dispatch() error {
 	defer p.Done()
+
+	fmt.Println("Dispatch")
 
 	var err error
 
@@ -235,7 +239,6 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 
 	newEncryptedIterationMessage := NewEncryptedIterationMessage{}
 	for p.IterationNumber < p.MaxIterations { // protocol iterations
-		fmt.Println("enter iteration: ", p.IterationNumber)
 		// 1. Announcement phase
 		finished := false
 
@@ -254,9 +257,12 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 			finished = p.IterationNumber >= p.MaxIterations
 		}
 
+		fmt.Println("enter iteration: ", p.IterationNumber, p.IsRoot())
+
 		if !finished {
 			// 2. Aggregation of local gradients
 			gradientsAggr, err := p.ascendingUpdateEncryptedGeneralModelPhase()
+			fmt.Println("one client finish training one iteration")
 			if err != nil {
 				return err
 			}
@@ -265,7 +271,9 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 				// if p.Debug.Print {
 				// 	log.Lvl2("ProtoIter: "+strconv.Itoa(p.IterationNumber)+", "+p.ServerIdentity().String()+", NEW WEIGHTS:", libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[0][0], 0)[p.InitalGapSize+1:p.InitalGapSize+3])
 				// }
+				fmt.Println("before root add iternum")
 				p.IterationNumber = p.IterationNumber + 1
+				fmt.Println("after root add iternum")
 				p.UpdateRootWeights(gradientsAggr)
 
 				// send updated weights down the tree
@@ -305,9 +313,14 @@ func (p *NNEncryptedProtocol) newEncryptedIterationAnnouncementPhase() (NewEncry
 
 func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*centralized.Gradients, error) {
 	// retrieve data points
-	gradients, err := p.localIteration(p.evaluator)
-	if err != nil {
-		return nil, err
+	var gradients [][]byte
+	var err error
+
+	if !p.IsRoot() {
+		gradients, err = p.localIteration(p.model.GetEvaluator())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// gradients for nn
@@ -319,17 +332,24 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 				aggChild = new(centralized.Gradients)
 				aggChild.NewGradient(v.ChildUpdatedLocalGradients)
 			} else {
-				aggChild.Aggregate(v.ChildUpdatedLocalGradients, p.evaluator)
+				aggChild.Aggregate(v.ChildUpdatedLocalGradients, p.model.GetEvaluator())
 			}
 		}
 
-		// add sum of children gradients with own local gradients
-		aggChild.Aggregate(gradients, p.evaluator)
+		if !p.IsRoot() {
+			// add sum of children gradients with own local gradients
+			aggChild.Aggregate(gradients, p.model.GetEvaluator())
+		}
 
 	} else {
 		aggChild = new(centralized.Gradients)
 		aggChild.NewGradient(gradients)
 	}
+
+	fmt.Printf("########\nIs Root: %v\nChecking the values of the local agg gradients: %v\n########\n",
+		p.IsRoot(),
+		aggChild.GetPlaintext(0, []int{0, 1, 2}, p.CryptoParams.Params, p.model.GetEncoder(), ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk)),
+	)
 
 	// send the aggregated gradients up
 	if !p.IsRoot() {
@@ -351,7 +371,12 @@ func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) ([][]byte, err
 	for i := range X {
 		encOut, _ := p.model.ForwardOne(X[i], nil, nil, nil, nil)
 		err0 := p.model.ComputeLossOne(encOut, y[i])
-		fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, p.CryptoParams.Params))
+
+		valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(encOut), p.CryptoParams.Params.LogSlots())
+
+		fmt.Printf("Check local iteration bacwakrd err: %v ...\n", valuesTest[0:4])
+
+		// fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, p.CryptoParams.Params))
 		p.model.BackwardOne(err0)
 		if i == 0 {
 			res = p.model.GetGradient()

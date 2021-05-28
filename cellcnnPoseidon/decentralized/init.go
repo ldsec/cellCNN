@@ -50,6 +50,7 @@ func (p *NNEncryptedProtocol) Init(
 
 	p.BatchSize = nodeBatchSize
 	p.MaxIterations = maxIterations
+	p.IterationNumber = 0
 
 	p.ApproximationDegree = int(approximationDegree)
 	p.Interval = []float64{-interval, interval}
@@ -57,7 +58,9 @@ func (p *NNEncryptedProtocol) Init(
 	//only in root, and root will pass weights down the tree
 	p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams)
 	p.model.InitWeights(nil, nil, nil, nil)
-	p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
+	eval := p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
+
+	p.evaluator = eval
 
 	// use sk for bootstrapping
 	p.model.WithSk(p.CryptoParams.Sk)

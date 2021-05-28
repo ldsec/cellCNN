@@ -8,7 +8,7 @@ import (
 	"github.com/ldsec/lattigo/v2/utils"
 )
 
-var ThreadsCount = 8
+var ThreadsCount = 1
 
 // CipherVector is a slice of Ciphertexts
 type CipherVector []*ckks.Ciphertext
@@ -310,14 +310,22 @@ func (cp *CryptoParams) GetEncoder() ckks.Encoder {
 
 func (cp *CryptoParams) GetEncryptor() ckks.Encryptor {
 	// return ckks.NewEncryptorFromPk(cp.Params, cp.Pk)
-	tmp := <-cp.encryptors
-	cp.encryptors <- tmp
+	// tmp := <-cp.encryptors
+	// cp.encryptors <- tmp
+	// return tmp
+	return ckks.NewEncryptorFromSk(cp.Params, cp.Sk)
+}
+
+func (cp *CryptoParams) GetDecryptor() ckks.Decryptor {
+	// return ckks.NewEncryptorFromPk(cp.Params, cp.Pk)
+	tmp := <-cp.decryptors
+	cp.decryptors <- tmp
 	return tmp
 }
 
 func (cp *CryptoParams) GetEvaluator() ckks.Evaluator {
 	tmp := <-cp.evaluators
-	cp.evaluators <- tmp.ShallowCopy()
+	cp.evaluators <- tmp
 	return tmp
 }
 

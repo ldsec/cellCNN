@@ -239,7 +239,7 @@ func (conv *Conv1D) Backward(
 	// 1. mult the dActv with the income err
 	// currently dActv = 1, skip this part
 
-	tx0 := time.Now()
+	// tx0 := time.Now()
 
 	// 2. extend the input err, pack each slot of err to length ncells*nmakers, with a factor of 1/n
 	maskedErrSlice := make([]*ckks.Ciphertext, sts.Nfilters)
@@ -261,11 +261,11 @@ func (conv *Conv1D) Backward(
 		// }
 	}
 
-	ty0 := time.Since(tx0)
+	// ty0 := time.Since(tx0)
 
-	fmt.Printf("> Time comsumed in point0 is: %v\n", ty0.Seconds())
+	// fmt.Printf("> Time comsumed in point0 is: %v\n", ty0.Seconds())
 
-	tx1 := time.Now()
+	// tx1 := time.Now()
 
 	//  2.2 rotate to extend one slots to ncells*nmakers, need to generate new rotation keys
 	// e.g.
@@ -281,31 +281,31 @@ func (conv *Conv1D) Backward(
 		extErrSlice[i] = leftMostTmp
 	}
 
-	ty1 := time.Since(tx1) // 18 seconds
+	// ty1 := time.Since(tx1) // 18 seconds
 
-	fmt.Printf("> Time comsumed in point1 is: %v\n", ty1.Seconds())
+	// fmt.Printf("> Time comsumed in point1 is: %v\n", ty1.Seconds())
 
 	// 3. mult the extended err with the transposed last input
 	dwSlice := make([]*ckks.Ciphertext, sts.Nfilters)
 
-	tx2 := time.Now()
+	// tx2 := time.Now()
 
 	inputT := conv.TransposeInput(sts, conv.lastInput, params)
 
-	ty2 := time.Since(tx2)
+	// ty2 := time.Since(tx2)
 
-	fmt.Printf("> Time comsumed in point2 is: %v\n", ty2.Seconds())
+	// fmt.Printf("> Time comsumed in point2 is: %v\n", ty2.Seconds())
 
 	batch := 1
 	n := sts.Ncells
 
-	tx := time.Now()
+	// tx := time.Now()
 	for i, extErr := range extErrSlice {
 		tpart1 := time.Now()
 
-		if i == 0 {
-			fmt.Printf("decentralized check level: " + utils.PrintCipherLevel(extErr, params))
-		}
+		// if i == 0 {
+		// 	fmt.Printf("decentralized check level: " + utils.PrintCipherLevel(extErr, params))
+		// }
 
 		dwSlice[i] = evaluator.MulRelinNew(inputT, extErr)
 		if err := evaluator.Rescale(dwSlice[i], params.Scale(), dwSlice[i]); err != nil {
@@ -334,12 +334,12 @@ func (conv *Conv1D) Backward(
 		}
 	}
 
-	fmt.Println("check level of dwSlice")
-	fmt.Println(utils.PrintCipherLevel(dwSlice[0], params))
+	// fmt.Println("check level of dwSlice")
+	// fmt.Println(utils.PrintCipherLevel(dwSlice[0], params))
 
-	ty := time.Since(tx)
+	// ty := time.Since(tx)
 
-	fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
+	// fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
 
 	conv.gradient = dwSlice
 
