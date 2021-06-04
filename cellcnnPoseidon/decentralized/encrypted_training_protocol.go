@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"runtime"
 
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/centralized"
@@ -34,6 +35,8 @@ const NNEncryptedProtocolName = "NNEncryptedProtocol"
 type NewEncryptedIterationMessage struct {
 	IterationNumber int
 	GlobalWeights   [][]byte // first n-1 are conv filters, last one is dense weight
+	GlobalSk        []byte
+	GlobalPk        []byte
 }
 
 // ChildUpdatedLocalGradientsMessage contains the gradients to be aggregated
@@ -198,7 +201,9 @@ func (p *NNEncryptedProtocol) Start() error {
 	//CN_1 sends the initial weights to initiate the process
 	weightsToSend := p.model.Marshall()
 
-	newEncryptedIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend}
+	// use common sk, pk across all nodes for test
+	dsk, spk := p.CryptoParams.MarshalBinary()
+	newEncryptedIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend, dsk, spk}
 
 	// Unlock channel (root node can continue with Dispatch)
 	if !p.Sync {
@@ -251,10 +256,32 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 
 			// receive iteration_number and weights
 			p.IterationNumber = newEncryptedIterationMessage.IterationNumber
-			p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
-
+			// p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
 			//need to check as new number is part of the message for non root nodes
 			finished = p.IterationNumber >= p.MaxIterations
+
+			// test: if iter = 0, use common pk, sk
+			if p.IterationNumber == 0 {
+				p.CryptoParams.RetrieveCommonParams(newEncryptedIterationMessage.GlobalSk, newEncryptedIterationMessage.GlobalPk)
+				//only in root, and root will pass weights down the tree
+				p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams)
+				p.model.InitWeights(nil, nil, nil, nil)
+				p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
+				eval := p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
+				p.evaluator = eval
+				// use sk for bootstrapping
+				p.model.WithSk(p.CryptoParams.Sk)
+			} else {
+				p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
+			}
+
+			if p.Index() == 1 {
+				valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(p.model.GetWeights()[0]), p.CryptoParams.Params.LogSlots())
+				fmt.Printf("######## node index: %v, inital weights in round %v: %v\n########\n",
+					p.Index(), p.IterationNumber,
+					valuesTest[0:4],
+				)
+			}
 		}
 
 		fmt.Println("enter iteration: ", p.IterationNumber, p.IsRoot())
@@ -271,21 +298,25 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 				// if p.Debug.Print {
 				// 	log.Lvl2("ProtoIter: "+strconv.Itoa(p.IterationNumber)+", "+p.ServerIdentity().String()+", NEW WEIGHTS:", libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[0][0], 0)[p.InitalGapSize+1:p.InitalGapSize+3])
 				// }
-				fmt.Println("before root add iternum")
+				// fmt.Println("before root add iternum")
 				p.IterationNumber = p.IterationNumber + 1
-				fmt.Println("after root add iternum")
+				// fmt.Println("after root add iternum")
+
+				// bootstrap before global update
+				gradientsAggr.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.Sk)
 				p.UpdateRootWeights(gradientsAggr)
 
 				// send updated weights down the tree
 				weightsToSend := p.model.Marshall()
 
-				newIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend}
+				newIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend, nil, nil}
 
 				if err := p.SendToChildren(&newIterationMessage); err != nil {
 					return err
 				}
 			}
 		}
+		runtime.GC()
 	}
 
 	// 3. Results reporting
@@ -346,8 +377,8 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 		aggChild.NewGradient(gradients)
 	}
 
-	fmt.Printf("########\nIs Root: %v\nChecking the values of the local agg gradients: %v\n########\n",
-		p.IsRoot(),
+	fmt.Printf("########\nIs Root: %v, index: %v\nChecking the values of the local agg gradients: %v\n########\n",
+		p.IsRoot(), p.Index(),
 		aggChild.GetPlaintext(0, []int{0, 1, 2}, p.CryptoParams.Params, p.model.GetEncoder(), ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk)),
 	)
 
@@ -372,21 +403,38 @@ func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) ([][]byte, err
 		encOut, _ := p.model.ForwardOne(X[i], nil, nil, nil, nil)
 		err0 := p.model.ComputeLossOne(encOut, y[i])
 
-		valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(encOut), p.CryptoParams.Params.LogSlots())
+		// valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(encOut), p.CryptoParams.Params.LogSlots())
 
-		fmt.Printf("Check local iteration bacwakrd err: %v ...\n", valuesTest[0:4])
+		// fmt.Printf("Check local iteration bacwakrd err: %v ...\n", valuesTest[0:4])
 
 		// fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, p.CryptoParams.Params))
 		p.model.BackwardOne(err0)
 		if i == 0 {
 			res = p.model.GetGradient()
+
+			valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(res[0]), p.CryptoParams.Params.LogSlots())
+			fmt.Printf("######## node index: %v, local batch %v, gradient: %v\n########\n",
+				p.Index(), i,
+				valuesTest[0:4],
+			)
 		} else {
 			ng := p.model.GetGradient()
+			valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(ng[0]), p.CryptoParams.Params.LogSlots())
+			fmt.Printf("######## node index: %v, local batch %v, gradient: %v\n########\n",
+				p.Index(), i,
+				valuesTest[0:4],
+			)
 			for i := range res {
 				eval.Add(res[i], ng[i], res[i])
 			}
 		}
 	}
+
+	valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(res[0]), p.CryptoParams.Params.LogSlots())
+	fmt.Printf("######## node index: %v, local batch %v, gradient: %v\n########\n",
+		p.Index(), "sum",
+		valuesTest[0:4],
+	)
 
 	bg := utils.CiphertextsToBytes(res)
 
@@ -424,6 +472,10 @@ func GetRandomBatch(
 
 	plaintextSlice := utils.Batch2PlainSlice(newBatch, params, encoder)
 	return plaintextSlice, newBatchLabels
+}
+
+func GetCommonCryptoParams() {
+
 }
 
 // // DecryptNNFinalWeights decrypt and extracts the cleartext weights for a 1-layer neural network model

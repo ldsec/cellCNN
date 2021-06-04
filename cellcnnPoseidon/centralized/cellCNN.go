@@ -49,6 +49,24 @@ func (g *Gradients) Aggregate(data [][]byte, eval ckks.Evaluator) {
 	eval.Add(g.dense, tmpDense, g.dense)
 }
 
+// bootstrap
+func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params *ckks.Parameters, sk *ckks.SecretKey) {
+	ect := ckks.NewEncryptorFromSk(params, sk)
+	dct := ckks.NewDecryptor(params, sk)
+
+	// re-encrypt filters
+	for i, each := range g.filters {
+		plain := encoder.Decode(dct.DecryptNew(each), params.LogSlots())
+		replain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plain, params.LogSlots())
+		g.filters[i] = ect.EncryptNew(replain)
+	}
+
+	// re-encrypt dense
+	plain := encoder.Decode(dct.DecryptNew(g.dense), params.LogSlots())
+	replain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plain, params.LogSlots())
+	g.dense = ect.EncryptNew(replain)
+}
+
 func (g *Gradients) Marshall() [][]byte {
 	res := make([][]byte, len(g.filters)+1)
 	var err error = nil
@@ -123,6 +141,12 @@ func (c *CellCNN) GetEncoder() ckks.Encoder {
 
 func (c *CellCNN) GetEvaluator() ckks.Evaluator {
 	return c.evaluator
+}
+
+func (c *CellCNN) GetWeights() []*ckks.Ciphertext {
+	econv := c.conv1d.GetWeights()
+	edense := c.dense.GetWeights()
+	return append(econv, edense)
 }
 
 type PlainCircuit struct {

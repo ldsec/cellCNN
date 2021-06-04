@@ -131,6 +131,46 @@ func NewCryptoParams(params *ckks.Parameters, kgen ckks.KeyGenerator, sk, aggreg
 	}
 }
 
+func (cp *CryptoParams) MarshalBinary() ([]byte, []byte) {
+	var dsk, dpk []byte
+	var err error
+	if dsk, err = cp.Sk.MarshalBinary(); err != nil {
+		panic("fail in sk marshal")
+	}
+	if dpk, err = cp.Pk.MarshalBinary(); err != nil {
+		panic("fail in pk marshal")
+	}
+	if len(dsk) == 0 {
+		panic("fail in loading marshal bytes")
+	}
+	return dsk, dpk
+}
+
+func (cp *CryptoParams) RetrieveCommonParams(dsk, dpk []byte) {
+	sk := new(ckks.SecretKey)
+	if err := sk.UnmarshalBinary(dsk); err != nil {
+		panic("fail to unmarshall sk")
+	}
+	pk := new(ckks.PublicKey)
+	if err := pk.UnmarshalBinary(dpk); err != nil {
+		panic("fail to unmarshall sk")
+	}
+	cp.Sk = sk
+	cp.Pk = pk
+	cp.Rlk = cp.Kgen.GenRelinearizationKey(sk)
+
+	close(cp.encryptors)
+	cp.encryptors = make(chan ckks.Encryptor, ThreadsCount)
+	for i := 0; i < ThreadsCount; i++ {
+		cp.encryptors <- ckks.NewEncryptorFromPk(cp.Params, pk)
+	}
+	close(cp.decryptors)
+	cp.decryptors = make(chan ckks.Decryptor, ThreadsCount)
+	for i := 0; i < ThreadsCount; i++ {
+		cp.decryptors <- ckks.NewDecryptor(cp.Params, sk)
+	}
+}
+
 // SetDecryptors sets the decryptors in the CryptoParams object
 func (cp *CryptoParams) SetDecryptors(params *ckks.Parameters, sk *ckks.SecretKey) {
 	decryptors := make(chan ckks.Decryptor, ThreadsCount)

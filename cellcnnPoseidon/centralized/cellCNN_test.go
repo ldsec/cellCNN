@@ -2,6 +2,7 @@ package centralized
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 
@@ -12,6 +13,33 @@ import (
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )
+
+func GetRandomBatch(
+	dataset *common.CnnDataset, batchSize int, params *ckks.Parameters, encoder ckks.Encoder,
+	sts *layers.CellCnnSettings,
+) ([]*ckks.Plaintext, []float64) {
+	// X := dataset.X
+	// y := dataset.Y
+
+	// // make a new batch
+	// newBatch := make([]*mat.Dense, batchSize)
+	// newBatchLabels := make([]float64, batchSize)
+	// for j := 0; j < len(newBatch); j++ {
+	// 	randi := rand.Intn(len(X))
+	// 	newBatch[j] = X[randi]
+	// 	newBatchLabels[j] = y[randi]
+	// }
+	newBatch := make([]*mat.Dense, batchSize)
+	newBatchLabels := make([]float64, batchSize)
+
+	for i := 0; i < batchSize; i++ {
+		newBatch[i] = utils.GenRandomMatrix(sts.Ncells, sts.Nmakers)
+		newBatchLabels[i] = float64(rand.Intn(sts.Nclasses))
+	}
+
+	plaintextSlice := utils.Batch2PlainSlice(newBatch, params, encoder)
+	return plaintextSlice, newBatchLabels
+}
 
 func CustomizedParams() *ckks.Parameters {
 	LogN := 15
@@ -478,6 +506,10 @@ func TestWithPlainNetBwOne(t *testing.T) {
 			plainInDense := mat.NewDense(ncells, nmakers, utils.SliceCmplxToFloat64(plainInput)[:ncells*nmakers])
 			encodeInput := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plainInput, params.LogSlots())
 
+			X, y := GetRandomBatch(nil, 1, params, encoder, cnnSettings)
+
+			encodeInput = X[0]
+
 			// init plaintext net
 			pconv := &cl.Conv1D{Nfilters: nfilters}
 			ppool := &cl.Pool{}
@@ -511,7 +543,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 			// )
 
 			// labels := make([]float64, 4)
-			var label float64 = 1
+			var label float64 = y[0]
 			err0 := model.ComputeLossOne(encOut, label)
 			fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, params))
 

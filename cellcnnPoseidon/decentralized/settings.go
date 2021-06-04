@@ -14,9 +14,9 @@ const ncells int = 5
 const nfilters int = 2
 const nmakers int = 2
 const nclasses int = 2
-const nodeBatchSize int = 1
+const nodeBatchSize int = 2
 const learningRate float64 = 0.1
-const maxIterations int = 2
+const maxIterations int = 3
 
 // const NCELLS = 300
 // const NFEATURES = 16

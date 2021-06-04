@@ -100,9 +100,9 @@ func TestDemo(t *testing.T) {
 
 	fmt.Println("start running")
 	// cryptoParamsList[0].SetDecryptors(cryptoParamsList[0].Params, cryptoParamsList[0].AggregateSk)
-	wBytes, err := RunNeuralNetworkTest(local, nil, tree, true, true, protoName)
+	_, err = RunNeuralNetworkTest(local, nil, tree, true, true, protoName)
 
-	fmt.Println(wBytes[0])
+	// fmt.Println(wBytes[0])
 	// for i := range expectedStats {
 	// 	require.InDelta(t, expectedStats[i], stats[i], 0.1)
 	// }
