@@ -8,7 +8,7 @@ import (
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
 	"github.com/ldsec/lattigo/v2/utils"
-	"github.com/ldsec/cellCNN/cellCNN_JPB"
+	"github.com/ldsec/cellCNN/cellCNN_optimized"
 	"runtime"
 )
 
