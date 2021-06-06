@@ -1,4 +1,4 @@
-package layers
+package utils
 
 type CellCnnSettings struct {
 	Ncells   int

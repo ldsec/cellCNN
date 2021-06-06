@@ -65,6 +65,10 @@ func (dense *Dense) WithEncoder(encoder ckks.Encoder) {
 	dense.encoder = encoder
 }
 
+func (dense *Dense) WithDiagM(diagM *ckks.PtDiagMatrix) {
+	dense.diagM = diagM
+}
+
 func (dense *Dense) GetGradient() *ckks.Ciphertext {
 	return dense.gradient
 }
@@ -89,7 +93,7 @@ func (dense *Dense) SetMomentum() {
 	dense.isMomentum = true
 }
 
-func (dense *Dense) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator,
+func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator,
 	params *ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
 ) []int {
 	// maxM1N2Ratio = 8.0
@@ -141,7 +145,7 @@ func (dense *Dense) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 func (dense *Dense) Forward(
 	input *ckks.Ciphertext,
 	newWeights *ckks.Ciphertext,
-	sts *CellCnnSettings,
+	sts *utils.CellCnnSettings,
 	evaluator ckks.Evaluator,
 	encoder ckks.Encoder,
 	params *ckks.Parameters,
@@ -213,7 +217,7 @@ func (dense *Dense) Forward(
 }
 
 func (dense *Dense) Backward(
-	inErr *ckks.Ciphertext, sts *CellCnnSettings, params *ckks.Parameters,
+	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *ckks.SecretKey,
 ) *ckks.Ciphertext {
 	// 1. compute the derivative of the activation function
@@ -371,7 +375,7 @@ func (dense *Dense) Step(lr float64, momentum float64, eval ckks.Evaluator) bool
 	return false
 }
 
-func (dense *Dense) PlainForwardCircuit(weights []complex128, input []complex128, sts *CellCnnSettings) ([]complex128, []complex128) {
+func (dense *Dense) PlainForwardCircuit(weights []complex128, input []complex128, sts *utils.CellCnnSettings) ([]complex128, []complex128) {
 
 	inputRep := utils.SliceReplicate(input, sts.Nfilters, sts.Nclasses)
 
@@ -397,7 +401,7 @@ func (dense *Dense) PlainForwardCircuit(weights []complex128, input []complex128
 }
 
 func (dense *Dense) PlainBackwardCircuit(
-	weights []complex128, input []complex128, u []complex128, err0 []complex128, sts *CellCnnSettings,
+	weights []complex128, input []complex128, u []complex128, err0 []complex128, sts *utils.CellCnnSettings,
 ) ([]complex128, []complex128) {
 	cf, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
 	if err != nil {

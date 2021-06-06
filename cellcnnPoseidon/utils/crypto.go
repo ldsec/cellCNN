@@ -28,7 +28,7 @@ type CryptoParams struct {
 	AggregateSk *ckks.SecretKey
 	Pk          *ckks.PublicKey
 	Rlk         *ckks.RelinearizationKey
-	Kgen        ckks.KeyGenerator
+	// Kgen        ckks.KeyGenerator
 	// RotKs       *ckks.RotationKeys
 	Params *ckks.Parameters
 
@@ -73,8 +73,8 @@ type CryptoParamsForNetwork struct {
 // #------------------------------------#
 
 func NewCryptoPlaceHolder(
-	params *ckks.Parameters, kgen ckks.KeyGenerator,
-	sk *ckks.SecretKey, rlk *ckks.RelinearizationKey,
+	params *ckks.Parameters,
+	sk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey,
 	encoder ckks.Encoder, encryptor ckks.Encryptor,
 ) *CryptoParams {
 
@@ -85,17 +85,18 @@ func NewCryptoPlaceHolder(
 	encryptors <- encryptor
 
 	return &CryptoParams{
-		Params:     params,
-		Sk:         sk,
-		Rlk:        rlk,
-		Kgen:       kgen,
+		Params: params,
+		Sk:     sk,
+		Rlk:    rlk,
+		Pk:     pk,
+		// Kgen:       kgen,
 		encoders:   encoders,
 		encryptors: encryptors,
 	}
 }
 
 // NewCryptoParams initializes CryptoParams with the given values
-func NewCryptoParams(params *ckks.Parameters, kgen ckks.KeyGenerator, sk, aggregateSk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey) *CryptoParams {
+func NewCryptoParams(params *ckks.Parameters, sk, aggregateSk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey) *CryptoParams {
 	evaluators := make(chan ckks.Evaluator, ThreadsCount)
 	// for i := 0; i < ThreadsCount; i++ {
 	// 	evaluators <- eval.ShallowCopy()
@@ -122,13 +123,17 @@ func NewCryptoParams(params *ckks.Parameters, kgen ckks.KeyGenerator, sk, aggreg
 		AggregateSk: aggregateSk,
 		Pk:          pk,
 		Rlk:         rlk,
-		Kgen:        kgen,
+		// Kgen:        kgen,
 
 		encoders:   encoders,
 		encryptors: encryptors,
 		decryptors: decryptors,
 		evaluators: evaluators,
 	}
+}
+
+func (cp *CryptoParams) Kgen() ckks.KeyGenerator {
+	return ckks.NewKeyGenerator(cp.Params)
 }
 
 func (cp *CryptoParams) MarshalBinary() ([]byte, []byte) {
@@ -157,7 +162,7 @@ func (cp *CryptoParams) RetrieveCommonParams(dsk, dpk []byte) {
 	}
 	cp.Sk = sk
 	cp.Pk = pk
-	cp.Rlk = cp.Kgen.GenRelinearizationKey(sk)
+	cp.Rlk = cp.Kgen().GenRelinearizationKey(sk)
 
 	close(cp.encryptors)
 	cp.encryptors = make(chan ckks.Encryptor, ThreadsCount)
@@ -198,26 +203,26 @@ func (cp *CryptoParams) SetEvaluator(eval ckks.Evaluator) {
 }
 
 // NewCryptoParamsForNetwork initializes a set of nbrNodes CryptoParams each containing: keys, encoder, encryptor, decryptor, etc.
-// func NewCryptoParamsForNetwork(params *ckks.Parameters, nbrNodes int) []*CryptoParams {
-// 	kgen := ckks.NewKeyGenerator(params)
+func NewCryptoParamsForNetwork(params *ckks.Parameters, nbrNodes int) []*CryptoParams {
+	kgen := ckks.NewKeyGenerator(params)
 
-// 	aggregateSk := ckks.NewSecretKey(params)
-// 	skList := make([]*ckks.SecretKey, nbrNodes)
-// 	rq, _ := ring.NewRing(params.N(), append(params.Qi(), params.Pi()...))
+	aggregateSk := ckks.NewSecretKey(params)
+	skList := make([]*ckks.SecretKey, nbrNodes)
+	rq, _ := ring.NewRing(params.N(), append(params.Qi(), params.Pi()...))
 
-// 	for i := 0; i < nbrNodes; i++ {
-// 		skList[i] = kgen.GenSecretKey()
-// 		rq.Add(aggregateSk.Get(), skList[i].Get(), aggregateSk.Get())
-// 	}
-// 	pk := kgen.GenPublicKey(aggregateSk)
+	for i := 0; i < nbrNodes; i++ {
+		skList[i] = kgen.GenSecretKey()
+		rq.Add(aggregateSk.Value, skList[i].Value, aggregateSk.Value)
+	}
+	pk := kgen.GenPublicKey(aggregateSk)
 
-// 	ret := make([]*CryptoParams, nbrNodes)
-// 	for i := range ret {
-// 		rlk := kgen.GenRelinKey(aggregateSk)
-// 		ret[i] = NewCryptoParams(params, skList[i], aggregateSk, pk, rlk)
-// 	}
-// 	return ret
-// }
+	ret := make([]*CryptoParams, nbrNodes)
+	for i := range ret {
+		rlk := kgen.GenRelinearizationKey(aggregateSk)
+		ret[i] = NewCryptoParams(params, skList[i], aggregateSk, pk, rlk)
+	}
+	return ret
+}
 
 // NewCryptoParamsFromPath reads given path and return the parsed CryptoParams
 // func NewCryptoParamsFromPath(path string) ([]*CryptoParams, error) {
@@ -353,6 +358,9 @@ func (cp *CryptoParams) GetEncryptor() ckks.Encryptor {
 	// tmp := <-cp.encryptors
 	// cp.encryptors <- tmp
 	// return tmp
+	if cp.AggregateSk != nil {
+		return ckks.NewEncryptorFromSk(cp.Params, cp.AggregateSk)
+	}
 	return ckks.NewEncryptorFromSk(cp.Params, cp.Sk)
 }
 

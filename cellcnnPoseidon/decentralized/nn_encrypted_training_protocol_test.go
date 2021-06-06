@@ -46,6 +46,7 @@ func TestDemo(t *testing.T) {
 
 	// cryptoParamsList = nnenc.ReadOrGenerateCryptoParamsForNN(HOSTS, N, PATH_CRYPTO_FILES, nInputLayer, nOutputLayer, nHiddenLayer, false)
 	// require.NotNil(t, cryptoParamsList)
+	cryptoList := CustomizedNetworkKeysList(HOSTS)
 
 	servers, _, tree := local.GenTree(HOSTS, true)
 	for _, s := range servers {
@@ -65,7 +66,7 @@ func TestDemo(t *testing.T) {
 			protocol.Sync = true
 
 			// 2. init protocol training variables
-			err = protocol.Init("v1")
+			err = protocol.Init("v1", cryptoList[tni.Index()])
 
 			// // ##STEP 1: Split data
 			// X, Y, maxIterations := spindleprotcommon.SplitDataForTest(trainType, spindleprotcommon.TrainData.X, spindleprotcommon.TrainData.Y, len(tni.Roster().List), tni.Index(),
@@ -136,6 +137,7 @@ func genTest(
 		// seed, err = libspindle.GenRandSeed()
 		// require.NoError(t, err)
 
+		cryptoList := CustomizedNetworkKeysList(HOSTS)
 		// cryptoParamsList = nnenc.ReadOrGenerateCryptoParamsForNN(HOSTS, N, PATH_CRYPTO_FILES, nInputLayer, nOutputLayer, nHiddenLayer, false)
 		// require.NotNil(t, cryptoParamsList)
 
@@ -157,7 +159,7 @@ func genTest(
 				protocol.Sync = true
 
 				// 2. init protocol training variables
-				err = protocol.Init("v1")
+				err = protocol.Init("v1", cryptoList[tni.Index()])
 
 				// // ##STEP 1: Split data
 				// X, Y, maxIterations := spindleprotcommon.SplitDataForTest(trainType, spindleprotcommon.TrainData.X, spindleprotcommon.TrainData.Y, len(tni.Roster().List), tni.Index(),

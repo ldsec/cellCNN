@@ -111,7 +111,7 @@ func (g *Gradients) GetPlaintext(idx int, inds []int, params *ckks.Parameters, e
 
 type CellCNN struct {
 	// network settings
-	cnnSettings *layers.CellCnnSettings
+	cnnSettings *utils.CellCnnSettings
 	// crypto settings
 	params    *ckks.Parameters
 	relikey   *ckks.RelinearizationKey
@@ -172,9 +172,9 @@ func NewPlainCircuit(filters [][]complex128, weights []complex128, input []compl
 }
 
 func NewCellCNN(
-	// sts *layers.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
+	// sts *utils.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
 	// encoder ckks.Encoder, encryptor ckks.Encryptor,
-	sts *layers.CellCnnSettings, cryptoParams *utils.CryptoParams,
+	sts *utils.CellCnnSettings, cryptoParams *utils.CryptoParams,
 ) *CellCNN {
 
 	model := &CellCNN{
@@ -226,6 +226,10 @@ func (c *CellCNN) WithEvaluator(eval ckks.Evaluator) {
 
 func (c *CellCNN) WithSk(sk *ckks.SecretKey) {
 	c.sk = sk
+}
+
+func (c *CellCNN) WithDiagM(diagM *ckks.PtDiagMatrix) {
+	c.dense.WithDiagM(diagM)
 }
 
 func (c *CellCNN) SetMomentum() {
@@ -319,7 +323,7 @@ func (c *CellCNN) InitEvaluator(
 	maxM1N2Ratio float64,
 ) ckks.Evaluator {
 
-	kgen := cryptoParams.Kgen
+	kgen := cryptoParams.Kgen()
 	encoder := c.encoder
 	params := cryptoParams.Params
 	sk := cryptoParams.Sk

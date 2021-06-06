@@ -96,7 +96,7 @@ func (conv *Conv1D) SetMomentum() {
 	conv.isMomentum = true
 }
 
-func (conv *Conv1D) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator) []int {
+func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
 	ncells := sts.Ncells
@@ -152,7 +152,7 @@ func (conv *Conv1D) InitRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerato
 	return Inds
 }
 
-func (conv *Conv1D) TransposeInput(sts *CellCnnSettings, input *ckks.Plaintext, params *ckks.Parameters) *ckks.Plaintext {
+func (conv *Conv1D) TransposeInput(sts *utils.CellCnnSettings, input *ckks.Plaintext, params *ckks.Parameters) *ckks.Plaintext {
 	slice := conv.encoder.Decode(input, params.LogSlots())
 	rowPacked := true
 	sliceT := utils.SliceTranspose(slice, sts.Nmakers, sts.Ncells, rowPacked)
@@ -165,7 +165,7 @@ func (conv *Conv1D) TransposeInput(sts *CellCnnSettings, input *ckks.Plaintext, 
 func (conv *Conv1D) Forward(
 	input *ckks.Plaintext,
 	newFilters []*ckks.Ciphertext,
-	sts *CellCnnSettings,
+	sts *utils.CellCnnSettings,
 	evaluator ckks.Evaluator,
 	params *ckks.Parameters,
 	mask *ckks.Plaintext,
@@ -231,7 +231,7 @@ func (conv *Conv1D) Forward(
 }
 
 func (conv *Conv1D) Backward(
-	inErr *ckks.Ciphertext, sts *CellCnnSettings, params *ckks.Parameters,
+	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder,
 ) []*ckks.Ciphertext {
 	// return dw for each filter, for debug
@@ -348,7 +348,7 @@ func (conv *Conv1D) Backward(
 
 func (conv *Conv1D) StepWithRep(
 	lr float64, momentum float64, eval ckks.Evaluator,
-	encoder ckks.Encoder, sts *CellCnnSettings, params *ckks.Parameters,
+	encoder ckks.Encoder, sts *utils.CellCnnSettings, params *ckks.Parameters,
 ) bool {
 	// create mask with scale
 	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
@@ -406,7 +406,7 @@ func (conv *Conv1D) Step(lr float64, momentum float64, eval ckks.Evaluator) bool
 }
 
 func (conv *Conv1D) PlainForwardCircuit(
-	input []complex128, filters [][]complex128, sts *CellCnnSettings,
+	input []complex128, filters [][]complex128, sts *utils.CellCnnSettings,
 ) []complex128 {
 	slots := len(input)
 	res := make([]complex128, slots)
@@ -421,7 +421,7 @@ func (conv *Conv1D) PlainForwardCircuit(
 }
 
 func (conv *Conv1D) PlainBackwardCircuit(
-	input []complex128, err0 []complex128, sts *CellCnnSettings,
+	input []complex128, err0 []complex128, sts *utils.CellCnnSettings,
 ) [][]complex128 {
 	// get the err for each filter
 	extErrSlice := make([][]complex128, sts.Nfilters)

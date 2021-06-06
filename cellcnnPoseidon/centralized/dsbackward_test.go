@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
@@ -33,7 +32,7 @@ func TestDenseBackwardOne(t *testing.T) {
 	sigInterval := 7
 	maxM1N2Ratio := 8.0
 
-	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
 	fmt.Printf(
 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
@@ -44,7 +43,8 @@ func TestDenseBackwardOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+	pk := kgen.GenPublicKey(sk)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
 	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
@@ -148,7 +148,7 @@ func TestConv1dBackwardOne(t *testing.T) {
 	sigInterval := 7
 	maxM1N2Ratio := 8.0
 
-	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
 	fmt.Printf(
 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
@@ -159,7 +159,8 @@ func TestConv1dBackwardOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+	pk := kgen.GenPublicKey(sk)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
 	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
@@ -252,7 +253,7 @@ func TestConv1dForwardOne(t *testing.T) {
 	sigInterval := 7
 	maxM1N2Ratio := 8.0
 
-	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
 	fmt.Printf(
 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
@@ -263,7 +264,8 @@ func TestConv1dForwardOne(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+	pk := kgen.GenPublicKey(sk)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
 	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights(nil, nil, nil, nil)
@@ -363,7 +365,7 @@ func TestModelForwardBackwardOne(t *testing.T) {
 	sigInterval := 7
 	maxM1N2Ratio := 8.0
 
-	cnnSettings := layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
 	fmt.Printf(
 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
@@ -407,7 +409,8 @@ func TestModelForwardBackwardOne(t *testing.T) {
 	ecf2 := encryptor.EncryptNew(ef2)
 	ecw := encryptor.EncryptNew(ew)
 
-	cryptoParams := utils.NewCryptoPlaceHolder(params, kgen, sk, rlk, encoder, encryptor)
+	pk := kgen.GenPublicKey(sk)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
 	model := NewCellCNN(cnnSettings, cryptoParams)
 	model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, nil, nil)

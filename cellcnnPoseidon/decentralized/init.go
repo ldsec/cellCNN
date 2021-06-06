@@ -2,7 +2,6 @@ package decentralized
 
 import (
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/centralized"
-	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
@@ -29,21 +28,42 @@ func CustomizedParams() *utils.CryptoParams {
 	pk := kgen.GenPublicKey(sk)
 	rlk := kgen.GenRelinearizationKey(sk)
 
-	return utils.NewCryptoParams(params, kgen, sk, nil, pk, rlk)
+	return utils.NewCryptoParams(params, sk, nil, pk, rlk)
+}
+
+func CustomizedNetworkKeysList(nbrNodes int) []*utils.CryptoParams {
+	LogN := 15
+	LogSlots := 14
+	// logN=15: max 881 logQP
+	LogModuli := ckks.LogModuli{
+		LogQi: []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
+		LogPi: []int{61, 61, 61},                             //90
+	}
+	// sum of first 3 logQi == Scale +128
+	Scale := float64(1 << 52)
+	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+	if err != nil {
+		panic(err)
+	}
+	params.SetScale(Scale)
+	params.SetLogSlots(LogSlots)
+
+	return utils.NewCryptoParamsForNetwork(params, nbrNodes)
 }
 
 // Init initializes variables for cellCNN
 func (p *NNEncryptedProtocol) Init(
 	version string,
+	crypto *utils.CryptoParams,
 ) error {
 
-	p.CryptoParams = CustomizedParams()
+	p.CryptoParams = crypto
 
 	p.encoder = p.CryptoParams.GetEncoder()
 
 	p.Version = version
 
-	p.CellCNNSettings = layers.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, approximationDegree, interval)
+	p.CellCNNSettings = utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, approximationDegree, interval)
 
 	// local learning rate
 	p.LearningRate = learningRate / float64(HOSTS*nodeBatchSize)
@@ -58,12 +78,15 @@ func (p *NNEncryptedProtocol) Init(
 	//only in root, and root will pass weights down the tree
 	p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams)
 	p.model.InitWeights(nil, nil, nil, nil)
-	eval := p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
+	eval, diagM := utils.InitEvaluator(p.CryptoParams, p.CellCNNSettings, maxM1N2Ratio)
+	p.model.WithEvaluator(eval)
+	p.model.WithDiagM(diagM)
+	// eval := p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
 
 	p.evaluator = eval
 
 	// use sk for bootstrapping
-	p.model.WithSk(p.CryptoParams.Sk)
+	p.model.WithSk(p.CryptoParams.AggregateSk)
 
 	return nil
 }
