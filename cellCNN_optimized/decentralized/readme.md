@@ -1,8 +1,8 @@
-#### Party Creation
+# Party Creation
 
 P = cellCNN.NewCellCNNProtocol(params \*ckks.Parameters)
 
-#### Key Generation
+#Key Generation
 
 Secret-Key : P.SetSecretKey(sk \*ckks.SecretKey)
 
@@ -14,7 +14,7 @@ Rotation-Key : P.SetRotationkey(galEl uint64, TOBEDEFINED)
 
 To get the needed rotations : P.RotKeyIndex()
 
-#### Weight Init
+#Weight Init
 
 // Roots 
 C := cellCNN.WeightsInit(Features, Filters, Features)
@@ -28,48 +28,48 @@ P.SetWeights(C \*ckks.Matrix, W \*ckks.Matrix)
 P.EncryptWeights()
 
 
-#### Init Local Evaluator
+#Init Local Evaluator
 
 // Root and all children do
 P.EvaluatorInit()
 
 
-#### Local Computation
+# Local Computation
 
-### Pre-pooling
+## Pre-pooling
 Load batch of n samples, each of Features x Filters, average pooling across the Features. Batch is now an n x Filters matrix
 
-### Forward Pass
+## Forward Pass
 
-## Plain
+### Plain
 P.ForwardPlain(batch \*ckks.Matrix)
 
-## Encrypted
+### Encrypted
 P.Forward(batch \*ckks.Matrix)
 
 
-### Bootstrapping
+## Bootstrapping
 
 
-### Backward
+## Backward
 
-## Plain
+### Plain
 
 P.BackwardPlain(XBatch, YBatch \*ckks.Matrix, #Parties int))
 
-## Encrypted
+### Encrypted
 
 P.Backward(XBatch, YBatch \*ckks.Matrix, #Parties int)
 
 
-### Aggregation
+## Aggregation
 
-### Update Model
+## Update Model
 
-## Plain
+### Plain
 
 P.UpdatePlain(DCPool, DWPool)
 
-## Encrypted
+### Encrypted
 
 P.Update(ctDCPool, ctDWPool \*ckks.Ciphertext,)
