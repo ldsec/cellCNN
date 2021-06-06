@@ -23,7 +23,7 @@ To get the needed rotations : P.RotKeyIndex()
 P.SetRotationkey(galEl uint64, TOBEDEFINED)
 
 
-#Weight Init
+# Weight Init
 
 1) Roots does : 
 C := cellCNN.WeightsInit(Features, Filters, Features)
@@ -36,7 +36,7 @@ P.SetWeights(C \*ckks.Matrix, W \*ckks.Matrix)
 P.EncryptWeights()
 
 
-#Init Local Evaluator
+# Init Local Evaluator
 
 1) Root and all children do
 P.EvaluatorInit()
