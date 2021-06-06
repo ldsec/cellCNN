@@ -36,10 +36,18 @@ P.EvaluatorInit()
 
 # Local Computation
 
-## Pre-pooling
+One epoch : 
+1) Select batch of samples
+2) Average prepooling of the samples
+3) Forward pass
+4) Bootstrapping with repacking
+5) Backward pass
+6) Global update
+
+## 2) Pre-pooling
 Load batch of n samples, each of Features x Filters, average pooling across the Features. Batch is now an n x Filters matrix
 
-## Forward Pass
+## 3) Forward Pass
 
 ### Plain
 P.ForwardPlain(batch \*ckks.Matrix)
@@ -48,10 +56,10 @@ P.ForwardPlain(batch \*ckks.Matrix)
 P.Forward(batch \*ckks.Matrix)
 
 
-## Bootstrapping
+## 4) Bootstrapping
 
 
-## Backward
+## 5) Backward
 
 ### Plain
 
@@ -62,9 +70,7 @@ P.BackwardPlain(XBatch, YBatch \*ckks.Matrix, #Parties int))
 P.Backward(XBatch, YBatch \*ckks.Matrix, #Parties int)
 
 
-## Aggregation
-
-## Update Model
+## 6) Update Model
 
 ### Plain
 
