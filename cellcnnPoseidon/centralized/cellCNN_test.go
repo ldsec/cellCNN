@@ -508,9 +508,9 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	plainInDense := mat.NewDense(ncells, nmakers, utils.SliceCmplxToFloat64(plainInput)[:ncells*nmakers])
 	encodeInput := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plainInput, params.LogSlots())
 
-	X, y := GetRandomBatch(nil, 1, params, encoder, cnnSettings)
+	// X, y := GetRandomBatch(nil, 1, params, encoder, cnnSettings)
 
-	encodeInput = X[0]
+	// encodeInput = X[0]
 
 	// init plaintext net
 	pconv := &cl.Conv1D{Nfilters: nfilters}
@@ -544,8 +544,8 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	// 	params, output, outputPlain, decryptor, encoder, validSlotsInds,
 	// )
 
-	// labels := make([]float64, 4)
-	var label float64 = y[0]
+	label := 1.0
+	// var label float64 = y[0]
 	err0 := model.ComputeLossOne(encOut, label)
 	fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, params))
 
@@ -558,7 +558,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	nwfilters := pNet.conv.GetWeights()
 	nwdense := pNet.dense.GetWeights()
 
-	model.Step(1)
+	// model.Step(1)
 	model.conv1d.StepWithRep(1, 0, model.evaluator, encoder, model.cnnSettings, params)
 	model.dense.Step(1, 0, model.evaluator)
 
