@@ -13,6 +13,102 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+type Gradients struct {
+	filters []*ckks.Ciphertext
+	dense   *ckks.Ciphertext
+}
+
+func (g *Gradients) NewGradient(data [][]byte) {
+	g.filters = make([]*ckks.Ciphertext, len(data)-1)
+	for i, each := range data[:len(data)-1] {
+		g.filters[i] = new(ckks.Ciphertext)
+		if err := g.filters[i].UnmarshalBinary(each); err != nil {
+			panic("fail to unmarshall Gradients")
+		}
+	}
+	g.dense = new(ckks.Ciphertext)
+	if err := g.dense.UnmarshalBinary(data[len(data)-1]); err != nil {
+		panic("fail to unmarshall conv filter weights")
+	}
+}
+
+// aggregate data to self
+func (g *Gradients) Aggregate(data [][]byte, eval ckks.Evaluator) {
+	// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
+	for i, each := range data[:len(data)-1] {
+		tmpFilter := new(ckks.Ciphertext)
+		if err := tmpFilter.UnmarshalBinary(each); err != nil {
+			panic("fail to unmarshall Gradients Aggregate")
+		}
+		eval.Add(g.filters[i], tmpFilter, g.filters[i])
+	}
+	tmpDense := new(ckks.Ciphertext)
+	if err := tmpDense.UnmarshalBinary(data[len(data)-1]); err != nil {
+		panic("fail to unmarshall conv filter weights")
+	}
+	eval.Add(g.dense, tmpDense, g.dense)
+}
+
+// bootstrap
+func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params *ckks.Parameters, sk *ckks.SecretKey) {
+	ect := ckks.NewEncryptorFromSk(params, sk)
+	dct := ckks.NewDecryptor(params, sk)
+
+	// re-encrypt filters
+	for i, each := range g.filters {
+		plain := encoder.Decode(dct.DecryptNew(each), params.LogSlots())
+		replain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plain, params.LogSlots())
+		g.filters[i] = ect.EncryptNew(replain)
+	}
+
+	// re-encrypt dense
+	plain := encoder.Decode(dct.DecryptNew(g.dense), params.LogSlots())
+	replain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), plain, params.LogSlots())
+	g.dense = ect.EncryptNew(replain)
+}
+
+func (g *Gradients) Marshall() [][]byte {
+	res := make([][]byte, len(g.filters)+1)
+	var err error = nil
+	for i, each := range g.filters {
+		res[i], err = each.MarshalBinary()
+		if err != nil {
+			panic("err in marshall Gradients")
+		}
+	}
+	res[len(res)-1], err = g.dense.MarshalBinary()
+	if err != nil {
+		panic("err in marshall Gradients")
+	}
+	return res
+}
+
+func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
+	res := make([]*ckks.Ciphertext, len(data))
+	for i, each := range data {
+		res[i] = new(ckks.Ciphertext)
+		if err := res[i].UnmarshalBinary(each); err != nil {
+			panic("fail to unmarshall Gradients")
+		}
+	}
+	return res
+}
+
+func (g *Gradients) GetPlaintext(idx int, inds []int, params *ckks.Parameters, encoder ckks.Encoder, decryptor ckks.Decryptor) []complex128 {
+	var ct *ckks.Ciphertext
+	if idx < len(g.filters) {
+		ct = g.filters[idx]
+	} else {
+		ct = g.dense
+	}
+	plaintext := encoder.Decode(decryptor.DecryptNew(ct), params.LogSlots())
+	res := make([]complex128, len(inds))
+	for i, each := range inds {
+		res[i] = plaintext[each]
+	}
+	return res
+}
+
 type CellCNN struct {
 	// network settings
 	cnnSettings *layers.CellCnnSettings
@@ -39,6 +135,20 @@ type CellCNN struct {
 	// denseMaskMap map[int]*ckks.Plaintext
 }
 
+func (c *CellCNN) GetEncoder() ckks.Encoder {
+	return c.encoder
+}
+
+func (c *CellCNN) GetEvaluator() ckks.Evaluator {
+	return c.evaluator
+}
+
+func (c *CellCNN) GetWeights() []*ckks.Ciphertext {
+	econv := c.conv1d.GetWeights()
+	edense := c.dense.GetWeights()
+	return append(econv, edense)
+}
+
 type PlainCircuit struct {
 	// weights
 	filters [][]complex128
@@ -62,22 +172,60 @@ func NewPlainCircuit(filters [][]complex128, weights []complex128, input []compl
 }
 
 func NewCellCNN(
-	sts *layers.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
-	encoder ckks.Encoder, encryptor ckks.Encryptor,
+	// sts *layers.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
+	// encoder ckks.Encoder, encryptor ckks.Encryptor,
+	sts *layers.CellCnnSettings, cryptoParams *utils.CryptoParams,
 ) *CellCNN {
 
 	model := &CellCNN{
 		cnnSettings: sts,
-		params:      params,
-		relikey:     rlk,
-		encoder:     encoder,
-		encryptor:   encryptor,
+		params:      cryptoParams.Params,
+		relikey:     cryptoParams.Rlk,
+		encoder:     cryptoParams.GetEncoder(),
+		encryptor:   cryptoParams.GetEncryptor(),
 	}
 	return model
 }
 
+func (c *CellCNN) UpdateWithGradients(g *Gradients) {
+	c.conv1d.UpdateWithGradients(g.filters, c.evaluator)
+	c.dense.UpdateWithGradients(g.dense, c.evaluator)
+}
+
+func (c *CellCNN) Marshall() (data [][]byte) {
+	filterData := c.conv1d.Marshall()
+	denseData := c.dense.Marshall()
+	// milestone = len(filterData)
+	data = append(filterData, denseData)
+	return
+}
+
+func (c *CellCNN) Unmarshall(data [][]byte) {
+	nfilters := len(data) - 1
+	c.conv1d.Unmarshall(data[:nfilters])
+	c.dense.Unmarshall(data[nfilters])
+}
+
+// return the the graident
+func (c *CellCNN) GetGradient() []*ckks.Ciphertext {
+	filters := c.conv1d.GetGradient()
+	dense := c.dense.GetGradient()
+	return append(filters, dense)
+}
+
+// return the byte representation of the graident
+func (c *CellCNN) GetGradientBinary() [][]byte {
+	dConv := c.conv1d.GetGradientBinary()
+	dDense := c.dense.GetGradientBinary()
+	return append(dConv, dDense)
+}
+
 func (c *CellCNN) WithEvaluator(eval ckks.Evaluator) {
 	c.evaluator = eval
+}
+
+func (c *CellCNN) WithSk(sk *ckks.SecretKey) {
+	c.sk = sk
 }
 
 func (c *CellCNN) SetMomentum() {
@@ -163,16 +311,23 @@ func (c *CellCNN) InitWeights(
 }
 
 func (c *CellCNN) InitEvaluator(
-	kgen ckks.KeyGenerator,
-	sk *ckks.SecretKey,
-	encoder ckks.Encoder,
-	params *ckks.Parameters,
+	// kgen ckks.KeyGenerator,
+	// sk *ckks.SecretKey,
+	// encoder ckks.Encoder,
+	// params *ckks.Parameters,
+	cryptoParams *utils.CryptoParams,
 	maxM1N2Ratio float64,
-) {
+) ckks.Evaluator {
+
+	kgen := cryptoParams.Kgen
+	encoder := c.encoder
+	params := cryptoParams.Params
+	sk := cryptoParams.Sk
+
 	t1 := time.Now()
+
 	Cinds := c.conv1d.InitRotationInds(c.cnnSettings, kgen)
 	Dinds := c.dense.InitRotationInds(c.cnnSettings, kgen, c.params, encoder, maxM1N2Ratio)
-
 	Rinds := utils.ClearRotInds(append(Cinds, Dinds...), params.Slots())
 
 	rks := kgen.GenRotationKeysForRotations(Rinds, false, sk)
@@ -181,8 +336,11 @@ func (c *CellCNN) InitEvaluator(
 
 	c.evaluator = ckks.NewEvaluator(c.params, ckks.EvaluationKey{Rlk: c.relikey, Rtks: rks})
 
+	// cryptoParams.SetEvaluator(c.evaluator)
+
 	fmt.Printf("==> CellCNN successfully creating evaluator\n")
 	fmt.Printf("    with %v to generate rotation keys\n", t2)
+	return c.evaluator
 }
 
 func (c *CellCNN) GenerateMaskMap() map[int]*ckks.Plaintext {
@@ -193,7 +351,7 @@ func (c *CellCNN) GenerateMaskMap() map[int]*ckks.Plaintext {
 	for i := 0; i < nclasses; i++ {
 		maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
 			tmpMask := make([]complex128, c.params.Slots())
-			fmt.Println("making maskMap: ", i*(nfilters-1))
+			// fmt.Println("making maskMap: ", i*(nfilters-1))
 			tmpMask[i] = complex(float64(1), 0)
 			return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
 		}()
@@ -217,20 +375,20 @@ func (c *CellCNN) ForwardOne(
 
 	if poolMask == nil && maskMap == nil {
 
-		fmt.Println("got nil mask")
+		// fmt.Println("got nil mask")
 		// initialize masks required
 		// conv1d left most mask
 		LeftMostMask := make([]complex128, c.params.Slots())
 		LeftMostMask[0] = complex(float64(1), 0)
 		poolMask = c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
 
-		fmt.Println("got nil map")
+		// fmt.Println("got nil map")
 		// dense maskMap to collect all results into one ciphertext
 		maskMap = make(map[int]*ckks.Plaintext)
 		for i := 0; i < nclasses; i++ {
 			maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
 				tmpMask := make([]complex128, c.params.Slots())
-				fmt.Println("making maskMap: ", i*(nfilters-1))
+				// fmt.Println("making maskMap: ", i*(nfilters-1))
 				tmpMask[i] = complex(float64(1), 0)
 				return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
 			}()
@@ -287,20 +445,20 @@ func (c *CellCNN) ForwardConv(
 
 		ta := time.Now()
 
-		fmt.Println("got nil mask")
+		// fmt.Println("got nil mask")
 		// initialize masks required
 		// conv1d left most mask
 		LeftMostMask := make([]complex128, c.params.Slots())
 		LeftMostMask[0] = complex(float64(1), 0)
 		poolMask = c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
 
-		fmt.Println("got nil map")
+		// fmt.Println("got nil map")
 		// dense maskMap to collect all results into one ciphertext
 		maskMap = make(map[int]*ckks.Plaintext)
 		for i := 0; i < nclasses; i++ {
 			maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
 				tmpMask := make([]complex128, c.params.Slots())
-				fmt.Println("making maskMap: ", i*(nfilters-1))
+				// fmt.Println("making maskMap: ", i*(nfilters-1))
 				tmpMask[i] = complex(float64(1), 0)
 				return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
 			}()

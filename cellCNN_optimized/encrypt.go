@@ -6,11 +6,7 @@ import (
 
 
 
-func EncryptRightForNaiveMul(W *ckks.Matrix, batchSize int, params *ckks.Parameters, level int, sk* ckks.SecretKey) (*ckks.Ciphertext){
-
-	encoder := ckks.NewEncoder(params)
-	encryptor := ckks.NewEncryptorFromSk(params, sk)
-
+func EncryptRightForNaiveMul(W *ckks.Matrix, batchSize int, params *ckks.Parameters, level int, encoder ckks.Encoder, encryptor ckks.Encryptor) (*ckks.Ciphertext){
 	// Extract each column of W
 	Wt := W.Transpose()
 

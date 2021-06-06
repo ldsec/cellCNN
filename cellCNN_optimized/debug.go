@@ -6,15 +6,22 @@ import(
 	"math"
 )
 
-func DecryptPrint(rows, cols int, Real bool, ciphertext *ckks.Ciphertext, params *ckks.Parameters, sk *ckks.SecretKey) {
+func DecryptPrint(rows, cols int, Real bool, element interface{}, params *ckks.Parameters, sk *ckks.SecretKey) {
 
+	var v []complex128
 
-	decryptor := ckks.NewDecryptor(params, sk)
-	encoder := ckks.NewEncoder(params)
+	switch element := element.(type){
+	case *ckks.Ciphertext:
+		decryptor := ckks.NewDecryptor(params, sk)
+		encoder := ckks.NewEncoder(params)
+		fmt.Println(element.Level(), element.Scale())
+		v = encoder.Decode(decryptor.DecryptNew(element), params.LogSlots())
 
-	v := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
-
-	fmt.Println(ciphertext.Level(), ciphertext.Scale())
+	case *ckks.Plaintext:
+		encoder := ckks.NewEncoder(params)
+		fmt.Println(element.Level(), element.Scale())
+		v = encoder.Decode(element, params.LogSlots())
+	}
 
 	fmt.Printf("[\n")
 	for i := 0; i < rows; i++ {

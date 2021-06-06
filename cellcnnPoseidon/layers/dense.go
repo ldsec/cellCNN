@@ -36,6 +36,22 @@ func NewDense(weights *ckks.Ciphertext) *Dense {
 	}
 }
 
+func (dense *Dense) Marshall() []byte {
+	data, err := dense.weights.MarshalBinary()
+	if err != nil {
+		panic("fail to marshall dense weights")
+	}
+	return data
+}
+
+func (dense *Dense) Unmarshall(data []byte) {
+	nw := new(ckks.Ciphertext)
+	if err := nw.UnmarshalBinary(data); err != nil {
+		panic("fail to unmarshall conv filter weights")
+	}
+	dense.weights = nw
+}
+
 // ################# Debug Functions ####################
 func (dense *Dense) WithWeights(weights *ckks.Ciphertext) {
 	dense.weights = weights
@@ -51,6 +67,18 @@ func (dense *Dense) WithEncoder(encoder ckks.Encoder) {
 
 func (dense *Dense) GetGradient() *ckks.Ciphertext {
 	return dense.gradient
+}
+
+func (dense *Dense) GetGradientBinary() []byte {
+	data, err := dense.gradient.MarshalBinary()
+	if err != nil {
+		panic("fail to marshall dense weights")
+	}
+	return data
+}
+
+func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator) {
+	eval.Add(dense.weights, g, dense.weights)
 }
 
 func (dense *Dense) GetWeights() *ckks.Ciphertext {
@@ -170,7 +198,7 @@ func (dense *Dense) Forward(
 	coeffs[0] = complex(cfs[0], 0)
 
 	for i := 1; i < len(coeffs); i++ {
-		coeffs[i] = complex(cfs[i]/math.Pow(sts.Interval*float64(sts.Ncells), float64(i)), 0)
+		coeffs[i] = complex(cfs[i]/math.Pow(sts.Interval, float64(i)), 0)
 	}
 
 	poly := ckks.NewPoly(coeffs)
@@ -196,7 +224,7 @@ func (dense *Dense) Backward(
 	//first coeff will be gone when derivative...
 	coeffs[0] = complex(cf[1]/math.Pow(sts.Interval, float64(1)), 0)
 	for i := 1; i < len(coeffs); i++ {
-		coeffs[i] = complex((cf[i+1]/math.Pow(sts.Interval*float64(sts.Ncells), float64(i+1)))*float64(i+1), 0)
+		coeffs[i] = complex((cf[i+1]/math.Pow(sts.Interval, float64(i+1)))*float64(i+1), 0)
 	}
 
 	poly := ckks.NewPoly(coeffs)
@@ -253,10 +281,10 @@ func (dense *Dense) Backward(
 
 	// 5. mult the err and the input get the derivative for the dense weights
 	// ------- min{b-2, input-1} level
-	repInput = evaluator.MultByConstNew(repInput, 1.0/float64(sts.Ncells))
-	if err := evaluator.Rescale(repInput, params.Scale(), repInput); err != nil {
-		panic("fail to rescale, dense backward repInput")
-	}
+	// repInput = evaluator.MultByConstNew(repInput, 1.0/float64(sts.Ncells))
+	// if err := evaluator.Rescale(repInput, params.Scale(), repInput); err != nil {
+	// 	panic("fail to rescale, dense backward repInput")
+	// }
 	dense.gradient = evaluator.MulRelinNew(repInput, repErr)
 	if err := evaluator.Rescale(dense.gradient, params.Scale(), dense.gradient); err != nil {
 		panic("fail to rescale, dense backward dw")
