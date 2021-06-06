@@ -4,15 +4,24 @@ P = cellCNN.NewCellCNNProtocol(params \*ckks.Parameters)
 
 #Key Generation
 
-Secret-Key : P.SetSecretKey(sk \*ckks.SecretKey)
+## Secret Key 
 
-Public-Key : p.SetPublicKey(pk \*ckks.PublicKey)
+P.SetSecretKey(sk \*ckks.SecretKey)
 
-Relinearization-Key : P.SetRelinKey(sk \*ckks.RelinearizationKey)
+## Encryption Key 
 
-Rotation-Key : P.SetRotationkey(galEl uint64, TOBEDEFINED)
+p.SetPublicKey(pk \*ckks.PublicKey)
+
+## Relinearization Key 
+
+P.SetRelinKey(sk \*ckks.RelinearizationKey)
+
+## Rotation-Key 
 
 To get the needed rotations : P.RotKeyIndex()
+
+P.SetRotationkey(galEl uint64, TOBEDEFINED)
+
 
 #Weight Init
 
