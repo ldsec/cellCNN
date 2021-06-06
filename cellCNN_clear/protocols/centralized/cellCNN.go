@@ -129,7 +129,7 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		if i == 1 || i%batchSize == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
-				utils.Print_train_stats_cellCNN(out2, newBatchLabels, common.NCLASSES)
+				utils.Print_train_stats_cellCNN(out2, newBatchLabels, common.NCLASSES, common.MICRO)
 			}
 		}
 
