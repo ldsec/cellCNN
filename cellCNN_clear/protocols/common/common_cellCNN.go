@@ -146,7 +146,7 @@ func RunCnnClearPredictionTest(w WeightsVector, x []*mat.Dense, y []float64) (fl
 
 	classified := utils.ClassifyCellCNN(output, NCLASSES)
 	accuracy := utils.ComputeAccuracy(classified, y)
-	precision, recall := utils.ComputePrecisionRecall(classified, y)
+	precision, recall := utils.ComputePrecisionRecall(classified, y, NCLASSES, MICRO)
 	fscore := 2 * precision * recall / (precision + recall)
 
 	return accuracy, precision, recall, fscore
@@ -169,7 +169,7 @@ func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset) (float64,
 
 	classified := utils.ClassifyCellCNN(output, NCLASSES)
 	accuracy := utils.ComputeAccuracy(classified, y)
-	precision, recall := utils.ComputePrecisionRecall(classified, y)
+	precision, recall := utils.ComputePrecisionRecall(classified, y, NCLASSES, MICRO)
 	fscore := 2 * precision * recall / (precision + recall)
 
 	return accuracy, precision, recall, fscore

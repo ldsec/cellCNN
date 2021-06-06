@@ -18,7 +18,9 @@ require (
 	gonum.org/v1/plot v0.8.0
 )
 
-replace github.com/ldsec/lattigo/v2 => C:\Users\Zybeline\go\src\github.com\ldsec\lattigo
+replace github.com/ldsec/lattigo/v2 => ../lattigo
+
+//replace github.com/ldsec/lattigo/v2 => C:\Users\Zybeline\go\src\github.com\ldsec\lattigo
 
 //replace github.com/ldsec/lattigo/v2 => /Users/sav/GolandProjects/lattigo-private
 
