@@ -2,7 +2,7 @@
 
 P = cellCNN.NewCellCNNProtocol(params \*ckks.Parameters)
 
-#Key Generation
+# Key Generation
 
 ## Secret Key 
 
