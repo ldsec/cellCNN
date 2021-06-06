@@ -26,13 +26,19 @@ P.SetRotationkey(galEl uint64, TOBEDEFINED)
 # Weight Init
 
 1) Roots does : 
+
 C := cellCNN.WeightsInit(Features, Filters, Features)
+
 W := cellCNN.WeightsInit(Filters, Classes (labels), Filters) 
 
 2) Roots sends C and W down and to all childrends
 
-3) Root and each children do
+3) Root and each children do :
+
 P.SetWeights(C \*ckks.Matrix, W \*ckks.Matrix)
+
+then 
+
 P.EncryptWeights()
 
 
