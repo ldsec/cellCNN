@@ -125,7 +125,9 @@ type CellCNN struct {
 	btp       *ckks.Bootstrapper
 	sk        *ckks.SecretKey
 	// evaluator chan ckks.Evaluator
-	pcir *PlainCircuit
+	pcir     *PlainCircuit
+	momentum float64
+	lr       float64
 	// for debug
 	// decryptor ckks.Decryptor
 
@@ -148,6 +150,10 @@ func (c *CellCNN) GetWeights() []*ckks.Ciphertext {
 	edense := c.dense.GetWeights()
 	return append(econv, edense)
 }
+
+// func (c *CellCNN) GetGradients() ([]*ckks.Ciphertext, *ckks.Ciphertext) {
+
+// }
 
 type PlainCircuit struct {
 	// weights
@@ -174,7 +180,7 @@ func NewPlainCircuit(filters [][]complex128, weights []complex128, input []compl
 func NewCellCNN(
 	// sts *utils.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
 	// encoder ckks.Encoder, encryptor ckks.Encryptor,
-	sts *utils.CellCnnSettings, cryptoParams *utils.CryptoParams,
+	sts *utils.CellCnnSettings, cryptoParams *utils.CryptoParams, momentum, lr float64,
 ) *CellCNN {
 
 	model := &CellCNN{
@@ -183,7 +189,14 @@ func NewCellCNN(
 		relikey:     cryptoParams.Rlk,
 		encoder:     cryptoParams.GetEncoder(),
 		encryptor:   cryptoParams.GetEncryptor(),
+		momentum:    momentum,
+		lr:          lr,
 	}
+
+	// if model.momentum {
+	// 	model.SetMomentum()
+	// }
+
 	return model
 }
 
@@ -232,15 +245,16 @@ func (c *CellCNN) WithDiagM(diagM *ckks.PtDiagMatrix) {
 	c.dense.WithDiagM(diagM)
 }
 
-func (c *CellCNN) SetMomentum() {
-	if c.conv1d != nil {
-		c.conv1d.SetMomentum()
-	}
-	if c.dense != nil {
-		c.dense.SetMomentum()
-	}
-}
+// func (c *CellCNN) SetMomentum() {
+// 	if c.conv1d != nil {
+// 		c.conv1d.SetMomentum()
+// 	}
+// 	if c.dense != nil {
+// 		c.dense.SetMomentum()
+// 	}
+// }
 
+// InitWeights init CellCNN and return the init plaintext weights (conv, dense) as mat.Dense
 func (c *CellCNN) InitWeights(
 	wConv1D []*ckks.Ciphertext, wDense *ckks.Ciphertext,
 	pConv, pDense []complex128,
@@ -305,10 +319,10 @@ func (c *CellCNN) InitWeights(
 		dm = mat.NewDense(nfilters, nclasses, dwNew)
 	}
 
-	c.conv1d = layers.NewConv1D(wConv1D)
+	c.conv1d = layers.NewConv1D(wConv1D, c.momentum)
 	c.conv1d.WithEncoder(encoder)
 	// c.pooling = layers.NewPool(ncells, nmakers, nfilters)
-	c.dense = layers.NewDense(wDense)
+	c.dense = layers.NewDense(wDense, c.momentum)
 	c.dense.WithEncoder(encoder)
 	fmt.Printf("==> CellCNN successfully initializing weights\n")
 	return cm, dm
@@ -499,9 +513,9 @@ func (c *CellCNN) ComputeLossOne(
 
 func (c *CellCNN) BackwardOne(err *ckks.Ciphertext) []float64 {
 	t1 := time.Now()
-	dsErr := c.dense.Backward(err, c.cnnSettings, c.params, c.evaluator, c.encoder, c.sk)
+	dsErr := c.dense.Backward(err, c.cnnSettings, c.params, c.evaluator, c.encoder, c.sk, c.lr)
 	t2 := time.Since(t1).Seconds()
-	c.conv1d.Backward(dsErr, c.cnnSettings, c.params, c.evaluator, c.encoder)
+	c.conv1d.Backward(dsErr, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
 	t3 := time.Since(t1).Seconds()
 	return []float64{t3 - t2, t2, t3}
 }
@@ -520,11 +534,11 @@ func (c *CellCNN) ForwardAndBackwardOne(
 	return tf, tb
 }
 
-func (c *CellCNN) Step(lr float64) bool {
-	t1 := c.conv1d.Step(lr, 0, c.evaluator)
-	t2 := c.dense.Step(lr, 0, c.evaluator)
-	return t1 && t2
-}
+// func (c *CellCNN) Step(lr float64) bool {
+// 	t1 := c.conv1d.Step(lr, 0, c.evaluator)
+// 	t2 := c.dense.Step(lr, 0, c.evaluator)
+// 	return t1 && t2
+// }
 
 func (c *CellCNN) ForwardBatch(inputs []*ckks.Plaintext, j int) ([]*ckks.Ciphertext, []float64) {
 
@@ -678,7 +692,7 @@ func CompareTwoNetForward(
 
 func CompareTwoNetBackward(
 	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
-	trainSet common.CnnDataset, niter int, batchSize int, lr float64,
+	trainSet common.CnnDataset, niter int, batchSize int,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
 ) {
 	X := trainSet.X
@@ -726,16 +740,16 @@ func CompareTwoNetBackward(
 		errP.Sub(po, labelsDense)
 
 		// backward
-		pNet.Backward(errP, lr, 0)
+		pconv, pdense := pNet.Backward(errP, eNet.lr, eNet.momentum)
 		eNet.BackwardOne(errE)
-		eNet.Step(lr)
+		// eNet.Step(lr)
 
 		// compare the accuracy and err
-		pconv := pNet.conv.GetWeights()
-		pdense := pNet.dense.GetWeights()
+		// pconv := pNet.conv.GetWeights()
+		// pdense := pNet.dense.GetWeights()
 
-		econv := eNet.conv1d.GetWeights()
-		edense := eNet.dense.GetWeights()
+		econv := eNet.conv1d.GetGradient()
+		edense := eNet.dense.GetGradient()
 
 		decconv := make([][]complex128, pNet.nfilters)
 		for i := range decconv {

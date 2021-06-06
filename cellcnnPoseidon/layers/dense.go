@@ -16,23 +16,23 @@ import (
 
 // Dense output layer for classification (nclasses > 1)
 type Dense struct {
-	weights    *ckks.Ciphertext // column packed weights
-	lastInput  *ckks.Ciphertext // nsamples x nfilters
-	u          *ckks.Ciphertext
-	diagM      *ckks.PtDiagMatrix // for backward transpose operation
-	encoder    ckks.Encoder
-	gradient   *ckks.Ciphertext
-	isMomentum bool
-	vt         *ckks.Ciphertext
+	weights   *ckks.Ciphertext // column packed weights
+	lastInput *ckks.Ciphertext // nsamples x nfilters
+	u         *ckks.Ciphertext
+	diagM     *ckks.PtDiagMatrix // for backward transpose operation
+	encoder   ckks.Encoder
+	gradient  *ckks.Ciphertext
+	momentum  float64
+	vt        *ckks.Ciphertext
 	// Activation  func(float64) float64
 	// dActivation func(float64) float64
 }
 
 // NewDense constructor
-func NewDense(weights *ckks.Ciphertext) *Dense {
+func NewDense(weights *ckks.Ciphertext, momentum float64) *Dense {
 	return &Dense{
-		weights:    weights,
-		isMomentum: false,
+		weights:  weights,
+		momentum: momentum,
 	}
 }
 
@@ -69,29 +69,13 @@ func (dense *Dense) WithDiagM(diagM *ckks.PtDiagMatrix) {
 	dense.diagM = diagM
 }
 
-func (dense *Dense) GetGradient() *ckks.Ciphertext {
-	return dense.gradient
-}
-
-func (dense *Dense) GetGradientBinary() []byte {
-	data, err := dense.gradient.MarshalBinary()
-	if err != nil {
-		panic("fail to marshall dense weights")
-	}
-	return data
-}
-
-func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator) {
-	eval.Add(dense.weights, g, dense.weights)
-}
-
 func (dense *Dense) GetWeights() *ckks.Ciphertext {
 	return dense.weights
 }
 
-func (dense *Dense) SetMomentum() {
-	dense.isMomentum = true
-}
+// func (dense *Dense) SetMomentum() {
+// 	dense.isMomentum = true
+// }
 
 func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator,
 	params *ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
@@ -216,9 +200,12 @@ func (dense *Dense) Forward(
 	return output
 }
 
+// Backward compute the gradient
+// return the err to conv1d
+// for scaled and momentumed one, call GetGradient
 func (dense *Dense) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
-	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *ckks.SecretKey,
+	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *ckks.SecretKey, lr float64,
 ) *ckks.Ciphertext {
 	// 1. compute the derivative of the activation function
 	cf, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
@@ -293,6 +280,9 @@ func (dense *Dense) Backward(
 	if err := evaluator.Rescale(dense.gradient, params.Scale(), dense.gradient); err != nil {
 		panic("fail to rescale, dense backward dw")
 	}
+
+	// change the gradient to scaled and momentum one
+	dense.ComputeGradientWithMomentumAndLr(sts, params, evaluator, encoder, lr)
 	// fmt.Printf("min{b-2, input-1} " + utils.PrintCipherLevel(dense.gradient, params))
 
 	// return dw
@@ -356,24 +346,61 @@ func (dense *Dense) Backward(
 	return outErr
 }
 
-func (dense *Dense) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {
-	if dense.gradient != nil {
-		update := eval.MultByConstNew(dense.gradient, lr)
-		if dense.isMomentum {
-			if dense.vt == nil {
-				dense.vt = update.CopyNew().Ciphertext()
-			} else {
-				dense.vt = eval.MultByConstNew(dense.vt, momentum)
-				dense.vt = eval.AddNew(dense.vt, update)
-			}
-			dense.weights = eval.SubNew(dense.weights, dense.vt)
+func (dense *Dense) ComputeGradientWithMomentumAndLr(
+	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
+) {
+	update := eval.MultByConstNew(dense.gradient, lr)
+	if dense.momentum > 0 {
+		if dense.vt == nil {
+			dense.vt = update.CopyNew().Ciphertext()
 		} else {
-			dense.weights = eval.SubNew(dense.weights, update)
+			dense.vt = eval.MultByConstNew(dense.vt, dense.momentum)
+			dense.vt = eval.AddNew(dense.vt, update)
 		}
-		return true
+		// dense.weights = eval.SubNew(dense.weights, dense.vt)
+		dense.gradient = dense.vt.CopyNew().Ciphertext()
+	} else {
+		// dense.weights = eval.SubNew(dense.weights, update)
+		dense.gradient = update
 	}
-	return false
 }
+
+// get the gradient of the model, contain momentum and lr
+func (dense *Dense) GetGradient() *ckks.Ciphertext {
+	return dense.gradient
+}
+
+func (dense *Dense) GetGradientBinary() []byte {
+	data, err := dense.gradient.MarshalBinary()
+	if err != nil {
+		panic("fail to marshall dense weights")
+	}
+	return data
+}
+
+func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator) {
+	eval.Add(dense.weights, g, dense.weights)
+}
+
+// func (dense *Dense) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {
+// 	if dense.gradient != nil {
+// 		update := eval.MultByConstNew(dense.gradient, lr)
+// 		if dense.isMomentum {
+// 			if dense.vt == nil {
+// 				dense.vt = update.CopyNew().Ciphertext()
+// 			} else {
+// 				dense.vt = eval.MultByConstNew(dense.vt, momentum)
+// 				dense.vt = eval.AddNew(dense.vt, update)
+// 			}
+// 			dense.weights = eval.SubNew(dense.weights, dense.vt)
+// 		} else {
+// 			dense.weights = eval.SubNew(dense.weights, update)
+// 		}
+// 		return true
+// 	}
+// 	return false
+// }
 
 func (dense *Dense) PlainForwardCircuit(weights []complex128, input []complex128, sts *utils.CellCnnSettings) ([]complex128, []complex128) {
 

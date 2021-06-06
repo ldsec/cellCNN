@@ -16,6 +16,7 @@ const nmakers int = 2
 const nclasses int = 2
 const nodeBatchSize int = 2
 const learningRate float64 = 0.1
+const momentum float64 = 1
 const maxIterations int = 3
 
 // const NCELLS = 300
@@ -26,3 +27,10 @@ const maxIterations int = 3
 // const NFILTERS = 7
 
 const HOSTS int = 3
+
+// TODO:
+// 1. set the correct lr sign
+// 2. how to process batch backward with momentum:
+//		batch forward
+//		for conv1d: average pure gradients over the batch
+// 		for dense: add pure gradients across the batch

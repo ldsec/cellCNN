@@ -108,7 +108,9 @@ func TestOne(t *testing.T) {
 	pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	model := NewCellCNN(cnnSettings, cryptoParams)
+	momentum := 0.3
+	lr := 0.1
+	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
 	model.InitWeights(nil, nil, nil, nil)
 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
@@ -198,7 +200,9 @@ func TestBatch(t *testing.T) {
 	pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	model := NewCellCNN(cnnSettings, cryptoParams)
+	momentum := 0.3
+	lr := 0.1
+	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
 	model.InitWeights(nil, nil, nil, nil)
 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
@@ -274,7 +278,9 @@ func TestWithPlainNetForward(t *testing.T) {
 	pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	eNet := NewCellCNN(cnnSettings, cryptoParams)
+	momentum := 0.3
+	lr := 0.1
+	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
 	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
 	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
@@ -434,6 +440,9 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	sigInterval := 3
 	maxM1N2Ratio := 8.0
 
+	momentum := 0.5
+	lr := 0.7
+
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
 	fmt.Printf(
@@ -481,7 +490,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	// pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, nil, rlk, encoder, encryptor)
 
-	model := NewCellCNN(cnnSettings, cryptoParams)
+	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
 	cw, dw := model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, append(filter1[:nmakers], filter2[:nmakers]...), weights[:nfilters*nclasses])
 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
@@ -554,28 +563,28 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	errDense.Sub(plainOut, labelsDense)
 
 	model.BackwardOne(err0)
-	pNet.Backward(errDense, 1, 0)
-	nwfilters := pNet.conv.GetWeights()
-	nwdense := pNet.dense.GetWeights()
+	dConv, dDense := pNet.Backward(errDense, lr, momentum)
+	// nwfilters := pNet.conv.GetWeights()
+	// nwdense := pNet.dense.GetWeights()
 
 	// model.Step(1)
-	model.conv1d.StepWithRep(1, 0, model.evaluator, encoder, model.cnnSettings, params)
-	model.dense.Step(1, 0, model.evaluator)
+	// model.conv1d.StepWithRep(1, 0, model.evaluator, encoder, model.cnnSettings, params)
+	// model.dense.Step(1, 0, model.evaluator)
 
-	fmt.Println("######## Check the backward gradient for filter0 #########")
-	utils.DebugWithDense(params, model.conv1d.GetWeights()[0], nwfilters, decryptor, encoder, 20, []int{0}, false)
-	fmt.Println("######## Check the backward gradient for filter1 #########")
-	utils.DebugWithDense(params, model.conv1d.GetWeights()[1], nwfilters, decryptor, encoder, 20, []int{1}, false)
-	fmt.Println("######## Check the backward gradient for dense #########")
-	utils.DebugWithDense(params, model.dense.GetWeights(), nwdense, decryptor, encoder, 20, []int{0, 1}, false)
+	// fmt.Println("######## Check the backward gradient for filter0 #########")
+	// utils.DebugWithDense(params, model.conv1d.GetWeights()[0], nwfilters, decryptor, encoder, 20, []int{0}, false)
+	// fmt.Println("######## Check the backward gradient for filter1 #########")
+	// utils.DebugWithDense(params, model.conv1d.GetWeights()[1], nwfilters, decryptor, encoder, 20, []int{1}, false)
+	// fmt.Println("######## Check the backward gradient for dense #########")
+	// utils.DebugWithDense(params, model.dense.GetWeights(), nwdense, decryptor, encoder, 20, []int{0, 1}, false)
 
 	// start at level 9 and scaled gradient end at level 3
-	// fmt.Println("######## Check the backward gradient for filter0 #########")
-	// utils.DebugWithDense(params, model.conv1d.GetGradient()[0], dConv, decryptor, encoder, 10, []int{0}, false)
-	// fmt.Println("######## Check the backward gradient for filter1 #########")
-	// utils.DebugWithDense(params, model.conv1d.GetGradient()[1], dConv, decryptor, encoder, 10, []int{1}, false)
-	// fmt.Println("######## Check the backward gradient for dense #########")
-	// utils.DebugWithDense(params, model.dense.GetGradient(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
+	fmt.Println("######## Check the backward gradient for filter0 #########")
+	utils.DebugWithDense(params, model.conv1d.GetGradient()[0], dConv, decryptor, encoder, 10, []int{0}, false)
+	fmt.Println("######## Check the backward gradient for filter1 #########")
+	utils.DebugWithDense(params, model.conv1d.GetGradient()[1], dConv, decryptor, encoder, 10, []int{1}, false)
+	fmt.Println("######## Check the backward gradient for dense #########")
+	utils.DebugWithDense(params, model.dense.GetGradient(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
 	// 	}()
 	// }
 
@@ -620,7 +629,10 @@ func TestLargeScale(t *testing.T) {
 	pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	eNet := NewCellCNN(cnnSettings, cryptoParams)
+	momentum := 0.3
+	lr := 0.1
+
+	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
 	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
 	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
@@ -640,7 +652,6 @@ func TestLargeScale(t *testing.T) {
 
 	niter := 10
 	batchSize := 5
-	lr := 0.6
 
 	pconv := &cl.Conv1D{Nfilters: nfilters}
 	ppool := &cl.Pool{}
@@ -656,7 +667,7 @@ func TestLargeScale(t *testing.T) {
 		dense:    pdense,
 	}
 
-	CompareTwoNetBackward(eNet, pNet, cw, dw, trainData, niter, batchSize, lr, decryptor, encoder, params)
+	CompareTwoNetBackward(eNet, pNet, cw, dw, trainData, niter, batchSize, decryptor, encoder, params)
 }
 
 func TestTimeForwardBackward(t *testing.T) {
@@ -697,7 +708,10 @@ func TestTimeForwardBackward(t *testing.T) {
 	pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	eNet := NewCellCNN(cnnSettings, cryptoParams)
+	momentum := 0.3
+	lr := 0.1
+
+	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
 	eNet.InitWeights(nil, nil, nil, nil)
 	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
@@ -718,7 +732,6 @@ func TestTimeForwardBackward(t *testing.T) {
 
 	niter := 10
 	batchSize := 5
-	// lr := 0.6
 
 	ForwardAndBackwardNiter(eNet, niter, batchSize)
 }

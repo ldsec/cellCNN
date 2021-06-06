@@ -15,17 +15,18 @@ type Conv1D struct {
 	// Activation  func(float64) float64
 	// dActivation func(float64) float64
 	// u           []*mat.Dense
-	encoder    ckks.Encoder
-	gradient   []*ckks.Ciphertext
-	isMomentum bool
-	vt         []*ckks.Ciphertext // momentum
+	encoder  ckks.Encoder
+	gradient []*ckks.Ciphertext
+	momentum float64
+	vt       []*ckks.Ciphertext // momentum
 }
 
 // NewConv1D constructor
-func NewConv1D(filters []*ckks.Ciphertext) *Conv1D {
+func NewConv1D(filters []*ckks.Ciphertext, isMomentum float64) *Conv1D {
 	return &Conv1D{
-		filters:    filters,
-		isMomentum: false,
+		filters:  filters,
+		momentum: isMomentum,
+		vt:       make([]*ckks.Ciphertext, len(filters)),
 	}
 }
 
@@ -65,23 +66,6 @@ func (conv *Conv1D) WithEncoder(encoder ckks.Encoder) {
 	conv.encoder = encoder
 }
 
-func (conv *Conv1D) GetGradient() []*ckks.Ciphertext {
-	return conv.gradient
-}
-
-func (conv *Conv1D) GetGradientBinary() [][]byte {
-	var err error
-	Nfilters := len(conv.filters)
-	data := make([][]byte, Nfilters)
-	for i := 0; i < Nfilters; i++ {
-		data[i], err = conv.gradient[i].MarshalBinary()
-		if err != nil {
-			panic("fail to marshall conv filter weights")
-		}
-	}
-	return data
-}
-
 func (conv *Conv1D) UpdateWithGradients(g []*ckks.Ciphertext, eval ckks.Evaluator) {
 	for i := range conv.filters {
 		eval.Add(conv.filters[i], g[i], conv.filters[i])
@@ -92,9 +76,9 @@ func (conv *Conv1D) GetWeights() []*ckks.Ciphertext {
 	return conv.filters
 }
 
-func (conv *Conv1D) SetMomentum() {
-	conv.isMomentum = true
-}
+// func (conv *Conv1D) SetMomentum() {
+// 	conv.isMomentum = true
+// }
 
 func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator) []int {
 	nmakers := sts.Nmakers
@@ -230,9 +214,12 @@ func (conv *Conv1D) Forward(
 	return output
 }
 
+// Backward compute the gradient
+// return the unscaled, no-momentum, un-replicated gradient
+// for scaled and momentumed one, call GetGradient
 func (conv *Conv1D) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
-	evaluator ckks.Evaluator, encoder ckks.Encoder,
+	evaluator ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) []*ckks.Ciphertext {
 	// return dw for each filter, for debug
 
@@ -341,69 +328,127 @@ func (conv *Conv1D) Backward(
 
 	// fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
 
+	// pure and no momentum gradient
 	conv.gradient = dwSlice
+
+	// scaled and momentum gradient
+	conv.ComputeGradientWithMomentumAndLr(sts, params, evaluator, encoder, lr)
 
 	return dwSlice
 }
 
-func (conv *Conv1D) StepWithRep(
-	lr float64, momentum float64, eval ckks.Evaluator,
-	encoder ckks.Encoder, sts *utils.CellCnnSettings, params *ckks.Parameters,
-) bool {
+func (conv *Conv1D) ComputeGradientWithMomentumAndLr(
+	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
+) {
 	// create mask with scale
 	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
 	mask := utils.GenSliceWithAnyAt(params.Slots(), maskInds, lr)
 	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
-	if conv.gradient != nil {
-		for i := range conv.filters {
-			// 1. mask and scale
-			// 2. replicate ncell times
-			update := eval.MulRelinNew(conv.gradient[i], maskPlain)
-			if err := eval.Rescale(update, params.Scale(), update); err != nil {
-				panic("fail to rescale, conv.gradient[i]")
-			}
-			eval.InnerSum(update, -sts.Nmakers, sts.Ncells, update)
-			// if use momentum
-			if conv.isMomentum {
-				if conv.vt == nil {
-					conv.vt[i] = update.CopyNew().Ciphertext()
-				} else {
-					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
-					conv.vt[i] = eval.AddNew(conv.vt[i], update)
-				}
-				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
-			} else {
-				// else use only gradient
-				conv.filters[i] = eval.SubNew(conv.filters[i], update)
-			}
+	for i := range conv.filters {
+		// 1. mask and scale
+		update := eval.MulRelinNew(conv.gradient[i], maskPlain)
+		if err := eval.Rescale(update, params.Scale(), update); err != nil {
+			panic("fail to rescale, conv.gradient[i]")
 		}
-		return true
+		// 2. replicate ncell times
+		eval.InnerSum(update, -sts.Nmakers, sts.Ncells, update)
+		// if use momentum
+		if conv.momentum > 0 {
+			if conv.vt[i] == nil {
+				conv.vt[i] = update.CopyNew().Ciphertext()
+			} else {
+				conv.vt[i] = eval.MultByConstNew(conv.vt[i], conv.momentum)
+				conv.vt[i] = eval.AddNew(conv.vt[i], update)
+			}
+			// conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
+			conv.gradient[i] = conv.vt[i].CopyNew().Ciphertext()
+		} else {
+			// else use only gradient
+			// conv.filters[i] = eval.SubNew(conv.filters[i], update)
+			conv.gradient[i] = update
+		}
 	}
-	return false
 }
 
-func (conv *Conv1D) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {
-	if conv.gradient != nil {
-		for i := range conv.filters {
-			update := eval.MultByConstNew(conv.gradient[i], lr)
-			// if use momentum
-			if conv.isMomentum {
-				if conv.vt == nil {
-					conv.vt[i] = update.CopyNew().Ciphertext()
-				} else {
-					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
-					conv.vt[i] = eval.AddNew(conv.vt[i], update)
-				}
-				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
-			} else {
-				// else use only gradient
-				conv.filters[i] = eval.SubNew(conv.filters[i], update)
-			}
-		}
-		return true
-	}
-	return false
+func (conv *Conv1D) GetGradient() []*ckks.Ciphertext {
+	return conv.gradient
 }
+
+func (conv *Conv1D) GetGradientBinary() [][]byte {
+	var err error
+	Nfilters := len(conv.filters)
+	data := make([][]byte, Nfilters)
+	for i := 0; i < Nfilters; i++ {
+		data[i], err = conv.gradient[i].MarshalBinary()
+		if err != nil {
+			panic("fail to marshall conv filter weights")
+		}
+	}
+	return data
+}
+
+// func (conv *Conv1D) StepWithRep(
+// 	lr float64, momentum float64, eval ckks.Evaluator,
+// 	encoder ckks.Encoder, sts *utils.CellCnnSettings, params *ckks.Parameters,
+// ) bool {
+// 	// create mask with scale
+// 	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
+// 	mask := utils.GenSliceWithAnyAt(params.Slots(), maskInds, lr)
+// 	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
+// 	if conv.gradient != nil {
+// 		for i := range conv.filters {
+// 			// 1. mask and scale
+// 			// 2. replicate ncell times
+// 			update := eval.MulRelinNew(conv.gradient[i], maskPlain)
+// 			if err := eval.Rescale(update, params.Scale(), update); err != nil {
+// 				panic("fail to rescale, conv.gradient[i]")
+// 			}
+// 			eval.InnerSum(update, -sts.Nmakers, sts.Ncells, update)
+// 			// if use momentum
+// 			if conv.isMomentum {
+// 				if conv.vt == nil {
+// 					conv.vt[i] = update.CopyNew().Ciphertext()
+// 				} else {
+// 					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
+// 					conv.vt[i] = eval.AddNew(conv.vt[i], update)
+// 				}
+// 				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
+// 			} else {
+// 				// else use only gradient
+// 				conv.filters[i] = eval.SubNew(conv.filters[i], update)
+// 			}
+// 		}
+// 		return true
+// 	}
+// 	return false
+// }
+
+// GetGradient return the gradient according to lr and momentum.
+// gradient is replicated for ncell times as filter weights.
+
+// func (conv *Conv1D) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {
+// 	if conv.gradient != nil {
+// 		for i := range conv.filters {
+// 			update := eval.MultByConstNew(conv.gradient[i], lr)
+// 			// if use momentum
+// 			if conv.isMomentum {
+// 				if conv.vt == nil {
+// 					conv.vt[i] = update.CopyNew().Ciphertext()
+// 				} else {
+// 					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
+// 					conv.vt[i] = eval.AddNew(conv.vt[i], update)
+// 				}
+// 				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
+// 			} else {
+// 				// else use only gradient
+// 				conv.filters[i] = eval.SubNew(conv.filters[i], update)
+// 			}
+// 		}
+// 		return true
+// 	}
+// 	return false
+// }
 
 func (conv *Conv1D) PlainForwardCircuit(
 	input []complex128, filters [][]complex128, sts *utils.CellCnnSettings,

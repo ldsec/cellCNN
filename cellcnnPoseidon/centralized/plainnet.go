@@ -22,9 +22,10 @@ func (p *PlainNet) ForwardBatch(input []*mat.Dense, cw, dw *mat.Dense) *mat.Dens
 	return out2
 }
 
+// Backward return the gradient for dconv and ddense
 func (p *PlainNet) Backward(gradient *mat.Dense, learn_rate float64, momentum float64) (*mat.Dense, *mat.Dense) {
 	delta2, dDense := p.dense.Backward(gradient, learn_rate, momentum)
 	delta1 := p.pool.Backward(delta2)
 	dConv := p.conv.Backward(delta1, learn_rate, momentum)
-	return dDense, dConv
+	return dConv, dDense
 }

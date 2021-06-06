@@ -76,7 +76,7 @@ func (p *NNEncryptedProtocol) Init(
 	p.Interval = []float64{-interval, interval}
 
 	//only in root, and root will pass weights down the tree
-	p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams)
+	p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams, momentum, learningRate)
 	p.model.InitWeights(nil, nil, nil, nil)
 	eval, diagM := utils.InitEvaluator(p.CryptoParams, p.CellCNNSettings, maxM1N2Ratio)
 	p.model.WithEvaluator(eval)
