@@ -16,21 +16,20 @@ To get the needed rotations : P.RotKeyIndex()
 
 #Weight Init
 
-// Roots 
+1) Roots does : 
 C := cellCNN.WeightsInit(Features, Filters, Features)
 W := cellCNN.WeightsInit(Filters, Classes (labels), Filters) 
 
-// Then send C and W down to childrends
+2) Roots sends C and W down and to all childrends
 
-
-// Root and each children do
+3) Root and each children do
 P.SetWeights(C \*ckks.Matrix, W \*ckks.Matrix)
 P.EncryptWeights()
 
 
 #Init Local Evaluator
 
-// Root and all children do
+1) Root and all children do
 P.EvaluatorInit()
 
 
