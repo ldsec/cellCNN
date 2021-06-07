@@ -19,7 +19,7 @@ func (c *CellCNNProtocol) NewCKGProtocol(){
 }
 
 func (c *CellCNNProtocol) CKGGenShare(crp *ring.Poly){
-	c.CkgProtocol.GenShare(&c.sk.SecretKey, crp, c.CkgShare)
+	c.CkgProtocol.GenShare(c.sk, crp, c.CkgShare)
 }
 
 func (c *CellCNNProtocol) CKGGetShare() (*drlwe.CKGShare){
@@ -32,7 +32,7 @@ func (c *CellCNNProtocol) CKGAggregateShares(A, B, C *drlwe.CKGShare){
 
 func (c *CellCNNProtocol) CKGGenPublicKey(share *drlwe.CKGShare, crp *ring.Poly){
 	c.pk = ckks.NewPublicKey(c.params)
-	c.CkgProtocol.GenCKKSPublicKey(share, crp, c.pk)
+	c.CkgProtocol.GenPublicKey(share, crp, c.pk)
 }
 
 func (c *CellCNNProtocol) CKGWipe(){
@@ -50,11 +50,11 @@ func (c *CellCNNProtocol) NewRKGProtocol(){
 }
 
 func (c *CellCNNProtocol) RKGRoundOne(crp []*ring.Poly){
-	c.RkgProtocol.GenShareRoundOne(&c.sk.SecretKey, crp, c.RkgEphemSk, c.RkgShareOne)
+	c.RkgProtocol.GenShareRoundOne(c.sk, crp, c.RkgEphemSk, c.RkgShareOne)
 }
 
 func (c *CellCNNProtocol) RKGRoundTwo(shareOne *drlwe.RKGShare, crp []*ring.Poly){
-	c.RkgProtocol.GenShareRoundTwo(c.RkgEphemSk, &c.sk.SecretKey, shareOne, crp, c.RkgShareTwo)
+	c.RkgProtocol.GenShareRoundTwo(c.RkgEphemSk, c.sk, shareOne, crp, c.RkgShareTwo)
 }
 
 func (c *CellCNNProtocol) CKGAggregate(A, B, C *drlwe.RKGShare){
@@ -71,7 +71,7 @@ func (c *CellCNNProtocol) CKGGetShareTwo() (*drlwe.RKGShare){
 
 func (c *CellCNNProtocol) RKGGenRelinearizationKey(shareOne, shareTwo *drlwe.RKGShare){
 	c.rlk = ckks.NewRelinearizationKey(c.params)
-	c.RkgProtocol.GenCKKSRelinearizationKey(shareOne, shareTwo, c.rlk)
+	c.RkgProtocol.GenRelinearizationKey(shareOne, shareTwo, c.rlk)
 }
 
 func (c *CellCNNProtocol) RKGWipe(){
@@ -88,7 +88,7 @@ func (c *CellCNNProtocol) RKGWipe(){
 func (c *CellCNNProtocol) NewRTGProtocol(){
 
 	if c.rotKey == nil{
-		c.rotKey = new(ckks.RotationKeySet)
+		c.rotKey = new(rlwe.RotationKeySet)
 		c.rotKey.Keys = make(map[uint64]*rlwe.SwitchingKey)
 	}
 
@@ -97,7 +97,7 @@ func (c *CellCNNProtocol) NewRTGProtocol(){
 }
 
 func (c *CellCNNProtocol) RTGGenShare(galEl uint64, crp []*ring.Poly){
-	c.RtgProtocol.GenShare(&c.sk.SecretKey, galEl, crp, c.RtgShare)
+	c.RtgProtocol.GenShare(c.sk, galEl, crp, c.RtgShare)
 }
 
 func (c *CellCNNProtocol) RTGGetShare()(*drlwe.RTGShare){
@@ -111,7 +111,7 @@ func (c *CellCNNProtocol) RTGAggregate(A, B, C *drlwe.RTGShare){
 func (c *CellCNNProtocol) RTGGenRotationKey(galEl uint64, crp []*ring.Poly, share *drlwe.RTGShare){
 	
 	if c.rotKey.Keys[galEl] == nil{
-		c.rotKey.Keys[galEl] = rlwe.NewSwitchingKey(c.params.N(), c.params.QPiCount(), c.params.Beta())
+		c.rotKey.Keys[galEl] = rlwe.NewSwitchingKey(c.params.Parameters)
 	}
 
 	c.RtgProtocol.GenRotationKey(share, crp, c.rotKey.Keys[galEl])
@@ -133,7 +133,7 @@ func (c *CellCNNProtocol) NewCKSProtocol(){
 }
 
 func (c *CellCNNProtocol) CKSGenShare(ciphertext *ckks.Ciphertext, targetKey *ring.Poly){
-	c.CksProtocol.GenShare(c.sk.SecretKey.Value, targetKey, ciphertext, c.CksShare)
+	c.CksProtocol.GenShare(c.sk.Value, targetKey, ciphertext, c.CksShare)
 }
 
 func (c *CellCNNProtocol) CKSGetShare() (dckks.CKSShare){
@@ -142,10 +142,4 @@ func (c *CellCNNProtocol) CKSGetShare() (dckks.CKSShare){
 
 func (c *CellCNNProtocol) CKSAggregate(A, B, C dckks.CKSShare){
 	c.CksProtocol.AggregateShares(A, B, C)
-}
-
-func (c *CellCNNProtocol) CKSKeySwitchToPlaintext(ciphertext *ckks.Ciphertext, share dckks.CKSShare) (*ckks.Plaintext){
-	pt := ckks.NewCiphertext(c.params, 0, ciphertext.Level(), ciphertext.Scale())
-	c.CksProtocol.KeySwitch(share, ciphertext, pt)
-	return pt.Plaintext()
 }

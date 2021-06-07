@@ -2,7 +2,6 @@ package cellCNN
 
 
 import (
-	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/utils"
 	"math"
 	"bufio"
@@ -13,8 +12,8 @@ import (
 	"fmt"
 )
 
-func WeightsInit(rows, cols, inputs int)(m *ckks.Matrix){
-   m = ckks.NewMatrix(rows, cols)
+func WeightsInit(rows, cols, inputs int)(m *Matrix){
+   m = NewMatrix(rows, cols)
    for i := range m.M {
       m.M[i] = complex(utils.RandFloat64(-1, 1) / math.Sqrt(float64(inputs)), 0)
    }
@@ -22,16 +21,16 @@ func WeightsInit(rows, cols, inputs int)(m *ckks.Matrix){
 }
 
 
-func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*ckks.Matrix) {
+func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*Matrix) {
 	y := String_to_float(Load_file(path+"y_train.txt", samples))
-	X = make([]*ckks.Matrix, samples)
-	Y = make([]*ckks.Matrix, samples)
+	X = make([]*Matrix, samples)
+	Y = make([]*Matrix, samples)
 	var fname string
 	for i := 0; i < samples; i++{
 		fname = fmt.Sprintf("X_train/%d.txt", i)
 		X[i] = Convert_X_cellCNN(Load_file(path+fname, cells), cells, features)
 
-		Y[i] = ckks.NewMatrix(1, 2)
+		Y[i] = NewMatrix(1, 2)
 
 		if y[i] == 1{
 			Y[i].M[0] = 1
@@ -42,16 +41,16 @@ func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*ckks.
 	return X, Y
 }
 
-func LoadValidDataFrom(path string, samples, cells, features int) (X, Y []*ckks.Matrix) {
+func LoadValidDataFrom(path string, samples, cells, features int) (X, Y []*Matrix) {
 	y := String_to_float(Load_file(path+"y_valid.txt", samples))
-	X = make([]*ckks.Matrix, samples)
-	Y = make([]*ckks.Matrix, samples)
+	X = make([]*Matrix, samples)
+	Y = make([]*Matrix, samples)
 	var fname string
 	for i := 0; i < samples; i++{
 		fname = fmt.Sprintf("X_valid/%d.txt", i)
 		X[i] = Convert_X_cellCNN(Load_file(path+fname, cells), cells, features)
 
-		Y[i] = ckks.NewMatrix(1, 2)
+		Y[i] = NewMatrix(1, 2)
 
 		if y[i] == 1{
 			Y[i].M[0] = 1
@@ -63,9 +62,9 @@ func LoadValidDataFrom(path string, samples, cells, features int) (X, Y []*ckks.
 }
 
 
-func Convert_X_cellCNN(X []string, cells, features int) (XMat *ckks.Matrix) {
+func Convert_X_cellCNN(X []string, cells, features int) (XMat *Matrix) {
 
-	XMat = ckks.NewMatrix(features, cells)
+	XMat = NewMatrix(features, cells)
 	for j := 0; j < features; j++ {
 		col := strings.Split(X[j], " ")
 		copy(XMat.M[j*cells:(j+1)*cells], String_to_float(col))

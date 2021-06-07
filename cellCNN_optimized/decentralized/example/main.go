@@ -5,6 +5,7 @@ import (
 	"time"
 	"math/rand"
 
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
 	"github.com/ldsec/lattigo/v2/utils"
@@ -17,7 +18,7 @@ type Party struct{
 	cellCNN.CellCNNProtocol
 }
 
-func NewParty(params *ckks.Parameters) (p *Party){
+func NewParty(params ckks.Parameters) (p *Party){
 	p = new(Party)
 	p.CellCNNProtocol = *cellCNN.NewCellCNNProtocol(params)
 	return
@@ -27,7 +28,7 @@ func main() {
 
 	var err error
 
-	nParties := 3
+	nParties := 1
 
 	trainEncrypted := true
 	deterministic := true
@@ -43,7 +44,7 @@ func main() {
 		panic(err)
 	}
 
-	ringQP, _ := ring.NewRing(params.N(), append(params.Qi(), params.Pi()...))
+	ringQP, _ := ring.NewRing(params.N(), append(params.Q(), params.P()...))
 
 	crpGenerator := ring.NewUniformSampler(prng, ringQP)
 
@@ -61,7 +62,7 @@ func main() {
 		P[i].SetWeights(C, W)
 	}
 
-	var masterSk *ckks.SecretKey
+	var masterSk *rlwe.SecretKey
 
 	if trainEncrypted {
 		GenEncryptionKey(P, crpGenerator)
@@ -69,7 +70,7 @@ func main() {
 		masterSk = ckks.NewSecretKey(params)
 
 		for i := range P{
-			ringQP.Add(masterSk.SecretKey.Value, P[i].SK().SecretKey.Value, masterSk.SecretKey.Value)
+			ringQP.Add(masterSk.Value, P[i].SK().Value, masterSk.Value)
 		}
 
 		fmt.Printf("Weights Encryption... ")
@@ -100,6 +101,8 @@ func main() {
 	epoch := 15
 	niter := epoch * cellCNN.Samples / cellCNN.BatchSize
 
+	niter = 1
+
 	fmt.Printf("#Iters : %d\n", niter)
 
 	partyDataSize := 2000/nParties
@@ -108,12 +111,12 @@ func main() {
 
 	for i := 0; i < niter; i++{
 
-		XPrePool := new(ckks.Matrix)
-		XBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
-		YBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
+		XPrePool := new(cellCNN.Matrix)
+		XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
+		YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
 
-		DWPool := ckks.NewMatrix(cellCNN.Filters, cellCNN.Classes)
-		DCPool := ckks.NewMatrix(cellCNN.Features, cellCNN.Filters)
+		DWPool := cellCNN.NewMatrix(cellCNN.Filters, cellCNN.Classes)
+		DCPool := cellCNN.NewMatrix(cellCNN.Features, cellCNN.Filters)
 
 		var ctDWPool, ctDCPool *ckks.Ciphertext
 
@@ -155,13 +158,11 @@ func main() {
 				/*
 				fmt.Println("DC")
 				P[j].DC.Print()
-				//pt := CollectiveDecryption(P, P[j].CtDC(), params)
 				cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P[j].CtDC(), params, masterSk)
 
 				fmt.Println("DW")
 				P[j].DW.Transpose().Print()
 				for i := 0; i < cellCNN.Classes; i++{
-					//pt := CollectiveDecryption(P, P[j].Eval().RotateNew(P[j].CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), params)
 					cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[j].Eval().RotateNew(P[j].CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
 				}
 				*/
@@ -169,8 +170,8 @@ func main() {
 				fmt.Printf("Iter[%02d][%d] : %s\n", i, j, time.Since(start))
 
 				if j == 0{
-					ctDWPool = P[j].CtDW().CopyNew().Ciphertext()
-					ctDCPool = P[j].CtDC().CopyNew().Ciphertext()
+					ctDWPool = P[j].CtDW().CopyNew()
+					ctDCPool = P[j].CtDC().CopyNew()
 				}else{
 					P[0].Eval().Add(ctDWPool, P[j].CtDW(), ctDWPool)
 					P[0].Eval().Add(ctDCPool, P[j].CtDC(), ctDCPool)
@@ -214,9 +215,9 @@ func main() {
 	r := 0
 	for i := 0; i < 2000/cellCNN.BatchSize; i++{
 
-		XPrePool := new(ckks.Matrix)
-		XBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
-		YBatch := ckks.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
+		XPrePool := new(cellCNN.Matrix)
+		XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
+		YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
 
 		for j := 0; j < cellCNN.BatchSize; j++ {
 
@@ -238,7 +239,7 @@ func main() {
 			v.Print()
 			ctv := P[0].Predict(XBatch, masterSk)
 			ctv.Print()
-			precisionStats := ckks.GetPrecisionStats(params, P[0].Encoder(), nil, v.M, ctv.M, 0)
+			precisionStats := ckks.GetPrecisionStats(params, P[0].Encoder(), nil, v.M, ctv.M, params.LogSlots(), 0)
 			fmt.Printf("Batch[%2d]", i)
 			fmt.Println(precisionStats.String())
 		}
@@ -262,30 +263,7 @@ func main() {
 
 }
 
-func CollectiveDecryption(P []*Party, ciphertext *ckks.Ciphertext, params *ckks.Parameters) (*ckks.Plaintext){
-	for i := range P{
-		P[i].NewCKSProtocol()
-	}
-
-	cksCombined := P[0].CksProtocol.AllocateShare()
-
-	zero := params.NewPolyQ()
-	for i := range P{
-		P[i]. CKSGenShare(ciphertext, zero)
-	}
-
-	for i := range P{
-		P[i].CKSAggregate(cksCombined, P[i].CKSGetShare(), cksCombined)
-	}
-
-	pt := P[0].CKSKeySwitchToPlaintext(ciphertext, cksCombined)
-
-	cksCombined = nil
-
-	return pt
-}
-
-func GenRotationKeys(P []*Party, crpGenerator *ring.UniformSampler, params *ckks.Parameters){
+func GenRotationKeys(P []*Party, crpGenerator *ring.UniformSampler, params ckks.Parameters){
 
 	fmt.Printf("Generating Rotation Keys... ")
 
@@ -331,7 +309,10 @@ func GenRotationKeys(P []*Party, crpGenerator *ring.UniformSampler, params *ckks
 			}
 		}
 
-		rtgCombined.Zero()
+		for i := range rtgCombined.Value{
+			rtgCombined.Value[i].Zero()
+		}
+		
 	}
 
 	// Conjugate Key
@@ -356,7 +337,7 @@ func GenRotationKeys(P []*Party, crpGenerator *ring.UniformSampler, params *ckks
 	fmt.Printf("Done\n")
 }
 
-func GenRelinearizationKey(P []*Party, crpGenerator *ring.UniformSampler, params *ckks.Parameters){
+func GenRelinearizationKey(P []*Party, crpGenerator *ring.UniformSampler, params ckks.Parameters){
 
 	fmt.Printf("Generating Relinearization Key... ")
 

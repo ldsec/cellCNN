@@ -5,7 +5,7 @@ import (
 	"github.com/ldsec/lattigo/v2/utils"
 )
 
-func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, ptL []*ckks.Plaintext, encoder ckks.Encoder, params *ckks.Parameters) {
+func EncodeLeftForPtMul(L *Matrix, Bcols int, scaling float64, ptL []*ckks.Plaintext, encoder ckks.Encoder, params ckks.Parameters) {
 
 	rows := L.Rows()
 	cols := L.Cols()
@@ -35,7 +35,7 @@ func EncodeLeftForPtMul(L *ckks.Matrix, Bcols int, scaling float64, ptL []*ckks.
 	}
 }
 
-func EncryptRightForPtMul(C *ckks.Matrix, nbMatrices, cells int, params *ckks.Parameters, level int, encoder ckks.Encoder, encryptor ckks.Encryptor) (*ckks.Ciphertext){
+func EncryptRightForPtMul(C *Matrix, nbMatrices, cells int, params ckks.Parameters, level int, encoder ckks.Encoder, encryptor ckks.Encryptor) (*ckks.Ciphertext){
 
 	features := C.Rows()
 	filters := C.Cols()

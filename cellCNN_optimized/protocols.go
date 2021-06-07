@@ -14,12 +14,12 @@ import(
 type CellCNNProtocol struct{
 
 
-	params *ckks.Parameters
+	params ckks.Parameters
 
-	sk *ckks.SecretKey
-	pk *ckks.PublicKey
-	rlk *ckks.RelinearizationKey
-	rotKey *ckks.RotationKeySet
+	sk *rlwe.SecretKey
+	pk *rlwe.PublicKey
+	rlk *rlwe.RelinearizationKey
+	rotKey *rlwe.RotationKeySet
 
 	rotKeyIndex []int
 
@@ -30,10 +30,10 @@ type CellCNNProtocol struct{
 
 	mask []*ckks.Plaintext
 
-	C, W *ckks.Matrix
-	DC, DW *ckks.Matrix
-	DCPrev, DWPrev *ckks.Matrix
-	P, U *ckks.Matrix
+	C, W *Matrix
+	DC, DW *Matrix
+	DCPrev, DWPrev *Matrix
+	P, U *Matrix
 
 	ctC, ctW *ckks.Ciphertext
 	ctDC, ctDW *ckks.Ciphertext
@@ -57,11 +57,11 @@ type CellCNNProtocol struct{
 }
 
 
-func (c *CellCNNProtocol) PK() (*ckks.PublicKey){
+func (c *CellCNNProtocol) PK() (*rlwe.PublicKey){
 	return c.pk
 }
 
-func (c *CellCNNProtocol) SK() (*ckks.SecretKey){
+func (c *CellCNNProtocol) SK() (*rlwe.SecretKey){
 	return c.sk
 }
 
@@ -80,7 +80,7 @@ func (c *CellCNNProtocol) CtW() (*ckks.Ciphertext){
 }
 
 func (c *CellCNNProtocol) EvaluatorInit(){
-	c.eval = ckks.NewEvaluator(c.params, ckks.EvaluationKey{c.rlk, c.rotKey})
+	c.eval = ckks.NewEvaluator(c.params, rlwe.EvaluationKey{c.rlk, c.rotKey})
 }
 
 // C returns the convolution matrix
@@ -93,7 +93,7 @@ func (c *CellCNNProtocol) CtBoot() (*ckks.Ciphertext){
 }
 
 // SecretKey returns the secret-key
-func (c *CellCNNProtocol) SecretKey() (*ckks.SecretKey){
+func (c *CellCNNProtocol) SecretKey() (*rlwe.SecretKey){
 	return c.sk
 }
 
@@ -116,7 +116,7 @@ func (c *CellCNNProtocol) Eval() (ckks.Evaluator){
 	return c.eval
 }
 
-func (c *CellCNNProtocol) PrintCtWPrecision(sk *ckks.SecretKey){
+func (c *CellCNNProtocol) PrintCtWPrecision(sk *rlwe.SecretKey){
 
 	decryptor := ckks.NewDecryptor(c.params, sk)
 
@@ -127,17 +127,17 @@ func (c *CellCNNProtocol) PrintCtWPrecision(sk *ckks.SecretKey){
 		y := c.encoder.Decode(decryptor.DecryptNew(c.eval.RotateNew(c.ctW, i*BatchSize*Filters)), c.params.LogSlots())
 		w = append(w, y[:Filters]...)
 	}
-	W := ckks.NewMatrix(Classes, Filters)
+	W := NewMatrix(Classes, Filters)
 	W.M = w
 
 	//W.Print()
 
-	precisionStats := ckks.GetPrecisionStats(c.params, c.encoder, nil, c.W.Transpose().M, W.M, 0)
+	precisionStats := ckks.GetPrecisionStats(c.params, c.encoder, nil, c.W.Transpose().M, W.M, c.params.LogSlots(), 0)
 	fmt.Println(precisionStats.String())
 
 }
 
-func (c *CellCNNProtocol) PrintCtCPrecision(sk *ckks.SecretKey){
+func (c *CellCNNProtocol) PrintCtCPrecision(sk *rlwe.SecretKey){
 
 	decryptor := ckks.NewDecryptor(c.params, sk)
 
@@ -145,17 +145,17 @@ func (c *CellCNNProtocol) PrintCtCPrecision(sk *ckks.SecretKey){
 	//c.C.Print()
 	y := c.encoder.Decode(decryptor.DecryptNew(c.ctC), c.params.LogSlots())
 
-	C := ckks.NewMatrix(Features, Filters)
+	C := NewMatrix(Features, Filters)
 	C.M = y[:Filters*Features]
 
 	//C.Print()
 
-	precisionStats := ckks.GetPrecisionStats(c.params, c.encoder, nil, c.C.M, C.M, 0)
+	precisionStats := ckks.GetPrecisionStats(c.params, c.encoder, nil, c.C.M, C.M, c.params.LogSlots(), 0)
 	fmt.Println(precisionStats.String())
 }
 
 // NewCellCNNProtocol creates a new cellCNN protocol
-func NewCellCNNProtocol(params *ckks.Parameters) (c *CellCNNProtocol){
+func NewCellCNNProtocol(params ckks.Parameters) (c *CellCNNProtocol){
 	c = new(CellCNNProtocol)
 
 	c.params = params
@@ -164,7 +164,7 @@ func NewCellCNNProtocol(params *ckks.Parameters) (c *CellCNNProtocol){
 
 	c.sk = kgen.GenSecretKey()
 
-	c.rotKeyIndex = GetRotationKeysIndex(kgen)
+	c.rotKeyIndex = GetRotationKeysIndex(params)
 
 	
 	c.decryptor = ckks.NewDecryptor(params, c.sk)
@@ -174,23 +174,23 @@ func NewCellCNNProtocol(params *ckks.Parameters) (c *CellCNNProtocol){
 
 	c.ptL = make([]*ckks.Plaintext, int(math.Ceil(float64(Features)*0.5)))
 	for i := 0; i < int(math.Ceil(float64(Features)*0.5)); i++{
-		c.ptL[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Qi()[params.MaxLevel()-1]))
+		c.ptL[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Q()[params.MaxLevel()-1]))
 	}
 
 	c.ptLTranspose = make([]*ckks.Plaintext, int(math.Ceil(float64(Samples)*0.5)))
 	for i := 0; i < int(math.Ceil(float64(Samples)*0.5)); i++{
-		c.ptLTranspose[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Qi()[params.MaxLevel()-1]))
+		c.ptLTranspose[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Q()[params.MaxLevel()-1]))
 	}
 
-	c.DW = new(ckks.Matrix)
-	c.DC = new(ckks.Matrix)
-	c.P = new(ckks.Matrix)
-	c.U = new(ckks.Matrix)
+	c.DW = new(Matrix)
+	c.DC = new(Matrix)
+	c.P = new(Matrix)
+	c.U = new(Matrix)
 	return
 }
 
 
-func (c *CellCNNProtocol) SetWeights(C, W *ckks.Matrix){
+func (c *CellCNNProtocol) SetWeights(C, W *Matrix){
 	c.C = C.Copy()
 	c.W = W.Copy()
 }
@@ -208,7 +208,7 @@ func (c *CellCNNProtocol) EncryptWeights(){
 	c.encryptor = nil
 }
 
-func (c *CellCNNProtocol) genPlaintextMaskForTrainingWithPrePooling(params *ckks.Parameters) []*ckks.Plaintext{
+func (c *CellCNNProtocol) genPlaintextMaskForTrainingWithPrePooling(params ckks.Parameters) []*ckks.Plaintext{
 
 	denseMatrixSize := DenseMatrixSize(Filters, Classes)
 	convolutionMatrixSize := ConvolutionMatrixSize(BatchSize, Features, Filters)
@@ -216,8 +216,8 @@ func (c *CellCNNProtocol) genPlaintextMaskForTrainingWithPrePooling(params *ckks
 	levelMaskPtW := 5
 	levelMaskPtC := 5
 
-	scaleMaskPtW := float64(params.Qi()[levelMaskPtW])
-	scaleMaskPtC := float64(params.Qi()[levelMaskPtC])
+	scaleMaskPtW := float64(params.Q()[levelMaskPtW])
+	scaleMaskPtC := float64(params.Q()[levelMaskPtC])
 
 	// Mask W
 	maskW := make([]complex128, params.Slots())
@@ -269,7 +269,7 @@ func (c *CellCNNProtocol) genPlaintextMaskForTrainingWithPrePooling(params *ckks
 
 
 
-func (c *CellCNNProtocol) ForwardPlain(XBatch *ckks.Matrix){
+func (c *CellCNNProtocol) ForwardPlain(XBatch *Matrix){
 	// Convolution
 	c.P.MulMat(XBatch, c.C)
 
@@ -278,12 +278,12 @@ func (c *CellCNNProtocol) ForwardPlain(XBatch *ckks.Matrix){
 
 }
 
-func (c *CellCNNProtocol) BackWardPlain(XBatch, YBatch *ckks.Matrix, nParties int){
+func (c *CellCNNProtocol) BackWardPlain(XBatch, YBatch *Matrix, nParties int){
 
-	L1Batch := new(ckks.Matrix)
-	L1DerivBatch := new(ckks.Matrix)
-	E0Batch := new(ckks.Matrix)
-	E1Batch := new(ckks.Matrix)
+	L1Batch := new(Matrix)
+	L1DerivBatch := new(Matrix)
+	E0Batch := new(Matrix)
+	E1Batch := new(Matrix)
 
 	// Activations
 	L1Batch.Func(c.U, Activation)
@@ -304,18 +304,18 @@ func (c *CellCNNProtocol) BackWardPlain(XBatch, YBatch *ckks.Matrix, nParties in
 	c.DC.MultConst(c.DC, complex(LearningRate/float64(nParties), 0))
 
 	if c.DCPrev == nil{
-		c.DCPrev = ckks.NewMatrix(Features, Filters)
+		c.DCPrev = NewMatrix(Features, Filters)
 	}
 
 	if c.DWPrev == nil{
-		c.DWPrev = ckks.NewMatrix(Filters, Classes)
+		c.DWPrev = NewMatrix(Filters, Classes)
 	}
 
 	// Adds the previous weights
 	// W_i = learning_rate * Wt + W_i-1 * momentum
 }
 
-func (c *CellCNNProtocol) UpdatePlain(DC, DW *ckks.Matrix){
+func (c *CellCNNProtocol) UpdatePlain(DC, DW *Matrix){
 
 	c.DW.Add(c.DW, c.DWPrev)
 	c.DC.Add(c.DC, c.DCPrev)
@@ -331,7 +331,7 @@ func (c *CellCNNProtocol) UpdatePlain(DC, DW *ckks.Matrix){
 }
 
 // Forward applies a forward pass on the given batch of samples and stores the result in ctBoot
-func (c *CellCNNProtocol) Forward(XBatch *ckks.Matrix){
+func (c *CellCNNProtocol) Forward(XBatch *Matrix){
 
 	// Encodes the Batch
 	EncodeLeftForPtMul(XBatch, Filters, 1.0, c.ptL, c.encoder, c.params)
@@ -349,12 +349,12 @@ func (c *CellCNNProtocol) Forward(XBatch *ckks.Matrix){
 	RepackBeforeBootstrappingWithPrepooling(c.ctBoot, ctPpool, c.ctW, c.ctDCPrev, c.ctDWPrev, BatchSize, Filters, Classes, c.eval)
 }
 
-func (c *CellCNNProtocol) PredictPlain(XBatch *ckks.Matrix) (*ckks.Matrix){
+func (c *CellCNNProtocol) PredictPlain(XBatch *Matrix) (*Matrix){
 
 	// Convolution
 	c.P.MulMat(XBatch, c.C)
 
-	U := new(ckks.Matrix)
+	U := new(Matrix)
 
 	// Dense
 	U.MulMat(c.P, c.W)
@@ -366,7 +366,7 @@ func (c *CellCNNProtocol) PredictPlain(XBatch *ckks.Matrix) (*ckks.Matrix){
 }
 
 
-func (c *CellCNNProtocol) Predict(XBatch *ckks.Matrix, sk *ckks.SecretKey) (*ckks.Matrix){
+func (c *CellCNNProtocol) Predict(XBatch *Matrix, sk *rlwe.SecretKey) (*Matrix){
 
 	// Encodes the Batch
 	EncodeLeftForPtMul(XBatch, Filters, 1.0, c.ptL, c.encoder, c.params)
@@ -381,7 +381,7 @@ func (c *CellCNNProtocol) Predict(XBatch *ckks.Matrix, sk *ckks.SecretKey) (*ckk
 	ctU := DenseLayer(ctP, c.ctW, Filters, Classes, c.eval)
 
 	// pow2 * 0.5 (for the complex trick)
-	pow2 := math.Exp2(math.Round(math.Log2(float64(c.params.Qi()[0]))))/2.0
+	pow2 := math.Exp2(math.Round(math.Log2(float64(c.params.Q()[0]))))/2.0
 
 	c.eval.MultByConst(ctU, int(pow2/ctU.Scale()), ctU)
 	ctU.SetScale(pow2*2)
@@ -398,7 +398,7 @@ func (c *CellCNNProtocol) Predict(XBatch *ckks.Matrix, sk *ckks.SecretKey) (*ckk
 
 	res := c.encoder.Decode(decryptor.DecryptNew(ctPredict), c.params.LogSlots())
 
-	U := ckks.NewMatrix(BatchSize, Classes)
+	U := NewMatrix(BatchSize, Classes)
 
 	for i := 0; i < BatchSize; i++{
 		for j := 0; j < Classes; j++{
@@ -410,7 +410,7 @@ func (c *CellCNNProtocol) Predict(XBatch *ckks.Matrix, sk *ckks.SecretKey) (*ckk
 }
 
 // Backward applies a backward pass on the given batch and stores the result in ctDC and ctDW
-func (c *CellCNNProtocol) Backward(XBatch, YBatch *ckks.Matrix, nbParties int) {
+func (c *CellCNNProtocol) Backward(XBatch, YBatch *Matrix, nbParties int) {
 
 	eval := c.eval
 	params := c.params
@@ -456,10 +456,10 @@ func (c *CellCNNProtocol) Backward(XBatch, YBatch *ckks.Matrix, nbParties int) {
 	// Sums accroses the batches
 	// [        W0       ] [       W1        ] [            Garbage              ]  
 	// | denseMatrixSize | | denseMatrixSize | | 2*(batches-1) * denseMatrixSize | 
-	eval.InnerSum(c.ctDW, Classes*Filters, BatchSize, c.ctDW)
+	eval.InnerSumLog(c.ctDW, Classes*Filters, BatchSize, c.ctDW)
 
 	// Sums accrosses the classes
-	eval.InnerSum(c.ctDC, convolutionMatrixSize, Classes, c.ctDC)
+	eval.InnerSumLog(c.ctDC, convolutionMatrixSize, Classes, c.ctDC)
 	
 	//  DC = Ltranspose x E0
 	c.ctDC = MulMatrixLeftPtWithRightCt(c.ptLTranspose, c.ctDC, BatchSize, Filters, c.eval)
@@ -468,7 +468,7 @@ func (c *CellCNNProtocol) Backward(XBatch, YBatch *ckks.Matrix, nbParties int) {
 	eval.Add(c.ctDC, eval.ConjugateNew(c.ctDC), c.ctDC)
 
 	// Replicates ctDC so that it is at least as large as convolutionMatrixSize
-	eval.Replicate(c.ctDC, Features*Filters, int(math.Ceil(float64(convolutionMatrixSize)/float64(Features * Filters))), c.ctDC)
+	eval.ReplicateLog(c.ctDC, Features*Filters, int(math.Ceil(float64(convolutionMatrixSize)/float64(Features * Filters))), c.ctDC)
 
 	// Divides by the average and learning rate and cleans the non-desired slots
 
@@ -479,14 +479,14 @@ func (c *CellCNNProtocol) Backward(XBatch, YBatch *ckks.Matrix, nbParties int) {
 	// Replicates DW batch times (no masking needed as it is a multiple of filters)
 	eval.Rotate(c.ctDW, -BatchSize*Filters + Filters, c.ctDW)
 	eval.Add(c.ctDW, ctDWtmp, c.ctDW)
-	eval.Replicate(c.ctDW, Filters, BatchSize, c.ctDW)
+	eval.ReplicateLog(c.ctDW, Filters, BatchSize, c.ctDW)
 
 	// Rescales
 	eval.Rescale(c.ctDW, params.Scale(), c.ctDW)
 }
 
 // Refresh refreshes and repack ctBoot using DummyBootWithPrepooling
-func (c *CellCNNProtocol) Refresh(sk *ckks.SecretKey, nbParties int){
+func (c *CellCNNProtocol) Refresh(sk *rlwe.SecretKey, nbParties int){
 	c.ctBoot = DummyBootWithPrepooling(c.ctBoot, c.params, sk, nbParties)
 }
 
@@ -519,14 +519,14 @@ func (c *CellCNNProtocol) Update(DC, DW *ckks.Ciphertext){
 	eval.Add(c.ctDC, c.ctDCPrev, c.ctDC)
 	eval.Add(c.ctDW, c.ctDWPrev, c.ctDW)
 
-	c.ctDCPrev = DC.CopyNew().Ciphertext()
-	c.ctDWPrev = DW.CopyNew().Ciphertext()
+	c.ctDCPrev = DC.CopyNew()
+	c.ctDWPrev = DW.CopyNew()
 
 	c.eval.Sub(c.ctC, DC, c.ctC)
 	c.eval.Sub(c.ctW, DW, c.ctW)
 }
 
-func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, params *ckks.Parameters, sk *ckks.SecretKey, nbParties int) (*ckks.Ciphertext){
+func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, params ckks.Parameters, sk *rlwe.SecretKey, nbParties int) (*ckks.Ciphertext){
 
 	//  [            CTU            ] [      CTPpool       ] [             CTW            ] [         prevCTDW           ] [                         prevCTDC                        ] [available] [   garbage  ]
 	//  | batches * DenseMatrixSize | | batches * Features | | batches *  DenseMatrixSize | | batches *  DenseMatrixSize | | batches * Filters + (Features/2 -1)*2*Filters + Filters | |         | | Filters -1 |
@@ -662,7 +662,7 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, params *ckks.Parameter
 
 
 
-func GetRotationKeysIndex(kgen ckks.KeyGenerator) (rotations []int){
+func GetRotationKeysIndex(params ckks.Parameters) (rotations []int){
 
 	denseMatrixSize := DenseMatrixSize(Filters, Classes)
 	convolutionMatrixSize := ConvolutionMatrixSize(BatchSize, Features, Filters)
@@ -681,13 +681,13 @@ func GetRotationKeysIndex(kgen ckks.KeyGenerator) (rotations []int){
 	}
 
 	// Dense layer rotations
-	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(1, Filters)...)
+	rotations = append(rotations, params.RotationsForInnerSumLog(1, Filters)...)
 
-	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(convolutionMatrixSize, Classes)...)
+	rotations = append(rotations, params.RotationsForInnerSumLog(convolutionMatrixSize, Classes)...)
 
-	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(BatchSize, Classes)...)
+	rotations = append(rotations, params.RotationsForInnerSumLog(BatchSize, Classes)...)
 
-	rotations = append(rotations, kgen.GenRotationIndexesForInnerSum(Classes*Filters, BatchSize)...)
+	rotations = append(rotations, params.RotationsForInnerSumLog(Classes*Filters, BatchSize)...)
 
 	// Pre-pool convolution replication
 	rotations = append(rotations, -BatchSize*Filters)
@@ -707,10 +707,10 @@ func GetRotationKeysIndex(kgen ckks.KeyGenerator) (rotations []int){
 	rotations = append(rotations, -BatchSize*Filters + Filters)
 
 	// Replication of DC
-	rotations = append(rotations, kgen.GenRotationIndexesForReplicate(Features*Filters, int(math.Ceil(float64(convolutionMatrixSize)/float64(Features * Filters))))...)
+	rotations = append(rotations, params.RotationsForReplicateLog(Features*Filters, int(math.Ceil(float64(convolutionMatrixSize)/float64(Features * Filters))))...)
 
 	// Replication of DW
-	rotations = append(rotations, kgen.GenRotationIndexesForReplicate(Filters, BatchSize)...)
+	rotations = append(rotations, params.RotationsForReplicateLog(Filters, BatchSize)...)
 
 	for i := 0; i < Classes; i++{
 		rotations = append(rotations, i*BatchSize*Filters)
