@@ -1,6 +1,19 @@
 package utils
 
-import "github.com/ldsec/lattigo/v2/ckks"
+import (
+	"github.com/ldsec/lattigo/v2/ckks"
+	"gonum.org/v1/gonum/mat"
+)
+
+func ScalarToOneHot(labels []float64, nclasses int) *mat.Dense {
+	res := mat.NewDense(len(labels), nclasses, nil)
+	for i, each := range labels {
+		row := make([]float64, nclasses)
+		row[int(each)] = 1
+		res.SetRow(i, row)
+	}
+	return res
+}
 
 func Float64ToOneHotEncode(label float64, nfilters int, params *ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
 	res := make([]complex128, params.Slots())

@@ -104,3 +104,11 @@ func CiphertextsToBytes(ct []*ckks.Ciphertext) [][]byte {
 	}
 	return data
 }
+
+func CopyCiphertextSlice(input []*ckks.Ciphertext) []*ckks.Ciphertext {
+	res := make([]*ckks.Ciphertext, len(input))
+	for i, each := range input {
+		res[i] = each.CopyNew().Ciphertext()
+	}
+	return res
+}

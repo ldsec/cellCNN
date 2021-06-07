@@ -401,7 +401,7 @@ func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) ([][]byte, err
 	// accumulate gradients in a batch
 	var res []*ckks.Ciphertext
 	for i := range X {
-		encOut, _ := p.model.ForwardOne(X[i], nil, nil, nil, nil)
+		encOut, _ := p.model.ForwardOne(X[i], nil, nil, nil)
 		err0 := p.model.ComputeLossOne(encOut, y[i])
 
 		// valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(encOut), p.CryptoParams.Params.LogSlots())

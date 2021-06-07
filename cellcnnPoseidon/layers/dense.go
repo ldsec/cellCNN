@@ -133,7 +133,7 @@ func (dense *Dense) Forward(
 	evaluator ckks.Evaluator,
 	encoder ckks.Encoder,
 	params *ckks.Parameters,
-	maskMap map[int]*ckks.Plaintext,
+	// maskMap map[int]*ckks.Plaintext,
 ) *ckks.Ciphertext {
 
 	if newWeights != nil {
@@ -201,12 +201,12 @@ func (dense *Dense) Forward(
 }
 
 // Backward compute the gradient
-// return the err to conv1d
+// return the err to conv1d, and pure gradient
 // for scaled and momentumed one, call GetGradient
 func (dense *Dense) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *ckks.SecretKey, lr float64,
-) *ckks.Ciphertext {
+) (*ckks.Ciphertext, *ckks.Ciphertext) {
 	// 1. compute the derivative of the activation function
 	cf, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
 
@@ -281,8 +281,12 @@ func (dense *Dense) Backward(
 		panic("fail to rescale, dense backward dw")
 	}
 
-	// change the gradient to scaled and momentum one
-	dense.ComputeGradientWithMomentumAndLr(sts, params, evaluator, encoder, lr)
+	pure_gradient := dense.gradient.CopyNew().Ciphertext()
+
+	if lr != 0 {
+		// change the gradient to scaled and momentum one
+		dense.ComputeGradientWithMomentumAndLr(dense.gradient, sts, params, evaluator, encoder, lr)
+	}
 	// fmt.Printf("min{b-2, input-1} " + utils.PrintCipherLevel(dense.gradient, params))
 
 	// return dw
@@ -343,18 +347,20 @@ func (dense *Dense) Backward(
 	// 2. innerSum to get the err in nclasses * (0~k-1) slots, with garbage
 	evaluator.InnerSum(outErr, 1, sts.Nclasses, outErr)
 
-	return outErr
+	return outErr, pure_gradient
 }
 
 func (dense *Dense) ComputeGradientWithMomentumAndLr(
+	gradient *ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params *ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) {
-	update := eval.MultByConstNew(dense.gradient, lr)
+	update := eval.MultByConstNew(gradient, lr)
 	if dense.momentum > 0 {
 		if dense.vt == nil {
 			dense.vt = update.CopyNew().Ciphertext()
 		} else {
+			fmt.Println("()()()()( enter )()()()()(")
 			dense.vt = eval.MultByConstNew(dense.vt, dense.momentum)
 			dense.vt = eval.AddNew(dense.vt, update)
 		}
@@ -380,7 +386,7 @@ func (dense *Dense) GetGradientBinary() []byte {
 }
 
 func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator) {
-	eval.Add(dense.weights, g, dense.weights)
+	eval.Sub(dense.weights, g, dense.weights)
 }
 
 // func (dense *Dense) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {

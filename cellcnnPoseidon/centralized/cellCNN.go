@@ -2,11 +2,8 @@ package centralized
 
 import (
 	"fmt"
-	"math"
-	"math/rand"
 	"time"
 
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
@@ -47,6 +44,15 @@ func (g *Gradients) Aggregate(data [][]byte, eval ckks.Evaluator) {
 		panic("fail to unmarshall conv filter weights")
 	}
 	eval.Add(g.dense, tmpDense, g.dense)
+}
+
+// aggregate data to self
+func (g *Gradients) AggregateCt(filters []*ckks.Ciphertext, dense *ckks.Ciphertext, eval ckks.Evaluator) {
+	// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
+	for i, each := range filters {
+		eval.Add(g.filters[i], each, g.filters[i])
+	}
+	eval.Add(g.dense, dense, g.dense)
 }
 
 // bootstrap
@@ -383,34 +389,35 @@ func (c *CellCNN) ForwardOne(
 	wConv []*ckks.Ciphertext,
 	wDense *ckks.Ciphertext,
 	poolMask *ckks.Plaintext,
-	maskMap map[int]*ckks.Plaintext,
+	// maskMap map[int]*ckks.Plaintext,
 ) (*ckks.Ciphertext, []float64) {
 
 	// nmakers := c.cnnSettings.Nmakers
-	nfilters := c.cnnSettings.Nfilters
+	// nfilters := c.cnnSettings.Nfilters
 	// ncells := c.cnnSettings.Ncells
-	nclasses := c.cnnSettings.Nclasses
+	// nclasses := c.cnnSettings.Nclasses
 
-	if poolMask == nil && maskMap == nil {
+	if poolMask == nil {
 
 		// fmt.Println("got nil mask")
 		// initialize masks required
 		// conv1d left most mask
-		LeftMostMask := make([]complex128, c.params.Slots())
-		LeftMostMask[0] = complex(float64(1), 0)
+		LeftMostMask := utils.GenSliceWithOneAt(c.params.Slots(), []int{0})
+		// LeftMostMask := make([]complex128, c.params.Slots())
+		// LeftMostMask[0] = complex(float64(1), 0)
 		poolMask = c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
 
 		// fmt.Println("got nil map")
 		// dense maskMap to collect all results into one ciphertext
-		maskMap = make(map[int]*ckks.Plaintext)
-		for i := 0; i < nclasses; i++ {
-			maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
-				tmpMask := make([]complex128, c.params.Slots())
-				// fmt.Println("making maskMap: ", i*(nfilters-1))
-				tmpMask[i] = complex(float64(1), 0)
-				return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
-			}()
-		}
+		// maskMap = make(map[int]*ckks.Plaintext)
+		// for i := 0; i < nclasses; i++ {
+		// 	maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
+		// 		tmpMask := make([]complex128, c.params.Slots())
+		// 		// fmt.Println("making maskMap: ", i*(nfilters-1))
+		// 		tmpMask[i] = complex(float64(1), 0)
+		// 		return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
+		// 	}()
+		// }
 
 	}
 
@@ -419,7 +426,7 @@ func (c *CellCNN) ForwardOne(
 	// t2 := time.Now()
 	// out2 := c.pooling.Forward(out1, c.evaluator, c.rotKeys, c.poolingMask, c.params.Slots())
 	t2 := time.Now()
-	out2 := c.dense.Forward(out1, wDense, c.cnnSettings, c.evaluator, c.encoder, c.params, maskMap)
+	out2 := c.dense.Forward(out1, wDense, c.cnnSettings, c.evaluator, c.encoder, c.params)
 	t3 := time.Now()
 	return out2, []float64{t2.Sub(t1).Seconds(), t3.Sub(t2).Seconds(), t3.Sub(t1).Seconds()}
 }
@@ -446,52 +453,6 @@ func (c *CellCNN) PlaintextCircuitBackwardOne(err0 []complex128) ([][]complex128
 	return dfilters, dweights
 }
 
-func (c *CellCNN) ForwardConv(
-	input *ckks.Plaintext,
-	wConv []*ckks.Ciphertext,
-	wDense *ckks.Ciphertext,
-	poolMask *ckks.Plaintext,
-	maskMap map[int]*ckks.Plaintext,
-) *ckks.Ciphertext {
-
-	// nmakers := c.cnnSettings.Nmakers
-	nfilters := c.cnnSettings.Nfilters
-	// ncells := c.cnnSettings.Ncells
-	nclasses := c.cnnSettings.Nclasses
-
-	if poolMask == nil && maskMap == nil {
-
-		ta := time.Now()
-
-		// fmt.Println("got nil mask")
-		// initialize masks required
-		// conv1d left most mask
-		LeftMostMask := make([]complex128, c.params.Slots())
-		LeftMostMask[0] = complex(float64(1), 0)
-		poolMask = c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
-
-		// fmt.Println("got nil map")
-		// dense maskMap to collect all results into one ciphertext
-		maskMap = make(map[int]*ckks.Plaintext)
-		for i := 0; i < nclasses; i++ {
-			maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
-				tmpMask := make([]complex128, c.params.Slots())
-				// fmt.Println("making maskMap: ", i*(nfilters-1))
-				tmpMask[i] = complex(float64(1), 0)
-				return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
-			}()
-		}
-
-		tb := time.Since(ta)
-
-		fmt.Printf("Time consumed for generating rotation keys: %v\n", tb.Seconds())
-	}
-
-	out1 := c.conv1d.Forward(input, wConv, c.cnnSettings, c.evaluator, c.params, poolMask)
-
-	return out1
-}
-
 func (c *CellCNN) ComputeLossOne(
 	pred *ckks.Ciphertext, labels float64,
 ) *ckks.Ciphertext {
@@ -513,7 +474,7 @@ func (c *CellCNN) ComputeLossOne(
 
 func (c *CellCNN) BackwardOne(err *ckks.Ciphertext) []float64 {
 	t1 := time.Now()
-	dsErr := c.dense.Backward(err, c.cnnSettings, c.params, c.evaluator, c.encoder, c.sk, c.lr)
+	dsErr, _ := c.dense.Backward(err, c.cnnSettings, c.params, c.evaluator, c.encoder, c.sk, c.lr)
 	t2 := time.Since(t1).Seconds()
 	c.conv1d.Backward(dsErr, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
 	t3 := time.Since(t1).Seconds()
@@ -527,59 +488,11 @@ func (c *CellCNN) ForwardAndBackwardOne(
 	poolMask *ckks.Plaintext,
 	maskMap map[int]*ckks.Plaintext,
 ) ([]float64, []float64) {
-	pred, tf := c.ForwardOne(input, wConv, wDense, poolMask, maskMap)
+	pred, tf := c.ForwardOne(input, wConv, wDense, poolMask)
 	fakeLabel := 0
 	loss := c.ComputeLossOne(pred, float64(fakeLabel))
 	tb := c.BackwardOne(loss)
 	return tf, tb
-}
-
-// func (c *CellCNN) Step(lr float64) bool {
-// 	t1 := c.conv1d.Step(lr, 0, c.evaluator)
-// 	t2 := c.dense.Step(lr, 0, c.evaluator)
-// 	return t1 && t2
-// }
-
-func (c *CellCNN) ForwardBatch(inputs []*ckks.Plaintext, j int) ([]*ckks.Ciphertext, []float64) {
-
-	// nmakers := c.cnnSettings.Nmakers
-	nfilters := c.cnnSettings.Nfilters
-	// ncells := c.cnnSettings.Ncells
-	nclasses := c.cnnSettings.Nclasses
-
-	// initialize masks required
-	// conv1d left most mask
-	LeftMostMask := make([]complex128, c.params.Slots())
-	LeftMostMask[0] = complex(float64(1), 0)
-	poolMask := c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
-
-	// dense maskMap to collect all results into one ciphertext
-	maskMap := make(map[int]*ckks.Plaintext)
-	for i := 0; i < nclasses; i++ {
-		maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
-			tmpMask := make([]complex128, c.params.Slots())
-			// fmt.Println("making maskMap: ", i*(nfilters-1))
-			tmpMask[i] = complex(float64(1), 0)
-			return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
-		}()
-	}
-
-	// timer[0]:conv1d, [1]:dense, [2]:sum
-	result := make([]*ckks.Ciphertext, 0)
-	timer := make([]float64, 3)
-	for id, sample := range inputs {
-		output, t := c.ForwardOne(sample, nil, nil, poolMask, maskMap)
-		result = append(result, output)
-		for i := 0; i < len(timer); i++ {
-			timer[i] += t[i]
-		}
-		utils.PrintTime(t, &id, "Forward One")
-	}
-	for i := 0; i < len(timer); i++ {
-		timer[i] /= float64(len(inputs))
-	}
-	utils.PrintTime(timer, &j, "\nAVG Forward One in Batch")
-	return result, timer
 }
 
 func (c *CellCNN) Matrix2Plaintext(rawData *mat.Dense) *ckks.Plaintext {
@@ -614,159 +527,159 @@ func (c *CellCNN) Batch2PlainSlice(inputs []*mat.Dense) []*ckks.Plaintext {
 	return result
 }
 
-func (c *CellCNN) MockTrain(niter int, trainSet common.CnnDataset, batchSize int) []float64 {
-	X := trainSet.X
-	y := trainSet.Y
-	tt := make([]float64, 3)
-	for i := 1; i <= niter; i++ {
-		// make a new batch
-		newBatch := make([]*mat.Dense, batchSize)
-		newBatchLabels := make([]float64, batchSize)
-		for j := 0; j < len(newBatch); j++ {
-			randi := rand.Intn(len(X))
-			newBatch[j] = X[randi]
-			newBatchLabels[j] = y[randi]
-		}
-		plaintextSlice := c.Batch2PlainSlice(newBatch)
-		_, avgTime := c.ForwardBatch(plaintextSlice, i)
-		for j := 0; j < len(tt); j++ {
-			tt[j] = (tt[j]*float64(i-1) + avgTime[j]) / float64(i)
-		}
-		fmt.Printf(
-			"=>Iter: %v |< Current: conv: %v | dense: %v | sum: %v >|< AVG: conv %v | dense: %v | sum: %v\n",
-			i, avgTime[0], avgTime[1], avgTime[2], tt[0], tt[1], tt[2],
-		)
-	}
-	return tt
-}
+// func (c *CellCNN) MockTrain(niter int, trainSet common.CnnDataset, batchSize int) []float64 {
+// 	X := trainSet.X
+// 	y := trainSet.Y
+// 	tt := make([]float64, 3)
+// 	for i := 1; i <= niter; i++ {
+// 		// make a new batch
+// 		newBatch := make([]*mat.Dense, batchSize)
+// 		newBatchLabels := make([]float64, batchSize)
+// 		for j := 0; j < len(newBatch); j++ {
+// 			randi := rand.Intn(len(X))
+// 			newBatch[j] = X[randi]
+// 			newBatchLabels[j] = y[randi]
+// 		}
+// 		plaintextSlice := c.Batch2PlainSlice(newBatch)
+// 		_, avgTime := c.ForwardBatch(plaintextSlice, i)
+// 		for j := 0; j < len(tt); j++ {
+// 			tt[j] = (tt[j]*float64(i-1) + avgTime[j]) / float64(i)
+// 		}
+// 		fmt.Printf(
+// 			"=>Iter: %v |< Current: conv: %v | dense: %v | sum: %v >|< AVG: conv %v | dense: %v | sum: %v\n",
+// 			i, avgTime[0], avgTime[1], avgTime[2], tt[0], tt[1], tt[2],
+// 		)
+// 	}
+// 	return tt
+// }
 
-func CompareTwoNetForward(
-	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
-	trainSet common.CnnDataset, niter int, batchSize int,
-	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
-) {
-	X := trainSet.X
-	y := trainSet.Y
-	collector := 0.0
-	amount := batchSize * niter * pNet.nclasses
-	for i := 1; i <= niter; i++ {
-		// make a new batch
-		newBatch := make([]*mat.Dense, batchSize)
-		newBatchLabels := make([]float64, batchSize)
-		for j := 0; j < len(newBatch); j++ {
-			randi := rand.Intn(len(X))
-			newBatch[j] = X[randi]
-			newBatchLabels[j] = y[randi]
-		}
-		// forward in encrypted net
-		plaintextSlice := eNet.Batch2PlainSlice(newBatch)
-		eo, _ := eNet.ForwardBatch(plaintextSlice, i)
+// func CompareTwoNetForward(
+// 	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
+// 	trainSet common.CnnDataset, niter int, batchSize int,
+// 	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
+// ) {
+// 	X := trainSet.X
+// 	y := trainSet.Y
+// 	collector := 0.0
+// 	amount := batchSize * niter * pNet.nclasses
+// 	for i := 1; i <= niter; i++ {
+// 		// make a new batch
+// 		newBatch := make([]*mat.Dense, batchSize)
+// 		newBatchLabels := make([]float64, batchSize)
+// 		for j := 0; j < len(newBatch); j++ {
+// 			randi := rand.Intn(len(X))
+// 			newBatch[j] = X[randi]
+// 			newBatchLabels[j] = y[randi]
+// 		}
+// 		// forward in encrypted net
+// 		plaintextSlice := eNet.Batch2PlainSlice(newBatch)
+// 		eo, _ := eNet.ForwardBatch(plaintextSlice, i)
 
-		// forward in plain net
-		po := pNet.ForwardBatch(newBatch, cw, dw)
+// 		// forward in plain net
+// 		po := pNet.ForwardBatch(newBatch, cw, dw)
 
-		d1, d2 := po.Dims()
-		fmt.Printf("Dims of plain net output: %v, %v\n", d1, d2)
+// 		d1, d2 := po.Dims()
+// 		fmt.Printf("Dims of plain net output: %v, %v\n", d1, d2)
 
-		// Decrypt and compare pred
-		fmt.Printf("Result for iteration %v\n", i)
-		for j, each := range eo {
-			predE := encoder.Decode(decryptor.DecryptNew(each), params.LogSlots())
-			info := fmt.Sprintf("--> ID: %v", j)
-			for c := 0; c < pNet.nclasses; c++ {
-				er := real(predE[c*pNet.nfilters]) - po.At(j, c)
-				collector += math.Pow(er, 2)
-				info += fmt.Sprintf(
-					"| Class %v E(%v) P(%v) | ", c, predE[c*pNet.nfilters], po.At(j, c),
-				)
-			}
-			info += "\n"
-			fmt.Printf(info)
-		}
-	}
-	fmt.Printf(
-		"Average error on one class: %v (tested over %v iterations with batchsize %v)",
-		math.Pow(collector/float64(amount), 0.5), niter, batchSize,
-	)
-}
+// 		// Decrypt and compare pred
+// 		fmt.Printf("Result for iteration %v\n", i)
+// 		for j, each := range eo {
+// 			predE := encoder.Decode(decryptor.DecryptNew(each), params.LogSlots())
+// 			info := fmt.Sprintf("--> ID: %v", j)
+// 			for c := 0; c < pNet.nclasses; c++ {
+// 				er := real(predE[c*pNet.nfilters]) - po.At(j, c)
+// 				collector += math.Pow(er, 2)
+// 				info += fmt.Sprintf(
+// 					"| Class %v E(%v) P(%v) | ", c, predE[c*pNet.nfilters], po.At(j, c),
+// 				)
+// 			}
+// 			info += "\n"
+// 			fmt.Printf(info)
+// 		}
+// 	}
+// 	fmt.Printf(
+// 		"Average error on one class: %v (tested over %v iterations with batchsize %v)",
+// 		math.Pow(collector/float64(amount), 0.5), niter, batchSize,
+// 	)
+// }
 
-func CompareTwoNetBackward(
-	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
-	trainSet common.CnnDataset, niter int, batchSize int,
-	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
-) {
-	X := trainSet.X
-	y := trainSet.Y
-	collector := 0.0
-	// amount := batchSize * niter * pNet.nclasses
-	for i := 1; i <= niter; i++ {
-		// make a new batch
-		newBatch := make([]*mat.Dense, batchSize)
-		newBatchLabels := make([]float64, batchSize)
-		for j := 0; j < len(newBatch); j++ {
-			randi := rand.Intn(len(X))
-			newBatch[j] = X[randi]
-			newBatchLabels[j] = y[randi]
-		}
-		// forward in encrypted net
-		plaintextSlice := eNet.Batch2PlainSlice(newBatch)
-		eo, _ := eNet.ForwardBatch(plaintextSlice, i)
+// func CompareTwoNetBackward(
+// 	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
+// 	trainSet common.CnnDataset, niter int, batchSize int,
+// 	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
+// ) {
+// 	X := trainSet.X
+// 	y := trainSet.Y
+// 	collector := 0.0
+// 	// amount := batchSize * niter * pNet.nclasses
+// 	for i := 1; i <= niter; i++ {
+// 		// make a new batch
+// 		newBatch := make([]*mat.Dense, batchSize)
+// 		newBatchLabels := make([]float64, batchSize)
+// 		for j := 0; j < len(newBatch); j++ {
+// 			randi := rand.Intn(len(X))
+// 			newBatch[j] = X[randi]
+// 			newBatchLabels[j] = y[randi]
+// 		}
+// 		// forward in encrypted net
+// 		plaintextSlice := eNet.Batch2PlainSlice(newBatch)
+// 		eo, _ := eNet.ForwardBatch(plaintextSlice, i)
 
-		// forward in plain net
-		po := pNet.ForwardBatch(newBatch, cw, dw)
+// 		// forward in plain net
+// 		po := pNet.ForwardBatch(newBatch, cw, dw)
 
-		// Decrypt and compare pred
-		fmt.Printf("Result for iteration %v\n", i)
-		for j, each := range eo {
-			predE := encoder.Decode(decryptor.DecryptNew(each), params.LogSlots())
-			info := fmt.Sprintf("--> ID: %v", j)
-			for c := 0; c < pNet.nclasses; c++ {
-				er := real(predE[c*pNet.nfilters]) - po.At(j, c)
-				collector += math.Pow(er, 2)
-				info += fmt.Sprintf(
-					"| Class %v E(%v) P(%v) | ", c, predE[c*pNet.nfilters], po.At(j, c),
-				)
-			}
-			info += "\n"
-			fmt.Printf(info)
-		}
+// 		// Decrypt and compare pred
+// 		fmt.Printf("Result for iteration %v\n", i)
+// 		for j, each := range eo {
+// 			predE := encoder.Decode(decryptor.DecryptNew(each), params.LogSlots())
+// 			info := fmt.Sprintf("--> ID: %v", j)
+// 			for c := 0; c < pNet.nclasses; c++ {
+// 				er := real(predE[c*pNet.nfilters]) - po.At(j, c)
+// 				collector += math.Pow(er, 2)
+// 				info += fmt.Sprintf(
+// 					"| Class %v E(%v) P(%v) | ", c, predE[c*pNet.nfilters], po.At(j, c),
+// 				)
+// 			}
+// 			info += "\n"
+// 			fmt.Printf(info)
+// 		}
 
-		// copmute loss function
-		errE := eNet.ComputeLossOne(eo[0], newBatchLabels[0])
-		tmpLabel := make([]float64, pNet.nclasses)
-		tmpLabel[int(newBatchLabels[0])] = 1
-		labelsDense := mat.NewDense(1, pNet.nclasses, tmpLabel)
-		errP := mat.NewDense(1, pNet.nclasses, nil)
-		errP.Sub(po, labelsDense)
+// 		// copmute loss function
+// 		errE := eNet.ComputeLossOne(eo[0], newBatchLabels[0])
+// 		tmpLabel := make([]float64, pNet.nclasses)
+// 		tmpLabel[int(newBatchLabels[0])] = 1
+// 		labelsDense := mat.NewDense(1, pNet.nclasses, tmpLabel)
+// 		errP := mat.NewDense(1, pNet.nclasses, nil)
+// 		errP.Sub(po, labelsDense)
 
-		// backward
-		pconv, pdense := pNet.Backward(errP, eNet.lr, eNet.momentum)
-		eNet.BackwardOne(errE)
-		// eNet.Step(lr)
+// 		// backward
+// 		pconv, pdense := pNet.Backward(errP, eNet.lr, eNet.momentum)
+// 		eNet.BackwardOne(errE)
+// 		// eNet.Step(lr)
 
-		// compare the accuracy and err
-		// pconv := pNet.conv.GetWeights()
-		// pdense := pNet.dense.GetWeights()
+// 		// compare the accuracy and err
+// 		// pconv := pNet.conv.GetWeights()
+// 		// pdense := pNet.dense.GetWeights()
 
-		econv := eNet.conv1d.GetGradient()
-		edense := eNet.dense.GetGradient()
+// 		econv := eNet.conv1d.GetGradient()
+// 		edense := eNet.dense.GetGradient()
 
-		decconv := make([][]complex128, pNet.nfilters)
-		for i := range decconv {
-			decconv[i] = encoder.Decode(decryptor.DecryptNew(econv[i]), params.LogSlots())
-		}
-		decdense := encoder.Decode(decryptor.DecryptNew(edense), params.LogSlots())
+// 		decconv := make([][]complex128, pNet.nfilters)
+// 		for i := range decconv {
+// 			decconv[i] = encoder.Decode(decryptor.DecryptNew(econv[i]), params.LogSlots())
+// 		}
+// 		decdense := encoder.Decode(decryptor.DecryptNew(edense), params.LogSlots())
 
-		Dmean, Dmse := utils.CompareDenseWeights(decdense, pdense, pNet.nfilters, pNet.nclasses)
-		Cmean, Cmsd := utils.CompareConv1dWeights(decconv, pconv, pNet.nmakers, pNet.nfilters)
+// 		Dmean, Dmse := utils.CompareDenseWeights(decdense, pdense, pNet.nfilters, pNet.nclasses)
+// 		Cmean, Cmsd := utils.CompareConv1dWeights(decconv, pconv, pNet.nmakers, pNet.nfilters)
 
-		fmt.Printf("\n######### In iteration <%v> Backward weights accuracay on each slot: ##########", i)
-		fmt.Printf(
-			"Conv1D: < mean: %v, mse: %v> || Dense: <mean: %v, mse: %v>\n\n",
-			Cmean, Cmsd, Dmean, Dmse,
-		)
-	}
-}
+// 		fmt.Printf("\n######### In iteration <%v> Backward weights accuracay on each slot: ##########", i)
+// 		fmt.Printf(
+// 			"Conv1D: < mean: %v, mse: %v> || Dense: <mean: %v, mse: %v>\n\n",
+// 			Cmean, Cmsd, Dmean, Dmse,
+// 		)
+// 	}
+// }
 
 // func (c *CellCNN) MockForwardBackward(niter int, trainSet common.CnnDataset, batchSize int) []float64 {
 // 	X := trainSet.X

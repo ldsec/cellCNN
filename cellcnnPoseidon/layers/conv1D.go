@@ -68,7 +68,7 @@ func (conv *Conv1D) WithEncoder(encoder ckks.Encoder) {
 
 func (conv *Conv1D) UpdateWithGradients(g []*ckks.Ciphertext, eval ckks.Evaluator) {
 	for i := range conv.filters {
-		eval.Add(conv.filters[i], g[i], conv.filters[i])
+		eval.Sub(conv.filters[i], g[i], conv.filters[i])
 	}
 }
 
@@ -159,7 +159,7 @@ func (conv *Conv1D) Forward(
 		conv.filters = newFilters
 	}
 
-	conv.lastInput = input
+	conv.lastInput = input.CopyNew().Plaintext()
 
 	var output *ckks.Ciphertext
 	batch := 1                    // only the left most
@@ -329,15 +329,18 @@ func (conv *Conv1D) Backward(
 	// fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
 
 	// pure and no momentum gradient
-	conv.gradient = dwSlice
+	conv.gradient = utils.CopyCiphertextSlice(dwSlice)
 
-	// scaled and momentum gradient
-	conv.ComputeGradientWithMomentumAndLr(sts, params, evaluator, encoder, lr)
+	if lr != 0 {
+		// scaled and momentum gradient
+		conv.ComputeGradientWithMomentumAndLr(conv.gradient, sts, params, evaluator, encoder, lr)
+	}
 
 	return dwSlice
 }
 
 func (conv *Conv1D) ComputeGradientWithMomentumAndLr(
+	gradients []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params *ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) {
@@ -347,7 +350,7 @@ func (conv *Conv1D) ComputeGradientWithMomentumAndLr(
 	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
 	for i := range conv.filters {
 		// 1. mask and scale
-		update := eval.MulRelinNew(conv.gradient[i], maskPlain)
+		update := eval.MulRelinNew(gradients[i], maskPlain)
 		if err := eval.Rescale(update, params.Scale(), update); err != nil {
 			panic("fail to rescale, conv.gradient[i]")
 		}
@@ -358,6 +361,7 @@ func (conv *Conv1D) ComputeGradientWithMomentumAndLr(
 			if conv.vt[i] == nil {
 				conv.vt[i] = update.CopyNew().Ciphertext()
 			} else {
+				fmt.Println("()()()()( enter )()()()()(")
 				conv.vt[i] = eval.MultByConstNew(conv.vt[i], conv.momentum)
 				conv.vt[i] = eval.AddNew(conv.vt[i], update)
 			}
