@@ -1,6 +1,7 @@
 package cellCNN
 
 import (
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"math"
 	"fmt"
@@ -40,6 +41,8 @@ var Momentum = 0.9
 // ring dimension
 var LogN = 15
 
+var LogSlots = LogN-1
+
 var Scale = float64(1 << 52)
 
 // Total number of levels
@@ -59,12 +62,13 @@ func DenseMatrixSize(filters, classes int) int{
 
 // GenParams generates CKKS parameters based on the input scale to
 // ensure a secure bootstrapping and appropriate moduli
-func GenParams() (params *ckks.Parameters){
+func GenParams() (params ckks.Parameters){
 
 	var err error
 
-	log2Scale := math.Log2(Scale)
+	parametersLiteral := new(ckks.ParametersLiteral)
 
+	log2Scale := math.Log2(Scale)
 
 	bootstrappModuliSize := int(math.Ceil((128.0 + log2Scale)/3.0))
 
@@ -89,17 +93,16 @@ func GenParams() (params *ckks.Parameters){
 		logPi[i] = bootstrappModuliSize+1
 	}
 
-	logModuli := ckks.LogModuli{
-		LogQi: logQi,
-		LogPi: logPi,
-	}
+	parametersLiteral.LogN = LogN
+	parametersLiteral.LogQ = logQi
+	parametersLiteral.LogP = logPi
+	parametersLiteral.LogSlots = LogSlots
+	parametersLiteral.Sigma = rlwe.DefaultSigma
+	parametersLiteral.Scale = Scale
 
-	if params, err = ckks.NewParametersFromLogModuli(LogN, &logModuli); err != nil{
+	if params, err = ckks.NewParametersFromLiteral(*parametersLiteral); err != nil{
 		panic(err)
 	}
-
-	params.SetScale(Scale)
-	params.SetLogSlots(LogN-1)
 
 	return 
 

@@ -1,12 +1,13 @@
 package cellCNN
 
 import(
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"math"
 	"fmt"
 )
 
-func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, cells, features, filters, classes int, params *ckks.Parameters, eval ckks.Evaluator, sk *ckks.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
+func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, cells, features, filters, classes int, params ckks.Parameters, eval ckks.Evaluator, sk *rlwe.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
 
 
 	// Extracts previous DC * momentum and previous DW * momentum
@@ -57,12 +58,12 @@ func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Pl
 	return ctDW, ctDC
 }
 
-func EncodeCellsForBackward(L *ckks.Matrix, cells, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeCellsForBackward(L *Matrix, cells, features, filters, classes int, learningRate float64, params ckks.Parameters) (*ckks.Plaintext){
 	encoder := ckks.NewEncoder(params)
 
 	values := make([]complex128, params.Slots())
 
-	LSum := new(ckks.Matrix)
+	LSum := new(Matrix)
 	LSum.SumRows(L.Transpose())
 
 
@@ -88,7 +89,7 @@ func EncodeCellsForBackward(L *ckks.Matrix, cells, features, filters, classes in
 
 
 
-func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, params ckks.Parameters) (*ckks.Plaintext){
 
 	encoder := ckks.NewEncoder(params)
 
@@ -119,7 +120,7 @@ func EncodeLabelsForBackward(Y *ckks.Matrix, cells, features, filters, classes i
 
 
 
-func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, classes int, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes int, params ckks.Parameters) (*ckks.Plaintext){
 
 	convolutionMatrixSize := ConvolutionMatrixSize(Y.Rows(), features, filters)
 
@@ -173,7 +174,7 @@ func EncodeLabelsForBackwardWithPrepooling(Y *ckks.Matrix, features, filters, cl
 	return pt
 }
 
-func EncodeCellsForBackwardWithPrepooling(level int, L *ckks.Matrix, batchSize, features, filters, classes int, learningRate float64, params *ckks.Parameters) (*ckks.Plaintext){
+func EncodeCellsForBackwardWithPrepooling(level int, L *Matrix, batchSize, features, filters, classes int, learningRate float64, params ckks.Parameters) (*ckks.Plaintext){
 
 	convolutionMatrixSize := ConvolutionMatrixSize(batchSize, features, filters)
 
@@ -195,7 +196,7 @@ func EncodeCellsForBackwardWithPrepooling(level int, L *ckks.Matrix, batchSize, 
 		values[j] = complex(c, 0)
 	}
 
-	pt := ckks.NewPlaintext(params, level, float64(params.Qi()[level]))
+	pt := ckks.NewPlaintext(params, level, float64(params.Q()[level]))
 	encoder.EncodeNTT(pt, values, params.LogSlots())
 
 	return pt

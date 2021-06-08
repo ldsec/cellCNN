@@ -40,7 +40,7 @@ func ActivationDeriv(x complex128) complex128{
 	return EvaluatePoly(x, coeffsActivationDeriv)
 }
 
-func ActivationsCt(ctU0 *ckks.Ciphertext, params *ckks.Parameters, eval ckks.Evaluator) (ctL1, ctL1Deriv *ckks.Ciphertext){
+func ActivationsCt(ctU0 *ckks.Ciphertext, params ckks.Parameters, eval ckks.Evaluator) (ctL1, ctL1Deriv *ckks.Ciphertext){
 	var err error
 
 	if ctL1, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivation), params.Scale()); err != nil {
@@ -48,7 +48,7 @@ func ActivationsCt(ctU0 *ckks.Ciphertext, params *ckks.Parameters, eval ckks.Eva
 	}
 
 	depthDeriv := int(math.Ceil(math.Log2(float64(len(coeffsActivationDeriv)+1))))
-	scaleDeriv := float64(params.Qi()[ctU0.Level() - depthDeriv]) * float64(params.Qi()[ctU0.Level() - depthDeriv-1]) / params.Scale()
+	scaleDeriv := float64(params.Q()[ctU0.Level() - depthDeriv]) * float64(params.Q()[ctU0.Level() - depthDeriv-1]) / params.Scale()
 
 	if ctL1Deriv, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivationDeriv), scaleDeriv); err != nil {
 		panic(err)
