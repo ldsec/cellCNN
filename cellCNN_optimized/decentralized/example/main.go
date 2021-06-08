@@ -183,13 +183,11 @@ func main() {
 		if trainEncrypted{
 			fmt.Println("DCPool")
 			DCPool.Print()
-			//pt := CollectiveDecryption(P, P[j].CtDC(), params)
 			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, ctDCPool, params, masterSk)
 
 			fmt.Println("DWPool")
 			DWPool.Transpose().Print()
 			for i := 0; i < cellCNN.Classes; i++{
-				//pt := CollectiveDecryption(P, P[j].Eval().RotateNew(P[j].CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), params)
 				cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[0].Eval().RotateNew(ctDWPool, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
 			}
 		}

@@ -37,6 +37,33 @@ type CellCNNProtocol struct{
 	ptLTranspose []*ckks.Plaintext
 }
 
+// NewCellCNNProtocol creates a new cellCNN protocol
+func NewCellCNNProtocol(params ckks.Parameters) (c *CellCNNProtocol){
+	c = new(CellCNNProtocol)
+
+	c.params = params
+
+	c.encoder = ckks.NewEncoder(params)
+	
+	c.mask = c.genPlaintextMaskForTrainingWithPrePooling(params)
+
+	c.ptL = make([]*ckks.Plaintext, int(math.Ceil(float64(Features)*0.5)))
+	for i := 0; i < int(math.Ceil(float64(Features)*0.5)); i++{
+		c.ptL[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Q()[params.MaxLevel()-1]))
+	}
+
+	c.ptLTranspose = make([]*ckks.Plaintext, int(math.Ceil(float64(Samples)*0.5)))
+	for i := 0; i < int(math.Ceil(float64(Samples)*0.5)); i++{
+		c.ptLTranspose[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Q()[params.MaxLevel()-1]))
+	}
+
+	c.DW = new(Matrix)
+	c.DC = new(Matrix)
+	c.P = new(Matrix)
+	c.U = new(Matrix)
+	return
+}
+
 
 func (c *CellCNNProtocol) PK() (*rlwe.PublicKey){
 	return c.pk
@@ -133,32 +160,7 @@ func (c *CellCNNProtocol) PrintCtCPrecision(sk *rlwe.SecretKey){
 	fmt.Println(precisionStats.String())
 }
 
-// NewCellCNNProtocol creates a new cellCNN protocol
-func NewCellCNNProtocol(params ckks.Parameters) (c *CellCNNProtocol){
-	c = new(CellCNNProtocol)
 
-	c.params = params
-
-	c.encoder = ckks.NewEncoder(params)
-	
-	c.mask = c.genPlaintextMaskForTrainingWithPrePooling(params)
-
-	c.ptL = make([]*ckks.Plaintext, int(math.Ceil(float64(Features)*0.5)))
-	for i := 0; i < int(math.Ceil(float64(Features)*0.5)); i++{
-		c.ptL[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Q()[params.MaxLevel()-1]))
-	}
-
-	c.ptLTranspose = make([]*ckks.Plaintext, int(math.Ceil(float64(Samples)*0.5)))
-	for i := 0; i < int(math.Ceil(float64(Samples)*0.5)); i++{
-		c.ptLTranspose[i] = ckks.NewPlaintext(params, params.MaxLevel(), float64(params.Q()[params.MaxLevel()-1]))
-	}
-
-	c.DW = new(Matrix)
-	c.DC = new(Matrix)
-	c.P = new(Matrix)
-	c.U = new(Matrix)
-	return
-}
 
 
 func (c *CellCNNProtocol) SetSecretKey(sk *rlwe.SecretKey){
