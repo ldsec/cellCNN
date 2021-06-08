@@ -8,7 +8,6 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
-	"github.com/ldsec/lattigo/v2/utils"
 	"github.com/ldsec/cellCNN/cellCNN_optimized"
 	"runtime"
 )
@@ -26,8 +25,6 @@ func NewParty(params ckks.Parameters) (p *Party){
 
 func main() {
 
-	var err error
-
 	nParties := 1
 
 	trainEncrypted := true
@@ -39,14 +36,7 @@ func main() {
 	
 	params := cellCNN.GenParams()
 
-	var prng utils.PRNG
-	if prng, err = utils.NewPRNG(); err != nil {
-		panic(err)
-	}
-
 	ringQP, _ := ring.NewRing(params.N(), append(params.Q(), params.P()...))
-
-	crpGenerator := ring.NewUniformSampler(prng, ringQP)
 
 	fmt.Println(params.LogQP())
 
@@ -65,27 +55,29 @@ func main() {
 	var masterSk *rlwe.SecretKey
 
 	if trainEncrypted {
-		GenEncryptionKey(P, crpGenerator)
 
+		kgen := ckks.NewKeyGenerator(params)
+		
 		masterSk = ckks.NewSecretKey(params)
 
 		for i := range P{
+			ski := kgen.GenSecretKey()
+			P[i].SetSecretKey(ski)
 			ringQP.Add(masterSk.Value, P[i].SK().Value, masterSk.Value)
 		}
 
-		fmt.Printf("Weights Encryption... ")
+		pk := kgen.GenPublicKey(masterSk)
+		rlk := kgen.GenRelinearizationKey(masterSk)
+
+		rotations := P[0].RotKeyIndex()
+
+		rtk := kgen.GenRotationKeysForRotations(rotations, true, masterSk)
+
 		for i := range P{
+			P[i].SetPublicKey(pk)
 			P[i].EncryptWeights()
+			P[i].EvaluatorInit(rlk, rtk)
 		}
-		fmt.Printf("Done\n")
-
-		GenRelinearizationKey(P, crpGenerator, params)
-		GenRotationKeys(P, crpGenerator, params)
-
-		for i := range P{
-			P[i].EvaluatorInit()
-		}
-		fmt.Printf("Done\n")
 	}
 
 	slotUsage := 3*cellCNN.BatchSize*cellCNN.Filters*cellCNN.Classes + (2*cellCNN.Classes+1) * cellCNN.ConvolutionMatrixSize(cellCNN.BatchSize, cellCNN.Features, cellCNN.Filters)
@@ -151,7 +143,7 @@ func main() {
 				start := time.Now()
 
 				P[j].Forward(XBatch)
-				P[j].Refresh(masterSk, nParties)
+				P[j].Refresh(masterSk, P[j].CtBoot(), nParties)
 				P[j].Backward(XBatch, YBatch, nParties)
 
 
@@ -178,6 +170,7 @@ func main() {
 				}
 			}
 		}
+
 
 		for j := range P{
 			P[j].UpdatePlain(DCPool, DWPool)
@@ -260,140 +253,4 @@ func main() {
 	}
 
 	fmt.Printf("error : %v%s", 100.0*float64(r)/float64(2000), "%")
-
-}
-
-func GenRotationKeys(P []*Party, crpGenerator *ring.UniformSampler, params ckks.Parameters){
-
-	fmt.Printf("Generating Rotation Keys... ")
-
-	for i := range P{
-		P[i].NewRTGProtocol()
-	}
-
-	rtgCombined := P[0].RtgProtocol.AllocateShares()
-
-	var crpRTG []*ring.Poly
-	var galEl uint64
-
-	// Rotations Keys
-	for _, rot := range P[0].RotKeyIndex(){
-
-		galEl = params.GaloisElementForColumnRotationBy(rot)
-
-		if !P[0].HasRotKey(galEl) && rot != 0{
-
-			fmt.Printf("%d ", rot)
-
-			if crpRTG == nil {
-
-				crpRTG = make([]*ring.Poly, params.Beta())
-
-				for i := 0; i < params.Beta(); i++ {
-					crpRTG[i] = crpGenerator.ReadNew()
-				}
-
-			}else{
-				for i := 0; i < params.Beta(); i++ {
-					crpGenerator.Read(crpRTG[i])
-				}
-			}
-
-			for i := range P{
-				P[i].RTGGenShare(galEl, crpRTG)
-				P[i].RTGAggregate(rtgCombined, P[i].RTGGetShare(), rtgCombined)
-			}
-
-			for i := range P{
-				P[i].RTGGenRotationKey(galEl, crpRTG, rtgCombined)
-			}
-		}
-
-		for i := range rtgCombined.Value{
-			rtgCombined.Value[i].Zero()
-		}
-		
-	}
-
-	// Conjugate Key
-	for i := 0; i < params.Beta(); i++ {
-		crpGenerator.Read(crpRTG[i])
-	}
-
-	galEl = params.GaloisElementForRowRotation()
-		
-	for i := range P{
-		P[i].RTGGenShare(galEl, crpRTG)
-		P[i].RTGAggregate(rtgCombined, P[i].RTGGetShare(), rtgCombined)
-	}
-
-	for i := range P{
-		P[i].RTGGenRotationKey(galEl, crpRTG, rtgCombined)
-		P[i].RTGWipe()
-	}
-
-	rtgCombined = nil
-
-	fmt.Printf("Done\n")
-}
-
-func GenRelinearizationKey(P []*Party, crpGenerator *ring.UniformSampler, params ckks.Parameters){
-
-	fmt.Printf("Generating Relinearization Key... ")
-
-	crpRKG := make([]*ring.Poly, params.Beta())
-
-	for i := 0; i < params.Beta(); i++ {
-		crpRKG[i] = crpGenerator.ReadNew()
-	}
-
-	for i := range P{
-		P[i].NewRKGProtocol()
-	}
-
-	_, rkgCombined1, rkgCombined2 := P[0].RkgProtocol.AllocateShares()
-
-	for i := range P{
-		P[i].RKGRoundOne(crpRKG)
-		P[i].CKGAggregate(rkgCombined1, P[i].CKGGetShareOne(), rkgCombined1)
-	}
-
-	for i := range P{
-		P[i].RKGRoundTwo(rkgCombined1, crpRKG)
-		P[i].CKGAggregate(rkgCombined2, P[i].CKGGetShareTwo(), rkgCombined2)
-	}
-
-	for i := range P{
-		P[i].RKGGenRelinearizationKey(rkgCombined1, rkgCombined2)
-		P[i].CKGWipe()
-	}
-
-	rkgCombined1, rkgCombined2 = nil, nil
-
-	fmt.Printf("Done\n")
-}
-
-
-func GenEncryptionKey(P []*Party, crpGenerator *ring.UniformSampler){
-	fmt.Printf("Generating Encryption Key... ")
-
-	crpCKG := crpGenerator.ReadNew()
-
-	for i := range P{
-		P[i].NewCKGProtocol()
-	}
-
-	ckgCombined := P[0].CkgProtocol.AllocateShares()
-
-	for i := range P{
-		P[i].CKGGenShare(crpCKG)
-		P[i].CKGAggregateShares(ckgCombined, P[i].CKGGetShare(), ckgCombined)
-	}
-
-	for i := range P{
-		P[i].CKGGenPublicKey(ckgCombined, crpCKG)
-		P[i].CKGWipe()
-	}
-
-	fmt.Printf("Done\n")
 }

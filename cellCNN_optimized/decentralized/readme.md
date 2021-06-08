@@ -1,11 +1,3 @@
-# TODO 
-
-1) Replace ckks.Matrix by go native package or local matrix package
-2) Provide API to set keys to the protocol
-3) Provide API to access internal ciphertexts
-4) Provide API for bootstrapping (independant of the protocol)
-5) Add pools for aggregation
-
 # Party Creation
 
 P = cellCNN.NewCellCNNProtocol(params \*ckks.Parameters)
