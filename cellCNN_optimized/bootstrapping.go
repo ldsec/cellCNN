@@ -1,13 +1,14 @@
 package cellCNN
 
 import(
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"math"
 	"fmt"
 )
 
 
-func RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphertext, cells, Filters, Classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *ckks.SecretKey){
+func RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphertext, cells, Filters, Classes int, eval ckks.Evaluator, params *ckks.Parameters, sk *rlwe.SecretKey){
 
 	// ctU
 	//
@@ -66,7 +67,7 @@ func RepackBeforeBootstrapping(ctU, ctPpool, ctW, ctDWprev, ctDCprev *ckks.Ciphe
 	//
 }
 
-func DummyBoot(ciphertext *ckks.Ciphertext, cells, Features, Filters, Classes int, LearningRate, Momentum float64, params *ckks.Parameters, sk *ckks.SecretKey) (*ckks.Ciphertext){
+func DummyBoot(ciphertext *ckks.Ciphertext, cells, Features, Filters, Classes int, LearningRate, Momentum float64, params ckks.Parameters, sk *rlwe.SecretKey) (*ckks.Ciphertext){
 
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)

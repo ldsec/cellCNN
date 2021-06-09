@@ -1,12 +1,13 @@
 package cellCNN
 
 import(
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"fmt"
 	"math"
 )
 
-func DecryptPrint(rows, cols int, Real bool, element interface{}, params *ckks.Parameters, sk *ckks.SecretKey) {
+func DecryptPrint(rows, cols int, Real bool, element interface{}, params ckks.Parameters, sk *rlwe.SecretKey) {
 
 	var v []complex128
 
@@ -39,7 +40,7 @@ func DecryptPrint(rows, cols int, Real bool, element interface{}, params *ckks.P
 	fmt.Println()
 }
 
-func DecryptPrintMatrix(M *ckks.Matrix, Real bool, ciphertext *ckks.Ciphertext, params *ckks.Parameters, sk *ckks.SecretKey) {
+func DecryptPrintMatrix(M *Matrix, Real bool, ciphertext *ckks.Ciphertext, params ckks.Parameters, sk *rlwe.SecretKey) {
 
 	rows := M.Rows()
 	cols := M.Cols()

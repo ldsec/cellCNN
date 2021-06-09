@@ -47,11 +47,11 @@ func Pooling(ct *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluat
 		rotHoisted = append(rotHoisted, -filters*i)
 	}
 
-	ctPpool := ct.CopyNew().Ciphertext()
+	ctPpool := ct.CopyNew()
 
 	tmp := eval.RotateHoisted(ct, rotHoisted) 
 
-	eval.InnerSum(ctPpool, filters, cells, ctPpool)
+	eval.InnerSumLog(ctPpool, filters, cells, ctPpool)
 
 	for i := range tmp{
 		eval.Add(ctPpool, tmp[i], ctPpool)
@@ -74,6 +74,6 @@ func Pooling(ct *ckks.Ciphertext, cells, filters, classes int, eval ckks.Evaluat
 func DenseLayer(ctP, ctW *ckks.Ciphertext, filters, classes int, eval ckks.Evaluator) (*ckks.Ciphertext) {
 	ctU := eval.MulRelinNew(ctP, ctW)
 	eval.Rescale(ctU, ctW.Scale(), ctU)
-	eval.InnerSum(ctU, 1, filters, ctU)
+	eval.InnerSumLog(ctU, 1, filters, ctU)
 	return ctU
 }
