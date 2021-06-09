@@ -216,7 +216,8 @@ func (conv *Conv1D) Forward(
 
 // Backward compute the gradient
 // return the unscaled, no-momentum, un-replicated gradient
-// for scaled and momentumed one, call GetGradient
+// for scaled one, call GetGradient
+// for momentum one, call ComputeGradientWithMomentumAndLr
 func (conv *Conv1D) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder, lr float64,
@@ -331,15 +332,19 @@ func (conv *Conv1D) Backward(
 	// pure and no momentum gradient
 	conv.gradient = utils.CopyCiphertextSlice(dwSlice)
 
+	// compute the scaled gradient
 	if lr != 0 {
-		// scaled and momentum gradient
-		conv.ComputeGradientWithMomentumAndLr(conv.gradient, sts, params, evaluator, encoder, lr)
+		conv.ComputeScaledGradient(conv.gradient, sts, params, evaluator, encoder, lr)
 	}
+	// if lr != 0 {
+	// 	// scaled and momentum gradient
+	// 	conv.ComputeGradientWithMomentumAndLr(conv.gradient, sts, params, evaluator, encoder, lr)
+	// }
 
 	return dwSlice
 }
 
-func (conv *Conv1D) ComputeGradientWithMomentumAndLr(
+func (conv *Conv1D) ComputeScaledGradient(
 	gradients []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params *ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
@@ -348,35 +353,44 @@ func (conv *Conv1D) ComputeGradientWithMomentumAndLr(
 	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
 	mask := utils.GenSliceWithAnyAt(params.Slots(), maskInds, lr)
 	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
-	for i := range conv.filters {
+	for i := range gradients {
 		// 1. mask and scale
-		update := eval.MulRelinNew(gradients[i], maskPlain)
-		if err := eval.Rescale(update, params.Scale(), update); err != nil {
+		eval.MulRelin(gradients[i], maskPlain, gradients[i])
+		if err := eval.Rescale(gradients[i], params.Scale(), gradients[i]); err != nil {
 			panic("fail to rescale, conv.gradient[i]")
 		}
 		// 2. replicate ncell times
-		eval.InnerSum(update, -sts.Nmakers, sts.Ncells, update)
-		// if use momentum
+		eval.InnerSum(gradients[i], -sts.Nmakers, sts.Ncells, gradients[i])
+	}
+	conv.gradient = gradients
+}
+
+func (conv *Conv1D) ComputeScaledGradientWithMomentum(
+	gradients []*ckks.Ciphertext,
+	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	eval ckks.Evaluator, encoder ckks.Encoder,
+) {
+	for i := range gradients {
 		if conv.momentum > 0 {
 			if conv.vt[i] == nil {
-				conv.vt[i] = update.CopyNew().Ciphertext()
+				conv.vt[i] = gradients[i].CopyNew().Ciphertext()
 			} else {
-				fmt.Println("()()()()( enter )()()()()(")
 				conv.vt[i] = eval.MultByConstNew(conv.vt[i], conv.momentum)
-				conv.vt[i] = eval.AddNew(conv.vt[i], update)
+				if err := eval.Rescale(conv.vt[i], params.Scale(), conv.vt[i]); err != nil {
+					panic("backward: fail to rescale, conv.vt[i]")
+				}
+				conv.vt[i] = eval.AddNew(conv.vt[i], gradients[i])
 			}
-			// conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
 			conv.gradient[i] = conv.vt[i].CopyNew().Ciphertext()
 		} else {
 			// else use only gradient
-			// conv.filters[i] = eval.SubNew(conv.filters[i], update)
-			conv.gradient[i] = update
+			conv.gradient[i] = gradients[i]
 		}
 	}
 }
 
 func (conv *Conv1D) GetGradient() []*ckks.Ciphertext {
-	return conv.gradient
+	return utils.CopyCiphertextSlice(conv.gradient)
 }
 
 func (conv *Conv1D) GetGradientBinary() [][]byte {

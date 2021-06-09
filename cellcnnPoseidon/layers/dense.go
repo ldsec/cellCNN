@@ -202,7 +202,8 @@ func (dense *Dense) Forward(
 
 // Backward compute the gradient
 // return the err to conv1d, and pure gradient
-// for scaled and momentumed one, call GetGradient
+// for scaled one, call GetGradient
+// for momentum one, call ComputeGradientWithMomentumAndLr
 func (dense *Dense) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *ckks.SecretKey, lr float64,
@@ -281,12 +282,18 @@ func (dense *Dense) Backward(
 		panic("fail to rescale, dense backward dw")
 	}
 
+	// keep pure gradient
 	pure_gradient := dense.gradient.CopyNew().Ciphertext()
 
+	// compute scaled gradient
 	if lr != 0 {
-		// change the gradient to scaled and momentum one
-		dense.ComputeGradientWithMomentumAndLr(dense.gradient, sts, params, evaluator, encoder, lr)
+		dense.ComputeScaledGradient(dense.gradient, sts, params, evaluator, encoder, lr)
 	}
+
+	// if lr != 0 {
+	// 	// change the gradient to scaled and momentum one
+	// 	dense.ComputeGradientWithMomentumAndLr(dense.gradient, sts, params, evaluator, encoder, lr)
+	// }
 	// fmt.Printf("min{b-2, input-1} " + utils.PrintCipherLevel(dense.gradient, params))
 
 	// return dw
@@ -350,31 +357,43 @@ func (dense *Dense) Backward(
 	return outErr, pure_gradient
 }
 
-func (dense *Dense) ComputeGradientWithMomentumAndLr(
+func (dense *Dense) ComputeScaledGradient(
 	gradient *ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params *ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) {
-	update := eval.MultByConstNew(gradient, lr)
+	eval.MultByConst(gradient, lr, gradient)
+	if err := eval.Rescale(gradient, params.Scale(), gradient); err != nil {
+		panic("backward dense: fail to rescale, update")
+	}
+	dense.gradient = gradient
+}
+
+func (dense *Dense) ComputeScaledGradientWithMomentum(
+	gradient *ckks.Ciphertext,
+	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	eval ckks.Evaluator, encoder ckks.Encoder,
+) {
 	if dense.momentum > 0 {
 		if dense.vt == nil {
-			dense.vt = update.CopyNew().Ciphertext()
+			dense.vt = gradient.CopyNew().Ciphertext()
 		} else {
-			fmt.Println("()()()()( enter )()()()()(")
 			dense.vt = eval.MultByConstNew(dense.vt, dense.momentum)
-			dense.vt = eval.AddNew(dense.vt, update)
+			if err := eval.Rescale(dense.vt, params.Scale(), dense.vt); err != nil {
+				panic("backward: fail to rescale, conv.vt[i]")
+			}
+			dense.vt = eval.AddNew(dense.vt, gradient)
 		}
-		// dense.weights = eval.SubNew(dense.weights, dense.vt)
 		dense.gradient = dense.vt.CopyNew().Ciphertext()
 	} else {
-		// dense.weights = eval.SubNew(dense.weights, update)
-		dense.gradient = update
+		dense.gradient = gradient
 	}
+
 }
 
 // get the gradient of the model, contain momentum and lr
 func (dense *Dense) GetGradient() *ckks.Ciphertext {
-	return dense.gradient
+	return dense.gradient.CopyNew().Ciphertext()
 }
 
 func (dense *Dense) GetGradientBinary() []byte {

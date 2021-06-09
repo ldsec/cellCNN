@@ -595,8 +595,8 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 	sigInterval := 3
 	maxM1N2Ratio := 8.0
 
-	momentum := 0.5
-	lr := 0.7
+	momentum := 0.1
+	lr := 0.1
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
@@ -673,10 +673,11 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 	fmt.Println()
 
 	batchSize := 2
+	iterrations := 10
 
 	var plainOut, dConv, dDense *mat.Dense
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < iterrations; i++ {
 
 		X, matrix, y := GetRandomBatch(nil, batchSize, params, encoder, cnnSettings)
 		yMat := utils.ScalarToOneHot(y, nclasses)
@@ -689,26 +690,32 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 			plainOut = pNet.ForwardBatch(matrix, nil, nil)
 		}
 
-		fmt.Println("######## Check the forward output #########")
-		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 20, []int{0}, true)
+		fmt.Printf("ROUND %v ######## Check the forward output #########\n", i)
+		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 4, []int{0}, true)
 
-		// labelsDense := mat.NewDense(1, nclasses, []float64{0, 1})
 		errDense := mat.NewDense(batchSize, nclasses, nil)
 		errDense.Sub(plainOut, yMat)
 
-		// model.BackwardOne(err0)
-		dConv, dDense = pNet.Backward(errDense, lr, momentum)
+		pNet.Backward(errDense, lr, momentum)
 
-		fmt.Println("######## Check the backward gradient for filter0 #########")
-		utils.DebugWithDense(params, model.conv1d.GetGradient()[0], dConv, decryptor, encoder, 10, []int{0}, false)
-		fmt.Println("######## Check the backward gradient for filter1 #########")
-		utils.DebugWithDense(params, model.conv1d.GetGradient()[1], dConv, decryptor, encoder, 10, []int{1}, false)
-		fmt.Println("######## Check the backward gradient for dense #########")
-		utils.DebugWithDense(params, model.dense.GetGradient(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
+		dConv = pNet.conv.GetWeights()
+		dDense = pNet.dense.GetWeights()
 
 		grad := &Gradients{model.conv1d.GetGradient(), model.dense.GetGradient()}
 		grad.Bootstrapping(encoder, params, sk)
 		model.UpdateWithGradients(grad)
+
+		// if i == iterrations-1 {
+		fmt.Println("######## Check the backward gradient for filter0 #########")
+		utils.DebugWithDense(params, model.conv1d.GetWeights()[0], dConv, decryptor, encoder, 10, []int{0}, false)
+		fmt.Println("######## Check the backward gradient for filter1 #########")
+		utils.DebugWithDense(params, model.conv1d.GetWeights()[1], dConv, decryptor, encoder, 10, []int{1}, false)
+		fmt.Println("######## Check the backward gradient for dense #########")
+		utils.DebugWithDense(params, model.dense.GetWeights(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
+		// }
+
+		// runtime.GC()
+
 	}
 
 	// nwfilters := pNet.conv.GetWeights()
@@ -723,6 +730,59 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 
 	// start at level 9 and scaled gradient end at level 3
 
+}
+
+func TestScaling(t *testing.T) {
+	params := CustomizedParams()
+	fmt.Println()
+	fmt.Println("=========================================")
+	fmt.Println("         INSTANTIATING SCHEME            ")
+	fmt.Println("=========================================")
+	fmt.Println()
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk)
+	encryptor := ckks.NewEncryptorFromSk(params, sk)
+	decryptor := ckks.NewDecryptor(params, sk)
+	encoder := ckks.NewEncoder(params)
+
+	eval := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: nil})
+
+	slice := make([]complex128, params.Slots())
+	slice[0] = complex(2, 0)
+
+	x1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), slice, params.LogSlots())
+	x2 := encryptor.EncryptNew(x1)
+
+	// x22 := x2.CopyNew().Ciphertext()
+
+	utils.PrintDebug(params, x2, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	x3 := eval.MultByConstNew(x2, 0.5)
+
+	if err := eval.Rescale(x3, params.Scale(), x3); err != nil {
+		panic("fail to rescale, conv.gradient[i]")
+	}
+
+	fmt.Println("x")
+	utils.PrintDebug(params, x3, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	y := encryptor.EncryptNew(encoder.EncodeNTTAtLvlNew(params.MaxLevel(), slice, params.LogSlots()))
+
+	fmt.Println("y")
+	utils.PrintDebug(params, y, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	f := eval.AddNew(x3, y)
+
+	fmt.Println("sum")
+	utils.PrintDebug(params, f, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	// utils.PrintDebug(params, x3, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	// x22.MulScale(2.0)
+
+	// utils.PrintDebug(params, x22, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
 }
 
 // func TestLargeScale(t *testing.T) {
