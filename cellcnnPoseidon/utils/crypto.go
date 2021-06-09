@@ -5,6 +5,7 @@ import (
 
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/utils"
 )
 
@@ -24,13 +25,13 @@ type PlainMatrix []PlainVector
 
 // CryptoParams aggregates all ckks scheme information
 type CryptoParams struct {
-	Sk          *ckks.SecretKey
-	AggregateSk *ckks.SecretKey
-	Pk          *ckks.PublicKey
-	Rlk         *ckks.RelinearizationKey
+	Sk          *rlwe.SecretKey
+	AggregateSk *rlwe.SecretKey
+	Pk          *rlwe.PublicKey
+	Rlk         *rlwe.RelinearizationKey
 	// Kgen        ckks.KeyGenerator
 	// RotKs       *ckks.RotationKeys
-	Params *ckks.Parameters
+	Params ckks.Parameters
 
 	encoders   chan ckks.Encoder
 	encryptors chan ckks.Encryptor
@@ -40,10 +41,10 @@ type CryptoParams struct {
 
 // CryptoParamsForNetwork stores all crypto info to save to file
 type CryptoParamsForNetwork struct {
-	params      *ckks.Parameters
-	sk          []*ckks.SecretKey
-	aggregateSk *ckks.SecretKey
-	pk          *ckks.PublicKey
+	params      ckks.Parameters
+	sk          []*rlwe.SecretKey
+	aggregateSk *rlwe.SecretKey
+	pk          *rlwe.PublicKey
 	// rlk         *ckks.EvaluationKey
 	// rotKs       *ckks.RotationKeys
 }
@@ -61,7 +62,7 @@ type CryptoParamsForNetwork struct {
 // var CKKSParamsForTests = NewCKKSParamsForTests()
 
 // NewCKKSParamsForTests initializes new _unsecure_ fast CryptoParams for testing
-// func NewCKKSParamsForTests() *ckks.Parameters {
+// func NewCKKSParamsForTests() ckks.Parameters {
 // 	var CKKSParamsForTests, _ = ckks.NewParametersFromLogModuli(8, &ckks.LogModuli{LogQi: []uint64{36, 30, 30, 30, 30, 30, 30, 30, 30, 30}, LogPi: []uint64{32, 32, 32}})
 // 	CKKSParamsForTests.SetScale(1 << 30)
 // 	CKKSParamsForTests.SetLogSlots(CKKSParamsForTests.LogN() - 1)
@@ -73,8 +74,8 @@ type CryptoParamsForNetwork struct {
 // #------------------------------------#
 
 func NewCryptoPlaceHolder(
-	params *ckks.Parameters,
-	sk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey,
+	params ckks.Parameters,
+	sk *rlwe.SecretKey, pk *rlwe.PublicKey, rlk *rlwe.RelinearizationKey,
 	encoder ckks.Encoder, encryptor ckks.Encryptor,
 ) *CryptoParams {
 
@@ -96,7 +97,7 @@ func NewCryptoPlaceHolder(
 }
 
 // NewCryptoParams initializes CryptoParams with the given values
-func NewCryptoParams(params *ckks.Parameters, sk, aggregateSk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey) *CryptoParams {
+func NewCryptoParams(params ckks.Parameters, sk, aggregateSk *rlwe.SecretKey, pk *rlwe.PublicKey, rlk *rlwe.RelinearizationKey) *CryptoParams {
 	evaluators := make(chan ckks.Evaluator, ThreadsCount)
 	// for i := 0; i < ThreadsCount; i++ {
 	// 	evaluators <- eval.ShallowCopy()
@@ -152,11 +153,11 @@ func (cp *CryptoParams) MarshalBinary() ([]byte, []byte) {
 }
 
 func (cp *CryptoParams) RetrieveCommonParams(dsk, dpk []byte) {
-	sk := new(ckks.SecretKey)
+	sk := new(rlwe.SecretKey)
 	if err := sk.UnmarshalBinary(dsk); err != nil {
 		panic("fail to unmarshall sk")
 	}
-	pk := new(ckks.PublicKey)
+	pk := new(rlwe.PublicKey)
 	if err := pk.UnmarshalBinary(dpk); err != nil {
 		panic("fail to unmarshall sk")
 	}
@@ -177,7 +178,7 @@ func (cp *CryptoParams) RetrieveCommonParams(dsk, dpk []byte) {
 }
 
 // SetDecryptors sets the decryptors in the CryptoParams object
-func (cp *CryptoParams) SetDecryptors(params *ckks.Parameters, sk *ckks.SecretKey) {
+func (cp *CryptoParams) SetDecryptors(params ckks.Parameters, sk *rlwe.SecretKey) {
 	decryptors := make(chan ckks.Decryptor, ThreadsCount)
 	for i := 0; i < ThreadsCount; i++ {
 		decryptors <- ckks.NewDecryptor(params, sk)
@@ -186,7 +187,7 @@ func (cp *CryptoParams) SetDecryptors(params *ckks.Parameters, sk *ckks.SecretKe
 }
 
 // SetEncryptors sets the encryptors in the CryptoParams object
-func (cp *CryptoParams) SetEncryptors(params *ckks.Parameters, pk *ckks.PublicKey) {
+func (cp *CryptoParams) SetEncryptors(params ckks.Parameters, pk *rlwe.PublicKey) {
 	encryptors := make(chan ckks.Encryptor, ThreadsCount)
 	for i := 0; i < ThreadsCount; i++ {
 		encryptors <- ckks.NewEncryptorFromPk(params, pk)
@@ -203,12 +204,12 @@ func (cp *CryptoParams) SetEvaluator(eval ckks.Evaluator) {
 }
 
 // NewCryptoParamsForNetwork initializes a set of nbrNodes CryptoParams each containing: keys, encoder, encryptor, decryptor, etc.
-func NewCryptoParamsForNetwork(params *ckks.Parameters, nbrNodes int) []*CryptoParams {
+func NewCryptoParamsForNetwork(params ckks.Parameters, nbrNodes int) []*CryptoParams {
 	kgen := ckks.NewKeyGenerator(params)
 
 	aggregateSk := ckks.NewSecretKey(params)
-	skList := make([]*ckks.SecretKey, nbrNodes)
-	rq, _ := ring.NewRing(params.N(), append(params.Qi(), params.Pi()...))
+	skList := make([]*rlwe.SecretKey, nbrNodes)
+	rq, _ := ring.NewRing(params.N(), append(params.Q(), params.P()...))
 
 	for i := 0; i < nbrNodes; i++ {
 		skList[i] = kgen.GenSecretKey()
@@ -322,7 +323,7 @@ func GenCRPListWithSeed(cryptoParams *CryptoParams, randomSeed []byte, n int) ([
 
 // NewSampler creates a uniform sampler from the PRNG and the crypto params
 func NewSampler(cryptoParams *CryptoParams, prng utils.PRNG) (*ring.UniformSampler, error) {
-	ringQP, err := ring.NewRing(cryptoParams.Params.N(), append(cryptoParams.Params.Qi(), cryptoParams.Params.Pi()...))
+	ringQP, err := ring.NewRing(cryptoParams.Params.N(), append(cryptoParams.Params.Q(), cryptoParams.Params.P()...))
 	if err != nil {
 		return nil, fmt.Errorf("creating new ring: %v", err)
 	}
@@ -333,7 +334,7 @@ func NewSampler(cryptoParams *CryptoParams, prng utils.PRNG) (*ring.UniformSampl
 
 // GetScaleByLevel returns a scale for a given level
 func (cp *CryptoParams) GetScaleByLevel(level uint64) float64 {
-	return float64(cp.Params.Qi()[level])
+	return float64(cp.Params.Q()[level])
 }
 
 // GetSlots gets the number of encodable slots (N/2)
@@ -787,10 +788,10 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // }
 
 // type cryptoParamsMarshalable struct {
-// 	Params      *ckks.Parameters
-// 	Sk          []*ckks.SecretKey
-// 	AggregateSk *ckks.SecretKey
-// 	Pk          *ckks.PublicKey
+// 	Params      ckks.Parameters
+// 	Sk          []*rlwe.SecretKey
+// 	AggregateSk *rlwe.SecretKey
+// 	Pk          *rlwe.PublicKey
 // 	Rlk         *ckks.EvaluationKey
 // 	RotKs       *ckks.RotationKeys
 // }
@@ -835,7 +836,7 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // }
 
 // // WriteParamsToFile writes the crypto params to a toml file including the keys' filenames
-// func (cp *CryptoParams) WriteParamsToFile(path string, secretKeysList []*ckks.SecretKey) error {
+// func (cp *CryptoParams) WriteParamsToFile(path string, secretKeysList []*rlwe.SecretKey) error {
 // 	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
 // 		return fmt.Errorf("creating parents dirs of %v: %w", path, err)
 // 	}
@@ -869,7 +870,7 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // func CopyEncryptedVector(src CipherVector) CipherVector {
 // 	dest := make(CipherVector, len(src))
 // 	for i := 0; i < len(src); i++ {
-// 		dest[i] = (*src[i]).CopyNew().Ciphertext()
+// 		dest[i] = (*src[i]).CopyNew()
 // 	}
 // 	return dest
 // }
@@ -886,7 +887,7 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // // ReplicateCiphertext replicates a cipher xn times (each time doubling the nbrElements contained inside the cipher).
 // // eg. n=2: [1, 2, 3] -> [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]
 // func ReplicateCiphertext(cryptoParams *CryptoParams, src *ckks.Ciphertext, nbrElements, n int) (*ckks.Ciphertext, error) {
-// 	srcCpy := src.CopyNew().Ciphertext()
+// 	srcCpy := src.CopyNew()
 
 // 	for i := 0; i < n; i++ {
 // 		cryptoParams.WithEvaluator(func(eval ckks.Evaluator) error {
@@ -912,7 +913,7 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // 	//to prevent unnecessary allocation
 // 	var temp *ckks.Ciphertext
 // 	if int(math.Ceil(math.Log2(float64(size)))) != int(math.Floor(math.Log2(float64(size)))) {
-// 		temp = ct.CopyNew().Ciphertext()
+// 		temp = ct.CopyNew()
 // 	}
 // 	rotate := rotateStart
 // 	for j := 0; j < int(math.Floor(math.Log2(float64(size)))); j++ {
@@ -946,7 +947,7 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // 	//to prevent unnecessary allocation
 // 	var temp *ckks.Ciphertext
 // 	if int(math.Ceil(math.Log2(float64(numRep)))) != int(math.Floor(math.Log2(float64(numRep)))) {
-// 		temp = ct.CopyNew().Ciphertext()
+// 		temp = ct.CopyNew()
 // 	}
 // 	for j := 0; j < int(math.Floor(math.Log2(float64(numRep)))); j++ {
 // 		cryptoParams.WithEvaluator(func(eval ckks.Evaluator) error {
@@ -1090,7 +1091,7 @@ func (cp *CryptoParams) WithEvaluator(act func(ckks.Evaluator) error) error {
 // 			defer rph.Recover(jT)
 
 // 			//Temporary ciphertext
-// 			tmpVec := emptyCT.CopyNew().Ciphertext()
+// 			tmpVec := emptyCT.CopyNew()
 
 // 			mutex1 := sync.Mutex{}
 // 			wg1 := sync.WaitGroup{}

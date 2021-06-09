@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -56,7 +57,7 @@ func (g *Gradients) AggregateCt(filters []*ckks.Ciphertext, dense *ckks.Cipherte
 }
 
 // bootstrap
-func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params *ckks.Parameters, sk *ckks.SecretKey) {
+func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params ckks.Parameters, sk *rlwe.SecretKey) {
 	ect := ckks.NewEncryptorFromSk(params, sk)
 	dct := ckks.NewDecryptor(params, sk)
 
@@ -100,7 +101,7 @@ func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
 	return res
 }
 
-func (g *Gradients) GetPlaintext(idx int, inds []int, params *ckks.Parameters, encoder ckks.Encoder, decryptor ckks.Decryptor) []complex128 {
+func (g *Gradients) GetPlaintext(idx int, inds []int, params ckks.Parameters, encoder ckks.Encoder, decryptor ckks.Decryptor) []complex128 {
 	var ct *ckks.Ciphertext
 	if idx < len(g.filters) {
 		ct = g.filters[idx]
@@ -119,8 +120,8 @@ type CellCNN struct {
 	// network settings
 	cnnSettings *utils.CellCnnSettings
 	// crypto settings
-	params    *ckks.Parameters
-	relikey   *ckks.RelinearizationKey
+	params    ckks.Parameters
+	relikey   *rlwe.RelinearizationKey
 	encoder   ckks.Encoder
 	encryptor ckks.Encryptor
 	// layers
@@ -129,7 +130,7 @@ type CellCNN struct {
 	dense     *layers.Dense
 	evaluator ckks.Evaluator
 	btp       *ckks.Bootstrapper
-	sk        *ckks.SecretKey
+	sk        *rlwe.SecretKey
 	// evaluator chan ckks.Evaluator
 	pcir     *PlainCircuit
 	momentum float64
@@ -184,7 +185,7 @@ func NewPlainCircuit(filters [][]complex128, weights []complex128, input []compl
 }
 
 func NewCellCNN(
-	// sts *utils.CellCnnSettings, params *ckks.Parameters, rlk *ckks.RelinearizationKey,
+	// sts *utils.CellCnnSettings, params ckks.Parameters, rlk *rlwe.RelinearizationKey,
 	// encoder ckks.Encoder, encryptor ckks.Encryptor,
 	sts *utils.CellCnnSettings, cryptoParams *utils.CryptoParams, momentum, lr float64,
 ) *CellCNN {
@@ -243,7 +244,7 @@ func (c *CellCNN) WithEvaluator(eval ckks.Evaluator) {
 	c.evaluator = eval
 }
 
-func (c *CellCNN) WithSk(sk *ckks.SecretKey) {
+func (c *CellCNN) WithSk(sk *rlwe.SecretKey) {
 	c.sk = sk
 }
 
@@ -336,9 +337,9 @@ func (c *CellCNN) InitWeights(
 
 func (c *CellCNN) InitEvaluator(
 	// kgen ckks.KeyGenerator,
-	// sk *ckks.SecretKey,
+	// sk *rlwe.SecretKey,
 	// encoder ckks.Encoder,
-	// params *ckks.Parameters,
+	// params ckks.Parameters,
 	cryptoParams *utils.CryptoParams,
 	maxM1N2Ratio float64,
 ) ckks.Evaluator {
@@ -350,7 +351,7 @@ func (c *CellCNN) InitEvaluator(
 
 	t1 := time.Now()
 
-	Cinds := c.conv1d.InitRotationInds(c.cnnSettings, kgen)
+	Cinds := c.conv1d.InitRotationInds(c.cnnSettings, params)
 	Dinds := c.dense.InitRotationInds(c.cnnSettings, kgen, c.params, encoder, maxM1N2Ratio)
 	Rinds := utils.ClearRotInds(append(Cinds, Dinds...), params.Slots())
 
@@ -358,7 +359,7 @@ func (c *CellCNN) InitEvaluator(
 
 	t2 := time.Since(t1).Seconds()
 
-	c.evaluator = ckks.NewEvaluator(c.params, ckks.EvaluationKey{Rlk: c.relikey, Rtks: rks})
+	c.evaluator = ckks.NewEvaluator(c.params, rlwe.EvaluationKey{Rlk: c.relikey, Rtks: rks})
 
 	// cryptoParams.SetEvaluator(c.evaluator)
 
@@ -556,7 +557,7 @@ func (c *CellCNN) Batch2PlainSlice(inputs []*mat.Dense) []*ckks.Plaintext {
 // func CompareTwoNetForward(
 // 	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
 // 	trainSet common.CnnDataset, niter int, batchSize int,
-// 	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
+// 	decryptor ckks.Decryptor, encoder ckks.Encoder, params ckks.Parameters,
 // ) {
 // 	X := trainSet.X
 // 	y := trainSet.Y
@@ -606,7 +607,7 @@ func (c *CellCNN) Batch2PlainSlice(inputs []*mat.Dense) []*ckks.Plaintext {
 // func CompareTwoNetBackward(
 // 	eNet *CellCNN, pNet *PlainNet, cw, dw *mat.Dense,
 // 	trainSet common.CnnDataset, niter int, batchSize int,
-// 	decryptor ckks.Decryptor, encoder ckks.Encoder, params *ckks.Parameters,
+// 	decryptor ckks.Decryptor, encoder ckks.Encoder, params ckks.Parameters,
 // ) {
 // 	X := trainSet.X
 // 	y := trainSet.Y

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
 // init evaluator for the distributed training
@@ -15,7 +16,7 @@ func InitEvaluator(cp *CryptoParams, sts *CellCnnSettings, maxM1N2Ratio float64)
 
 	t1 := time.Now()
 
-	Cinds := InitConvRotationInds(sts, kgen)
+	Cinds := InitConvRotationInds(sts, cp.Params)
 	Dinds, diagM := InitDenseRotationInds(sts, kgen, cp.Params, cp.GetEncoder(), maxM1N2Ratio)
 	// clear duplicate
 	Rinds := ClearRotInds(append(Cinds, Dinds...), cp.Params.Slots())
@@ -24,7 +25,7 @@ func InitEvaluator(cp *CryptoParams, sts *CellCnnSettings, maxM1N2Ratio float64)
 
 	t2 := time.Since(t1).Seconds()
 
-	eval := ckks.NewEvaluator(cp.Params, ckks.EvaluationKey{Rlk: relikey, Rtks: rks})
+	eval := ckks.NewEvaluator(cp.Params, rlwe.EvaluationKey{Rlk: relikey, Rtks: rks})
 
 	fmt.Printf("==> Init evaluators for all nodes: %v s\n", t2)
 
@@ -38,14 +39,14 @@ func InitEvaluator(cp *CryptoParams, sts *CellCnnSettings, maxM1N2Ratio float64)
 // ######################
 // rotation keys for conv
 // ######################
-func InitConvRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator) []int {
+func InitConvRotationInds(sts *CellCnnSettings, params ckks.Parameters) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
 	ncells := sts.Ncells
 
 	// Conv1D Forward
 	// 1. for input weights matrix mult
-	Fmult := kgen.GenRotationIndexesForInnerSum(1, nmakers*ncells)
+	Fmult := params.RotationsForInnerSumLog(1, nmakers*ncells)
 
 	// 2. for rotation the result to left most slots
 	Fshift := make([]int, 0)
@@ -57,7 +58,7 @@ func InitConvRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator) []int {
 	//Conv1D Backward
 	// 3. for replicate the err for each filter
 	Brep1 := NewSlice(0, (sts.Nfilters-1)*sts.Nclasses, sts.Nclasses)
-	Brep2 := kgen.GenRotationIndexesForInnerSum(-1, sts.Ncells*sts.Nmakers)
+	Brep2 := params.RotationsForInnerSumLog(-1, sts.Ncells*sts.Nmakers)
 	Brep := append(Brep1, Brep2...)
 
 	// 4. left collect gradient
@@ -66,9 +67,9 @@ func InitConvRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator) []int {
 		Bcol[i] = sts.Ncells*i - i
 	}
 	// 5. replicate gradient
-	Brepg := kgen.GenRotationIndexesForInnerSum(-sts.Nmakers, sts.Ncells)
-	B0 := kgen.GenRotationIndexesForInnerSum(1, sts.Ncells)
-	Bcollect := kgen.GenRotationIndexesForInnerSum(sts.Ncells-1, sts.Nmakers)
+	Brepg := params.RotationsForInnerSumLog(-sts.Nmakers, sts.Ncells)
+	B0 := params.RotationsForInnerSumLog(1, sts.Ncells)
+	Bcollect := params.RotationsForInnerSumLog(sts.Ncells-1, sts.Nmakers)
 
 	Binds := append(Brep, Bcol...)
 	Binds = append(Binds, Brepg...)
@@ -84,25 +85,25 @@ func InitConvRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator) []int {
 // rotation keys for dense
 // ######################
 func InitDenseRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator,
-	params *ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
+	params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
 ) ([]int, *ckks.PtDiagMatrix) {
 	nfilters := sts.Nfilters
 	nclasses := sts.Nclasses
 
 	// Dense Forward
 	// 1. for replicate the input mutiple times
-	Frep := kgen.GenRotationIndexesForInnerSum(-sts.Nfilters, sts.Nclasses)
+	Frep := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
 
 	// 2. for input weights matrix mult
-	Fmult := kgen.GenRotationIndexesForInnerSum(1, nfilters)
+	Fmult := params.RotationsForInnerSumLog(1, nfilters)
 
 	// 3. for collect the result into the left most slots
 	Finds := append(Frep, Fmult...)
 
 	// Dense Backward
-	rot1 := kgen.GenRotationIndexesForInnerSum(-1, sts.Nfilters)
-	rot2 := kgen.GenRotationIndexesForInnerSum(-sts.Nfilters, sts.Nclasses)
-	rot3 := kgen.GenRotationIndexesForInnerSum(-sts.Nclasses, sts.Nfilters)
+	rot1 := params.RotationsForInnerSumLog(-1, sts.Nfilters)
+	rot2 := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
+	rot3 := params.RotationsForInnerSumLog(-sts.Nclasses, sts.Nfilters)
 	rotAll := append(rot1, rot2...)
 	rotAll = append(rotAll, rot3...)
 
@@ -111,8 +112,8 @@ func InitDenseRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator,
 	ouRowPacked := false
 	colsMatrix := GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := GenTransposeMap(colsMatrix)
-	diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), maxM1N2Ratio, params.LogSlots())
-	Btranspose := kgen.GenRotationIndexesForDiagMatrix(diagM)
+	diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
+	Btranspose := params.RotationsForDiagMatrixMult(diagM)
 	Binds := append(rotAll, Btranspose...)
 
 	return append(Finds, Binds...), diagM

@@ -15,13 +15,12 @@ func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64
 	var gradAccumulator *Gradients = nil
 	suppressGradientModify := 0.0
 
-	for i, each := range inputBatch {
+	for i, input := range inputBatch {
 		// forward one
-		input := each.CopyNew().Plaintext()
 		out1 := c.conv1d.Forward(input, nil, c.cnnSettings, c.evaluator, c.params, poolMask)
 		out2 := c.dense.Forward(out1, nil, c.cnnSettings, c.evaluator, c.encoder, c.params)
 		// record the preds
-		preds[i] = out2.CopyNew().Ciphertext()
+		preds[i] = out2.CopyNew()
 
 		// backward one
 		err0 := c.ComputeLossOne(out2, labels[i])

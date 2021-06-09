@@ -15,7 +15,7 @@ func ScalarToOneHot(labels []float64, nclasses int) *mat.Dense {
 	return res
 }
 
-func Float64ToOneHotEncode(label float64, nfilters int, params *ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
+func Float64ToOneHotEncode(label float64, nfilters int, params ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
 	res := make([]complex128, params.Slots())
 	res[int(label)*nfilters] = complex(1, 0)
 	encoded := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), res, params.LogSlots())

@@ -34,7 +34,7 @@ func RetrieveRow(arr *mat.Dense, ind int) []complex128 {
 	return res
 }
 
-func Batch2PlainSlice(inputs []*mat.Dense, params *ckks.Parameters, encoder ckks.Encoder) []*ckks.Plaintext {
+func Batch2PlainSlice(inputs []*mat.Dense, params ckks.Parameters, encoder ckks.Encoder) []*ckks.Plaintext {
 	result := make([]*ckks.Plaintext, 0)
 	for _, each := range inputs {
 		result = append(result, Matrix2Plaintext(each, params, encoder))
@@ -42,7 +42,7 @@ func Batch2PlainSlice(inputs []*mat.Dense, params *ckks.Parameters, encoder ckks
 	return result
 }
 
-func Matrix2Plaintext(rawData *mat.Dense, params *ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
+func Matrix2Plaintext(rawData *mat.Dense, params ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
 	// shape of each input: 200 * 37 (ncells = 200, nmakers = 37)
 	row, col := rawData.Dims()
 	// fmt.Println("row, col: ", row, col)

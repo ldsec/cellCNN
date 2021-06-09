@@ -7,7 +7,7 @@ import (
 )
 
 // ReadOrGenerateCryptoParamsForNN reads (from a set of files) or generates new cryptoParams for a neural network learning to be given to each node
-// func ReadOrGenerateCryptoParamsForNN(hosts int, defaultN *ckks.Parameters, rootPath string, sizeInputLayer, sizeOutputLayer int, sizeHiddenLayer []int, generateRotKeys bool) []*libspindle.CryptoParams {
+// func ReadOrGenerateCryptoParamsForNN(hosts int, defaultN ckks.Parameters, rootPath string, sizeInputLayer, sizeOutputLayer int, sizeHiddenLayer []int, generateRotKeys bool) []*libspindle.CryptoParams {
 // 	return spindleprotcommon.ReadOrGenerateCryptoParams(hosts, defaultN, rootPath, protocols.NeuralNetwork, nil, &spindleprotcommon.NNParams{
 // 		SizeInputLayer:  sizeInputLayer,
 // 		SizeHiddenLayer: sizeHiddenLayer,

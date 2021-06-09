@@ -80,7 +80,7 @@ func (conv *Conv1D) GetWeights() []*ckks.Ciphertext {
 // 	conv.isMomentum = true
 // }
 
-func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator) []int {
+func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Parameters) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
 	ncells := sts.Ncells
@@ -88,7 +88,7 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 
 	// Conv1D Forward
 	// 1. for input weights matrix mult
-	Fmult := kgen.GenRotationIndexesForInnerSum(1, nmakers*ncells)
+	Fmult := params.RotationsForInnerSumLog(1, nmakers*ncells)
 	// 2. for rotation the result to left most slots
 	Fshift := make([]int, 0)
 	for i := 1; i < nfilters; i++ {
@@ -108,7 +108,7 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	// ---------------------------------------
 	// +++++++++++++++++++++++++++++++++++++++
 	Brep1 := utils.NewSlice(0, (sts.Nfilters-1)*sts.Nclasses, sts.Nclasses)
-	Brep2 := kgen.GenRotationIndexesForInnerSum(-1, sts.Ncells*sts.Nmakers)
+	Brep2 := params.RotationsForInnerSumLog(-1, sts.Ncells*sts.Nmakers)
 	Brep := append(Brep1, Brep2...)
 	// +++++++++++++++++++++++++++++++++++++++
 
@@ -119,9 +119,9 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	}
 	// 5. replicate gradient
 	// ++++++++++++++++++++++++++++
-	Brepg := kgen.GenRotationIndexesForInnerSum(-sts.Nmakers, sts.Ncells)
-	B0 := kgen.GenRotationIndexesForInnerSum(1, sts.Ncells)
-	Bcollect := kgen.GenRotationIndexesForInnerSum(sts.Ncells-1, sts.Nmakers)
+	Brepg := params.RotationsForInnerSumLog(-sts.Nmakers, sts.Ncells)
+	B0 := params.RotationsForInnerSumLog(1, sts.Ncells)
+	Bcollect := params.RotationsForInnerSumLog(sts.Ncells-1, sts.Nmakers)
 	// eval.InnerSum(mct, step-1, num, mct)
 	// ----------------------------
 	// Brepg := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
@@ -136,7 +136,7 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	return Inds
 }
 
-func (conv *Conv1D) TransposeInput(sts *utils.CellCnnSettings, input *ckks.Plaintext, params *ckks.Parameters) *ckks.Plaintext {
+func (conv *Conv1D) TransposeInput(sts *utils.CellCnnSettings, input *ckks.Plaintext, params ckks.Parameters) *ckks.Plaintext {
 	slice := conv.encoder.Decode(input, params.LogSlots())
 	rowPacked := true
 	sliceT := utils.SliceTranspose(slice, sts.Nmakers, sts.Ncells, rowPacked)
@@ -151,7 +151,7 @@ func (conv *Conv1D) Forward(
 	newFilters []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings,
 	evaluator ckks.Evaluator,
-	params *ckks.Parameters,
+	params ckks.Parameters,
 	mask *ckks.Plaintext,
 ) *ckks.Ciphertext {
 
@@ -159,7 +159,7 @@ func (conv *Conv1D) Forward(
 		conv.filters = newFilters
 	}
 
-	conv.lastInput = input.CopyNew().Plaintext()
+	conv.lastInput = input
 
 	var output *ckks.Ciphertext
 	batch := 1                    // only the left most
@@ -185,7 +185,7 @@ func (conv *Conv1D) Forward(
 		eval.Rescale(actvs[i], params.Scale(), actvs[i])
 
 		// 2. innerSum to get the pooling result (before avg) in the left most slot
-		eval.InnerSum(actvs[i], batch, n, actvs[i])
+		eval.InnerSumLog(actvs[i], batch, n, actvs[i])
 
 		// 3. mask the ouput to keep only the left most element
 		eval.MulRelin(actvs[i], poolMask, actvs[i])
@@ -219,7 +219,7 @@ func (conv *Conv1D) Forward(
 // for scaled one, call GetGradient
 // for momentum one, call ComputeGradientWithMomentumAndLr
 func (conv *Conv1D) Backward(
-	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
+	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) []*ckks.Ciphertext {
 	// return dw for each filter, for debug
@@ -265,7 +265,7 @@ func (conv *Conv1D) Backward(
 	for i, mErr := range maskedErrSlice {
 		// left rotate once and right replicate
 		leftMostTmp := evaluator.RotateNew(mErr, i*sts.Nclasses)
-		evaluator.InnerSum(leftMostTmp, -1, sts.Ncells*sts.Nmakers, leftMostTmp)
+		evaluator.InnerSumLog(leftMostTmp, -1, sts.Ncells*sts.Nmakers, leftMostTmp)
 		extErrSlice[i] = leftMostTmp
 	}
 
@@ -301,7 +301,7 @@ func (conv *Conv1D) Backward(
 		}
 
 		// 4. innerSum to get the result in the correct place, valid at: (0~m-1)*n
-		evaluator.InnerSum(dwSlice[i], batch, n, dwSlice[i])
+		evaluator.InnerSumLog(dwSlice[i], batch, n, dwSlice[i])
 		tpart2 := time.Now()
 		ts1 := time.Since(tpart1).Seconds()
 
@@ -346,7 +346,7 @@ func (conv *Conv1D) Backward(
 
 func (conv *Conv1D) ComputeScaledGradient(
 	gradients []*ckks.Ciphertext,
-	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	sts *utils.CellCnnSettings, params ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) {
 	// create mask with scale
@@ -360,20 +360,20 @@ func (conv *Conv1D) ComputeScaledGradient(
 			panic("fail to rescale, conv.gradient[i]")
 		}
 		// 2. replicate ncell times
-		eval.InnerSum(gradients[i], -sts.Nmakers, sts.Ncells, gradients[i])
+		eval.InnerSumLog(gradients[i], -sts.Nmakers, sts.Ncells, gradients[i])
 	}
 	conv.gradient = gradients
 }
 
 func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 	gradients []*ckks.Ciphertext,
-	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	sts *utils.CellCnnSettings, params ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder,
 ) {
 	for i := range gradients {
 		if conv.momentum > 0 {
 			if conv.vt[i] == nil {
-				conv.vt[i] = gradients[i].CopyNew().Ciphertext()
+				conv.vt[i] = gradients[i].CopyNew()
 			} else {
 				conv.vt[i] = eval.MultByConstNew(conv.vt[i], conv.momentum)
 				if err := eval.Rescale(conv.vt[i], params.Scale(), conv.vt[i]); err != nil {
@@ -381,7 +381,7 @@ func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 				}
 				conv.vt[i] = eval.AddNew(conv.vt[i], gradients[i])
 			}
-			conv.gradient[i] = conv.vt[i].CopyNew().Ciphertext()
+			conv.gradient[i] = conv.vt[i].CopyNew()
 		} else {
 			// else use only gradient
 			conv.gradient[i] = gradients[i]
@@ -408,7 +408,7 @@ func (conv *Conv1D) GetGradientBinary() [][]byte {
 
 // func (conv *Conv1D) StepWithRep(
 // 	lr float64, momentum float64, eval ckks.Evaluator,
-// 	encoder ckks.Encoder, sts *utils.CellCnnSettings, params *ckks.Parameters,
+// 	encoder ckks.Encoder, sts *utils.CellCnnSettings, params ckks.Parameters,
 // ) bool {
 // 	// create mask with scale
 // 	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
@@ -426,7 +426,7 @@ func (conv *Conv1D) GetGradientBinary() [][]byte {
 // 			// if use momentum
 // 			if conv.isMomentum {
 // 				if conv.vt == nil {
-// 					conv.vt[i] = update.CopyNew().Ciphertext()
+// 					conv.vt[i] = update.CopyNew()
 // 				} else {
 // 					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
 // 					conv.vt[i] = eval.AddNew(conv.vt[i], update)
@@ -452,7 +452,7 @@ func (conv *Conv1D) GetGradientBinary() [][]byte {
 // 			// if use momentum
 // 			if conv.isMomentum {
 // 				if conv.vt == nil {
-// 					conv.vt[i] = update.CopyNew().Ciphertext()
+// 					conv.vt[i] = update.CopyNew()
 // 				} else {
 // 					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
 // 					conv.vt[i] = eval.AddNew(conv.vt[i], update)

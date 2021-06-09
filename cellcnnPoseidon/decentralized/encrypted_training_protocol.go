@@ -449,7 +449,7 @@ func (p *NNEncryptedProtocol) UpdateRootWeights(gradientsAggr *centralized.Gradi
 }
 
 func GetRandomBatch(
-	dataset *common.CnnDataset, batchSize int, params *ckks.Parameters, encoder ckks.Encoder,
+	dataset *common.CnnDataset, batchSize int, params ckks.Parameters, encoder ckks.Encoder,
 	sts *utils.CellCnnSettings,
 ) ([]*ckks.Plaintext, []float64) {
 	// X := dataset.X

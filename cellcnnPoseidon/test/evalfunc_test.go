@@ -10,7 +10,7 @@ import (
 )
 
 func PrintDebugMatrix(
-	params *ckks.Parameters, ciphertext *ckks.Ciphertext,
+	params ckks.Parameters, ciphertext *ckks.Ciphertext,
 	valuesWant []complex128, decryptor ckks.Decryptor,
 	encoder ckks.Encoder, r, c int, inRowPacked bool, ouRowPacked bool,
 ) (valuesTest []complex128) {
@@ -163,7 +163,7 @@ func TestLinearTransform(t *testing.T) {
 	ncells := 2
 	nmakers := 3
 
-	// inds := kgen.GenRotationIndexesForInnerSum(1, 4)
+	// inds := params.RotationsForInnerSumLog(1, 4)
 	// inds = append(inds, -1)
 	// fmt.Printf("original inds: %v\n", inds)
 	// rks := kgen.GenRotationKeysForRotations(inds, false, sk)

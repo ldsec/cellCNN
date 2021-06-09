@@ -25,7 +25,7 @@ func AddHoistedMap(hm map[int]*ckks.Ciphertext, eval ckks.Evaluator) *ckks.Ciphe
 //  	ciphertext: [a, b, c, garb, garb, garb...]
 //		(actually: [a, b, c, 0, b, c, 0, 0, c, 0, 0, 0,...])
 func MaskAndCollectToLeft(
-	ct *ckks.Ciphertext, params *ckks.Parameters,
+	ct *ckks.Ciphertext, params ckks.Parameters,
 	encoder ckks.Encoder, eval ckks.Evaluator,
 	start, step, num int,
 ) *ckks.Ciphertext {
@@ -76,7 +76,7 @@ func MaskAndCollectToLeft(
 }
 
 func MaskAndCollectToLeftFast(
-	ct *ckks.Ciphertext, params *ckks.Parameters,
+	ct *ckks.Ciphertext, params ckks.Parameters,
 	encoder ckks.Encoder, eval ckks.Evaluator,
 	start, step, num int,
 ) *ckks.Ciphertext {
@@ -93,6 +93,6 @@ func MaskAndCollectToLeftFast(
 		panic("fail to rescale, utils.MaskAndCollectToLeftFast")
 	}
 	// conduct innerSum to collect to left most with garbage slots
-	eval.InnerSum(mct, step-1, num, mct)
+	eval.InnerSumLog(mct, step-1, num, mct)
 	return mct
 }

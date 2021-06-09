@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/approx/leastsquares"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
 // requires rotation keys for:
@@ -78,7 +79,7 @@ func (dense *Dense) GetWeights() *ckks.Ciphertext {
 // }
 
 func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator,
-	params *ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
+	params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
 ) []int {
 	// maxM1N2Ratio = 8.0
 	// nmakers := sts.Nmakers
@@ -92,9 +93,9 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	// for i := 1; i < nclasses; i++ {
 	// 	Frep = append(Frep, -i*nfilters)
 	// }
-	Frep := kgen.GenRotationIndexesForInnerSum(-sts.Nfilters, sts.Nclasses)
+	Frep := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
 	// 2. for input weights matrix mult
-	Fmult := kgen.GenRotationIndexesForInnerSum(1, nfilters)
+	Fmult := params.RotationsForInnerSumLog(1, nfilters)
 	// 3. for collect the result into the left most slots
 	// step := nfilters - 1
 	// Fshift := utils.NewSlice(0, (nclasses-1)*step, step)
@@ -106,9 +107,9 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	// 	err mult input
 	// 	rotation keys required: -1 ~ -(k-1)
 	// 	rotation keys required: -k ~ -k*(theta-1)
-	rot1 := kgen.GenRotationIndexesForInnerSum(-1, sts.Nfilters)
-	rot2 := kgen.GenRotationIndexesForInnerSum(-sts.Nfilters, sts.Nclasses)
-	rot3 := kgen.GenRotationIndexesForInnerSum(-sts.Nclasses, sts.Nfilters)
+	rot1 := params.RotationsForInnerSumLog(-1, sts.Nfilters)
+	rot2 := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
+	rot3 := params.RotationsForInnerSumLog(-sts.Nclasses, sts.Nfilters)
 	rotAll := append(rot1, rot2...)
 	rotAll = append(rotAll, rot3...)
 
@@ -117,9 +118,10 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	ouRowPacked := false
 	colsMatrix := utils.GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := utils.GenTransposeMap(colsMatrix)
-	diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), maxM1N2Ratio, params.LogSlots())
+	diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
+	diagM.N1 = 8
 	dense.diagM = diagM
-	Btranspose := kgen.GenRotationIndexesForDiagMatrix(diagM)
+	Btranspose := params.RotationsForDiagMatrixMult(diagM)
 	Binds := append(rotAll, Btranspose...)
 
 	return append(Finds, Binds...)
@@ -132,7 +134,7 @@ func (dense *Dense) Forward(
 	sts *utils.CellCnnSettings,
 	evaluator ckks.Evaluator,
 	encoder ckks.Encoder,
-	params *ckks.Parameters,
+	params ckks.Parameters,
 	// maskMap map[int]*ckks.Plaintext,
 ) *ckks.Ciphertext {
 
@@ -141,13 +143,13 @@ func (dense *Dense) Forward(
 	}
 
 	// records the last input for backward
-	dense.lastInput = input.CopyNew().Ciphertext()
+	dense.lastInput = input.CopyNew()
 
 	var inputRep, output *ckks.Ciphertext
 	inputRep = input
 
 	// 1. replicate the input by Nclasses times
-	evaluator.InnerSum(inputRep, -sts.Nfilters, sts.Nclasses, inputRep)
+	evaluator.InnerSumLog(inputRep, -sts.Nfilters, sts.Nclasses, inputRep)
 
 	// 2. mul the weights and the input representation
 	inputRep = evaluator.MulRelinNew(inputRep, dense.weights)
@@ -157,7 +159,7 @@ func (dense *Dense) Forward(
 	}
 
 	// 3. innerSum to get the pred for class theta in the theta * nfilters place
-	evaluator.InnerSum(inputRep, 1, sts.Nfilters, inputRep)
+	evaluator.InnerSumLog(inputRep, 1, sts.Nfilters, inputRep)
 
 	// 4. mask and left shift to store the result in left most Nclass slots.
 	// // mask the output slots at (nfilter*0~nclasses-1)
@@ -171,7 +173,7 @@ func (dense *Dense) Forward(
 	output = inputRep
 
 	// record the last ouput before activation for backward use.
-	dense.u = output.CopyNew().Ciphertext()
+	dense.u = output.CopyNew()
 	// fmt.Printf("Dense.u" + utils.PrintCipherLevel(dense.u, params))
 
 	// 5. apply least square approximation to compute the sigmoid
@@ -205,8 +207,8 @@ func (dense *Dense) Forward(
 // for scaled one, call GetGradient
 // for momentum one, call ComputeGradientWithMomentumAndLr
 func (dense *Dense) Backward(
-	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params *ckks.Parameters,
-	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *ckks.SecretKey, lr float64,
+	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params ckks.Parameters,
+	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *rlwe.SecretKey, lr float64,
 ) (*ckks.Ciphertext, *ckks.Ciphertext) {
 	// 1. compute the derivative of the activation function
 	cf, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
@@ -263,13 +265,13 @@ func (dense *Dense) Backward(
 	}
 	// fmt.Printf("b-1 " + utils.PrintCipherLevel(mErr, params))
 
-	evaluator.InnerSum(mErr, -1, sts.Nfilters, mErr)
+	evaluator.InnerSumLog(mErr, -1, sts.Nfilters, mErr)
 	repErr := mErr
 
 	// 4. replicate the last input theta times
 	// rotation keys required: -k ~ -k*(theta-1)
-	repInput := dense.lastInput.CopyNew().Ciphertext()
-	evaluator.InnerSum(repInput, -sts.Nfilters, sts.Nclasses, repInput)
+	repInput := dense.lastInput.CopyNew()
+	evaluator.InnerSumLog(repInput, -sts.Nfilters, sts.Nclasses, repInput)
 
 	// 5. mult the err and the input get the derivative for the dense weights
 	// ------- min{b-2, input-1} level
@@ -283,7 +285,7 @@ func (dense *Dense) Backward(
 	}
 
 	// keep pure gradient
-	pure_gradient := dense.gradient.CopyNew().Ciphertext()
+	pure_gradient := dense.gradient.CopyNew()
 
 	// compute scaled gradient
 	if lr != 0 {
@@ -342,7 +344,7 @@ func (dense *Dense) Backward(
 
 	// replicate the err k times and mult with weightsT
 	mErrRep := mErrCollect
-	evaluator.InnerSum(mErrRep, -sts.Nclasses, sts.Nfilters, mErrRep)
+	evaluator.InnerSumLog(mErrRep, -sts.Nclasses, sts.Nfilters, mErrRep)
 
 	// ------- min{u-5, inErr-3, b-3} level
 	outErr := evaluator.MulRelinNew(mErrRep, weightsT)
@@ -352,14 +354,14 @@ func (dense *Dense) Backward(
 	// fmt.Printf("min{u-5, inErr-3, b-3} " + utils.PrintCipherLevel(outErr, params))
 
 	// 2. innerSum to get the err in nclasses * (0~k-1) slots, with garbage
-	evaluator.InnerSum(outErr, 1, sts.Nclasses, outErr)
+	evaluator.InnerSumLog(outErr, 1, sts.Nclasses, outErr)
 
 	return outErr, pure_gradient
 }
 
 func (dense *Dense) ComputeScaledGradient(
 	gradient *ckks.Ciphertext,
-	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	sts *utils.CellCnnSettings, params ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) {
 	eval.MultByConst(gradient, lr, gradient)
@@ -371,12 +373,12 @@ func (dense *Dense) ComputeScaledGradient(
 
 func (dense *Dense) ComputeScaledGradientWithMomentum(
 	gradient *ckks.Ciphertext,
-	sts *utils.CellCnnSettings, params *ckks.Parameters,
+	sts *utils.CellCnnSettings, params ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder,
 ) {
 	if dense.momentum > 0 {
 		if dense.vt == nil {
-			dense.vt = gradient.CopyNew().Ciphertext()
+			dense.vt = gradient.CopyNew()
 		} else {
 			dense.vt = eval.MultByConstNew(dense.vt, dense.momentum)
 			if err := eval.Rescale(dense.vt, params.Scale(), dense.vt); err != nil {
@@ -384,7 +386,7 @@ func (dense *Dense) ComputeScaledGradientWithMomentum(
 			}
 			dense.vt = eval.AddNew(dense.vt, gradient)
 		}
-		dense.gradient = dense.vt.CopyNew().Ciphertext()
+		dense.gradient = dense.vt.CopyNew()
 	} else {
 		dense.gradient = gradient
 	}
@@ -393,7 +395,7 @@ func (dense *Dense) ComputeScaledGradientWithMomentum(
 
 // get the gradient of the model, contain momentum and lr
 func (dense *Dense) GetGradient() *ckks.Ciphertext {
-	return dense.gradient.CopyNew().Ciphertext()
+	return dense.gradient.CopyNew()
 }
 
 func (dense *Dense) GetGradientBinary() []byte {
@@ -413,7 +415,7 @@ func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator)
 // 		update := eval.MultByConstNew(dense.gradient, lr)
 // 		if dense.isMomentum {
 // 			if dense.vt == nil {
-// 				dense.vt = update.CopyNew().Ciphertext()
+// 				dense.vt = update.CopyNew()
 // 			} else {
 // 				dense.vt = eval.MultByConstNew(dense.vt, momentum)
 // 				dense.vt = eval.AddNew(dense.vt, update)

@@ -9,11 +9,12 @@ import (
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"gonum.org/v1/gonum/mat"
 )
 
 func GetRandomBatch(
-	dataset *common.CnnDataset, batchSize int, params *ckks.Parameters, encoder ckks.Encoder,
+	dataset *common.CnnDataset, batchSize int, params ckks.Parameters, encoder ckks.Encoder,
 	sts *utils.CellCnnSettings,
 ) ([]*ckks.Plaintext, []*mat.Dense, []float64) {
 	// X := dataset.X
@@ -39,40 +40,25 @@ func GetRandomBatch(
 	return plaintextSlice, newBatch, newBatchLabels
 }
 
-func CustomizedParams() *ckks.Parameters {
-	LogN := 15
-	LogSlots := 14
-	// logN=15: max 881 logQP
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
-		LogPi: []int{61, 61, 61},                             //90
+func CustomizedParams() ckks.Parameters {
+	pl := ckks.ParametersLiteral{
+		LogN:     15,
+		LogSlots: 14,
+		LogQ:     []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
+		LogP:     []int{61, 61, 61},                             //183
+		Scale:    1 << 52,
+		Sigma:    rlwe.DefaultSigma,
 	}
-	// sum of first 3 logQi == Scale +128
-	Scale := float64(1 << 52)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+	params, err := ckks.NewParametersFromLiteral(pl)
 	if err != nil {
 		panic(err)
 	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
 	return params
 }
 
 func TestOne(t *testing.T) {
 
-	LogN := 14
-	LogSlots := 13
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40, 40},
-		LogPi: []int{30, 30},
-	}
-	Scale := float64(1 << 40)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
+	params := CustomizedParams()
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -321,19 +307,7 @@ func TestOne(t *testing.T) {
 
 func TestInnerSum(t *testing.T) {
 
-	LogN := 14
-	LogSlots := 13
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
-		LogPi: []int{45, 45},
-	}
-	Scale := float64(1 << 40)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
+	params := CustomizedParams()
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -380,13 +354,13 @@ func TestInnerSum(t *testing.T) {
 
 	fmt.Println("Conduct innersum on filter1")
 	// encFilter1 is ciphertext with slots: [1,0,0,0...]
-	ind := kgen.GenRotationIndexesForInnerSum(2, 3)
+	ind := params.RotationsForInnerSumLog(2, 3)
 	rks := kgen.GenRotationKeysForRotations(ind, false, sk)
-	evaluator := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
+	evaluator := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rks})
 
-	cout := encFilter1.CopyNew().Ciphertext()
+	cout := encFilter1.CopyNew()
 
-	evaluator.InnerSum(encFilter1, 2, 3, cout)
+	evaluator.InnerSumLog(encFilter1, 2, 3, cout)
 	// evaluator = ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
 	// evaluator.ShallowCopy().InnerSum(encFilter1, -2, 1, encFilter1)
 
@@ -747,7 +721,7 @@ func TestScaling(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	eval := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: nil})
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil})
 
 	slice := make([]complex128, params.Slots())
 	slice[0] = complex(2, 0)
@@ -755,7 +729,7 @@ func TestScaling(t *testing.T) {
 	x1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), slice, params.LogSlots())
 	x2 := encryptor.EncryptNew(x1)
 
-	// x22 := x2.CopyNew().Ciphertext()
+	// x22 := x2.CopyNew()
 
 	utils.PrintDebug(params, x2, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
 

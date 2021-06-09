@@ -9,7 +9,7 @@ package test
 // 	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
 // )
 
-// func PrintDebug(params *ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
+// func PrintDebug(params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
 
 // 	valuesTest = encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
 
@@ -64,7 +64,7 @@ package test
 // 	ncells := 2
 // 	nmakers := 4
 
-// 	inds := kgen.GenRotationIndexesForInnerSum(1, 4)
+// 	inds := params.RotationsForInnerSumLog(1, 4)
 // 	rks := kgen.GenRotationKeysForRotations(inds, false, sk)
 
 // 	evaluator := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
@@ -144,8 +144,8 @@ package test
 // 	var sigDegree uint = 3
 // 	sigInterval := 7
 
-// 	indsConv := kgen.GenRotationIndexesForInnerSum(1, nmakers*ncells)
-// 	indsDense := kgen.GenRotationIndexesForInnerSum(1, nfilters)
+// 	indsConv := params.RotationsForInnerSumLog(1, nmakers*ncells)
+// 	indsDense := params.RotationsForInnerSumLog(1, nfilters)
 // 	rotConv := make([]int, 0)
 // 	for i := 1; i < nfilters; i++ {
 // 		rotConv = append(rotConv, -i)
