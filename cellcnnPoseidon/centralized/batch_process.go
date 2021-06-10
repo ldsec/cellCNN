@@ -6,8 +6,9 @@ import (
 )
 
 // ForwardBatch conduct batch forward.
-// return the preds of each input, modified grad (with momentum and lr) called by GetGradient
-func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64) []*ckks.Ciphertext {
+// return the preds of each input.
+// modified grad (with momentum and lr) called by GetGradient
+func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64, isMomentum bool) []*ckks.Ciphertext {
 
 	LeftMostMask := utils.GenSliceWithOneAt(c.params.Slots(), []int{0})
 	poolMask := c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
@@ -32,7 +33,7 @@ func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64
 		if i == 0 {
 			gradAccumulator = &Gradients{pgConv, pgDense}
 		} else {
-			gradAccumulator.AggregateCt(pgConv, pgDense, c.evaluator)
+			gradAccumulator.Aggregate(append(pgConv, pgDense), c.evaluator)
 		}
 	}
 
@@ -41,9 +42,9 @@ func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64
 	c.dense.ComputeScaledGradient(gradAccumulator.dense, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
 
 	// with momentum
-	if c.momentum != 0 {
-		c.conv1d.ComputeScaledGradientWithMomentum(c.conv1d.GetGradient(), c.cnnSettings, c.params, c.evaluator, c.encoder)
-		c.dense.ComputeScaledGradientWithMomentum(c.dense.GetGradient(), c.cnnSettings, c.params, c.evaluator, c.encoder)
+	if isMomentum {
+		c.conv1d.ComputeScaledGradientWithMomentum(c.conv1d.GetGradient(), c.cnnSettings, c.params, c.evaluator, c.encoder, c.momentum)
+		c.dense.ComputeScaledGradientWithMomentum(c.dense.GetGradient(), c.cnnSettings, c.params, c.evaluator, c.encoder, c.momentum)
 	}
 
 	return preds

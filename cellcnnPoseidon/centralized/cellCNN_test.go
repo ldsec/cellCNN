@@ -2,43 +2,14 @@ package centralized
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 
 	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/rlwe"
 	"gonum.org/v1/gonum/mat"
 )
-
-func GetRandomBatch(
-	dataset *common.CnnDataset, batchSize int, params ckks.Parameters, encoder ckks.Encoder,
-	sts *utils.CellCnnSettings,
-) ([]*ckks.Plaintext, []*mat.Dense, []float64) {
-	// X := dataset.X
-	// y := dataset.Y
-
-	// // make a new batch
-	// newBatch := make([]*mat.Dense, batchSize)
-	// newBatchLabels := make([]float64, batchSize)
-	// for j := 0; j < len(newBatch); j++ {
-	// 	randi := rand.Intn(len(X))
-	// 	newBatch[j] = X[randi]
-	// 	newBatchLabels[j] = y[randi]
-	// }
-	newBatch := make([]*mat.Dense, batchSize)
-	newBatchLabels := make([]float64, batchSize)
-
-	for i := 0; i < batchSize; i++ {
-		newBatch[i] = utils.GenRandomMatrix(sts.Ncells, sts.Nmakers)
-		newBatchLabels[i] = float64(rand.Intn(sts.Nclasses))
-	}
-
-	plaintextSlice := utils.Batch2PlainSlice(newBatch, params, encoder)
-	return plaintextSlice, newBatch, newBatchLabels
-}
 
 func CustomizedParams() ckks.Parameters {
 	pl := ckks.ParametersLiteral{
@@ -648,35 +619,47 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 
 	batchSize := 2
 	iterrations := 10
+	isMomentum := false
 
 	var plainOut, dConv, dDense *mat.Dense
 
 	for i := 0; i < iterrations; i++ {
 
-		X, matrix, y := GetRandomBatch(nil, batchSize, params, encoder, cnnSettings)
+		X, matrix, y := utils.GetRandomBatch(nil, batchSize, params, encoder, cnnSettings)
 		yMat := utils.ScalarToOneHot(y, nclasses)
 
-		// forward one get preds
-		encOut := model.BatchProcessing(X, y)
+		// forward & backward
+		encOut := model.BatchProcessing(X, y, isMomentum)
 		if i == 0 {
 			plainOut = pNet.ForwardBatch(matrix, cw, dw)
 		} else {
 			plainOut = pNet.ForwardBatch(matrix, nil, nil)
 		}
 
-		fmt.Printf("ROUND %v ######## Check the forward output #########\n", i)
-		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 4, []int{0}, true)
-
 		errDense := mat.NewDense(batchSize, nclasses, nil)
 		errDense.Sub(plainOut, yMat)
-
 		pNet.Backward(errDense, lr, momentum)
+
+		fmt.Printf("ROUND %v ######## Check the forward output #########\n", i)
+		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 4, []int{0}, true)
 
 		dConv = pNet.conv.GetWeights()
 		dDense = pNet.dense.GetWeights()
 
+		// get scaled gradients
 		grad := &Gradients{model.conv1d.GetGradient(), model.dense.GetGradient()}
-		grad.Bootstrapping(encoder, params, sk)
+
+		if model.FisrtMomentum() {
+			// if first momentum, btp scaled_g to level 9 and kept as vt
+			grad.Bootstrapping(encoder, params, sk)
+			model.UpdateMomentum(grad)
+		} else {
+			// else, compute scaled_m at level 8
+			grad := model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
+			grad.Bootstrapping(encoder, params, sk)
+			model.UpdateMomentum(grad)
+		}
+
 		model.UpdateWithGradients(grad)
 
 		// if i == iterrations-1 {

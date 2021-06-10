@@ -74,9 +74,13 @@ func (dense *Dense) GetWeights() *ckks.Ciphertext {
 	return dense.weights
 }
 
-// func (dense *Dense) SetMomentum() {
-// 	dense.isMomentum = true
-// }
+func (dense *Dense) FirstMomentum() bool {
+	return dense.vt == nil
+}
+
+func (dense *Dense) UpdateMomentum(grad *ckks.Ciphertext) {
+	dense.vt = grad
+}
 
 func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator,
 	params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
@@ -374,13 +378,13 @@ func (dense *Dense) ComputeScaledGradient(
 func (dense *Dense) ComputeScaledGradientWithMomentum(
 	gradient *ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params ckks.Parameters,
-	eval ckks.Evaluator, encoder ckks.Encoder,
-) {
-	if dense.momentum > 0 {
+	eval ckks.Evaluator, encoder ckks.Encoder, momentum float64,
+) *ckks.Ciphertext {
+	if momentum > 0 {
 		if dense.vt == nil {
 			dense.vt = gradient.CopyNew()
 		} else {
-			dense.vt = eval.MultByConstNew(dense.vt, dense.momentum)
+			dense.vt = eval.MultByConstNew(dense.vt, momentum)
 			if err := eval.Rescale(dense.vt, params.Scale(), dense.vt); err != nil {
 				panic("backward: fail to rescale, conv.vt[i]")
 			}
@@ -390,7 +394,7 @@ func (dense *Dense) ComputeScaledGradientWithMomentum(
 	} else {
 		dense.gradient = gradient
 	}
-
+	return dense.gradient
 }
 
 // get the gradient of the model, contain momentum and lr

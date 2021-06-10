@@ -76,6 +76,14 @@ func (conv *Conv1D) GetWeights() []*ckks.Ciphertext {
 	return conv.filters
 }
 
+func (conv *Conv1D) FirstMomentum() bool {
+	return conv.vt[0] == nil
+}
+
+func (conv *Conv1D) UpdateMomentum(grad []*ckks.Ciphertext) {
+	conv.vt = grad
+}
+
 // func (conv *Conv1D) SetMomentum() {
 // 	conv.isMomentum = true
 // }
@@ -368,14 +376,14 @@ func (conv *Conv1D) ComputeScaledGradient(
 func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 	gradients []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params ckks.Parameters,
-	eval ckks.Evaluator, encoder ckks.Encoder,
-) {
+	eval ckks.Evaluator, encoder ckks.Encoder, momentum float64,
+) []*ckks.Ciphertext {
 	for i := range gradients {
-		if conv.momentum > 0 {
+		if momentum > 0 {
 			if conv.vt[i] == nil {
 				conv.vt[i] = gradients[i].CopyNew()
 			} else {
-				conv.vt[i] = eval.MultByConstNew(conv.vt[i], conv.momentum)
+				conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
 				if err := eval.Rescale(conv.vt[i], params.Scale(), conv.vt[i]); err != nil {
 					panic("backward: fail to rescale, conv.vt[i]")
 				}
@@ -387,6 +395,7 @@ func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 			conv.gradient[i] = gradients[i]
 		}
 	}
+	return conv.gradient
 }
 
 func (conv *Conv1D) GetGradient() []*ckks.Ciphertext {

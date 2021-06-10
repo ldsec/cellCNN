@@ -31,29 +31,34 @@ func (g *Gradients) NewGradient(data [][]byte) {
 }
 
 // aggregate data to self
-func (g *Gradients) Aggregate(data [][]byte, eval ckks.Evaluator) {
-	// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
-	for i, each := range data[:len(data)-1] {
-		tmpFilter := new(ckks.Ciphertext)
-		if err := tmpFilter.UnmarshalBinary(each); err != nil {
-			panic("fail to unmarshall Gradients Aggregate")
+func (g *Gradients) Aggregate(data interface{}, eval ckks.Evaluator) {
+	switch data := data.(type) {
+	case [][]byte:
+		// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
+		for i, each := range data[:len(data)-1] {
+			tmpFilter := new(ckks.Ciphertext)
+			if err := tmpFilter.UnmarshalBinary(each); err != nil {
+				panic("fail to unmarshall Gradients Aggregate")
+			}
+			eval.Add(g.filters[i], tmpFilter, g.filters[i])
 		}
-		eval.Add(g.filters[i], tmpFilter, g.filters[i])
+		tmpDense := new(ckks.Ciphertext)
+		if err := tmpDense.UnmarshalBinary(data[len(data)-1]); err != nil {
+			panic("fail to unmarshall conv filter weights")
+		}
+		eval.Add(g.dense, tmpDense, g.dense)
+	case []*ckks.Ciphertext:
+		// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
+		for i, each := range data[:len(data)-1] {
+			eval.Add(g.filters[i], each, g.filters[i])
+		}
+		eval.Add(g.dense, data[len(data)-1], g.dense)
+	case *Gradients:
+		for i, each := range data.filters {
+			eval.Add(g.filters[i], each, g.filters[i])
+		}
+		eval.Add(g.dense, data.dense, g.dense)
 	}
-	tmpDense := new(ckks.Ciphertext)
-	if err := tmpDense.UnmarshalBinary(data[len(data)-1]); err != nil {
-		panic("fail to unmarshall conv filter weights")
-	}
-	eval.Add(g.dense, tmpDense, g.dense)
-}
-
-// aggregate data to self
-func (g *Gradients) AggregateCt(filters []*ckks.Ciphertext, dense *ckks.Ciphertext, eval ckks.Evaluator) {
-	// tmpFilters = make([]*ckks.Ciphertext, len(data)-1)
-	for i, each := range filters {
-		eval.Add(g.filters[i], each, g.filters[i])
-	}
-	eval.Add(g.dense, dense, g.dense)
 }
 
 // bootstrap
@@ -158,9 +163,10 @@ func (c *CellCNN) GetWeights() []*ckks.Ciphertext {
 	return append(econv, edense)
 }
 
-// func (c *CellCNN) GetGradients() ([]*ckks.Ciphertext, *ckks.Ciphertext) {
+func (c *CellCNN) GetGradients() *Gradients {
+	return &Gradients{c.conv1d.GetGradient(), c.dense.GetGradient()}
 
-// }
+}
 
 type PlainCircuit struct {
 	// weights
@@ -250,6 +256,14 @@ func (c *CellCNN) WithSk(sk *rlwe.SecretKey) {
 
 func (c *CellCNN) WithDiagM(diagM *ckks.PtDiagMatrix) {
 	c.dense.WithDiagM(diagM)
+}
+
+func (c *CellCNN) FisrtMomentum() bool {
+	return c.conv1d.FirstMomentum() && c.dense.FirstMomentum()
+}
+
+func (c *CellCNN) UpdateMomentum(grad *Gradients) {
+
 }
 
 // func (c *CellCNN) SetMomentum() {
@@ -526,6 +540,16 @@ func (c *CellCNN) Batch2PlainSlice(inputs []*mat.Dense) []*ckks.Plaintext {
 		result = append(result, c.Matrix2Plaintext(each))
 	}
 	return result
+}
+
+func (c *CellCNN) ComputeScaledGradientWithMomentum(
+	grad *Gradients,
+	sts *utils.CellCnnSettings, params ckks.Parameters,
+	eval ckks.Evaluator, encoder ckks.Encoder, momentum float64,
+) *Gradients {
+	Fgrad := c.conv1d.ComputeScaledGradientWithMomentum(grad.filters, sts, params, eval, encoder, momentum)
+	Cgrad := c.dense.ComputeScaledGradientWithMomentum(grad.dense, sts, params, eval, encoder, momentum)
+	return &Gradients{Fgrad, Cgrad}
 }
 
 // func (c *CellCNN) MockTrain(niter int, trainSet common.CnnDataset, batchSize int) []float64 {

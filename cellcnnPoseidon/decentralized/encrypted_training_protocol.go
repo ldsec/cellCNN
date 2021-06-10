@@ -3,7 +3,6 @@ package decentralized
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"runtime"
 
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
@@ -13,7 +12,6 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
-	"gonum.org/v1/gonum/mat"
 )
 
 func init() {
@@ -288,8 +286,8 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 		fmt.Println("enter iteration: ", p.IterationNumber, p.IsRoot())
 
 		if !finished {
-			// 2. Aggregation of local gradients
-			gradientsAggr, err := p.ascendingUpdateEncryptedGeneralModelPhase()
+			// 2. Aggregation of local gradients at level 2
+			gradAgg, err := p.ascendingUpdateEncryptedGeneralModelPhase()
 			fmt.Println("one client finish training one iteration")
 			if err != nil {
 				return err
@@ -299,13 +297,21 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 				// if p.Debug.Print {
 				// 	log.Lvl2("ProtoIter: "+strconv.Itoa(p.IterationNumber)+", "+p.ServerIdentity().String()+", NEW WEIGHTS:", libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[0][0], 0)[p.InitalGapSize+1:p.InitalGapSize+3])
 				// }
-				// fmt.Println("before root add iternum")
 				p.IterationNumber = p.IterationNumber + 1
-				// fmt.Println("after root add iternum")
+
+				if p.model.FisrtMomentum() {
+					// if first momentum, btp scaled_g to level 9 and kept as vt
+					gradAgg.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+					p.model.UpdateMomentum(gradAgg)
+				} else {
+					// else, compute scaled_m at level 8 and get momentumed scaled at level 2
+					gradAgg := p.model.ComputeScaledGradientWithMomentum(gradAgg, p.CellCNNSettings, p.CryptoParams.Params, p.model.GetEvaluator(), p.encoder, momentum)
+					gradAgg.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+					p.model.UpdateMomentum(gradAgg)
+				}
 
 				// bootstrap before global update
-				gradientsAggr.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
-				p.UpdateRootWeights(gradientsAggr)
+				p.UpdateRootWeights(gradAgg)
 
 				// send updated weights down the tree
 				weightsToSend := p.model.Marshall()
@@ -345,7 +351,7 @@ func (p *NNEncryptedProtocol) newEncryptedIterationAnnouncementPhase() (NewEncry
 
 func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*centralized.Gradients, error) {
 	// retrieve data points
-	var gradients [][]byte
+	var gradients *centralized.Gradients
 	var err error
 
 	if !p.IsRoot() {
@@ -374,8 +380,7 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 		}
 
 	} else {
-		aggChild = new(centralized.Gradients)
-		aggChild.NewGradient(gradients)
+		aggChild = gradients
 	}
 
 	fmt.Printf("########\nIs Root: %v, index: %v\nChecking the values of the local agg gradients: %v\n########\n",
@@ -394,89 +399,29 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 	return aggChild, nil
 }
 
-func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) ([][]byte, error) {
+func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) (*centralized.Gradients, error) {
+	// local node does not keep a momentum
+	isMomentum := false
+
 	// make a new batch
-	X, y := GetRandomBatch(p.TrainSet, p.BatchSize, p.CryptoParams.Params, p.encoder, p.CellCNNSettings)
+	X, _, y := utils.GetRandomBatch(p.TrainSet, p.BatchSize, p.CryptoParams.Params, p.encoder, p.CellCNNSettings)
 
-	// accumulate gradients in a batch
-	var res []*ckks.Ciphertext
-	for i := range X {
-		encOut, _ := p.model.ForwardOne(X[i], nil, nil, nil)
-		err0 := p.model.ComputeLossOne(encOut, y[i])
+	// batch forward and backward
+	preds := p.model.BatchProcessing(X, y, isMomentum)
 
-		// valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.Sk).DecryptNew(encOut), p.CryptoParams.Params.LogSlots())
+	// get scaled gradients
+	grad := p.model.GetGradients()
 
-		// fmt.Printf("Check local iteration bacwakrd err: %v ...\n", valuesTest[0:4])
+	valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.AggregateSk).DecryptNew(preds[0]), p.CryptoParams.Params.LogSlots())
+	fmt.Printf("######## node index: %v, preds: %v\n########\n", p.Index(), valuesTest[:10])
 
-		// fmt.Printf("decentralized check err level: " + utils.PrintCipherLevel(err0, p.CryptoParams.Params))
-		p.model.BackwardOne(err0)
-		if i == 0 {
-			res = p.model.GetGradient()
-
-			valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.AggregateSk).DecryptNew(res[0]), p.CryptoParams.Params.LogSlots())
-			fmt.Printf("######## node index: %v, local batch %v, gradient: %v\n########\n",
-				p.Index(), i,
-				valuesTest[0:4],
-			)
-		} else {
-			ng := p.model.GetGradient()
-			valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.AggregateSk).DecryptNew(ng[0]), p.CryptoParams.Params.LogSlots())
-			fmt.Printf("######## node index: %v, local batch %v, gradient: %v\n########\n",
-				p.Index(), i,
-				valuesTest[0:4],
-			)
-			for i := range res {
-				eval.Add(res[i], ng[i], res[i])
-			}
-		}
-	}
-
-	valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.AggregateSk).DecryptNew(res[0]), p.CryptoParams.Params.LogSlots())
-	fmt.Printf("######## node index: %v, local batch %v, gradient: %v\n########\n",
-		p.Index(), "sum",
-		valuesTest[0:4],
-	)
-
-	bg := utils.CiphertextsToBytes(res)
-
-	return bg, nil
+	return grad, nil
 }
 
 // UpdateRootWeights updates global model based on the aggregated gradients and bootstraps
 func (p *NNEncryptedProtocol) UpdateRootWeights(gradientsAggr *centralized.Gradients) {
 	//update at root
 	p.model.UpdateWithGradients(gradientsAggr)
-}
-
-func GetRandomBatch(
-	dataset *common.CnnDataset, batchSize int, params ckks.Parameters, encoder ckks.Encoder,
-	sts *utils.CellCnnSettings,
-) ([]*ckks.Plaintext, []float64) {
-	// X := dataset.X
-	// y := dataset.Y
-
-	// // make a new batch
-	// newBatch := make([]*mat.Dense, batchSize)
-	// newBatchLabels := make([]float64, batchSize)
-	// for j := 0; j < len(newBatch); j++ {
-	// 	randi := rand.Intn(len(X))
-	// 	newBatch[j] = X[randi]
-	// 	newBatchLabels[j] = y[randi]
-	// }
-	newBatch := make([]*mat.Dense, batchSize)
-	newBatchLabels := make([]float64, batchSize)
-
-	for i := 0; i < batchSize; i++ {
-		newBatch[i] = utils.GenRandomMatrix(sts.Ncells, sts.Nmakers)
-		newBatchLabels[i] = float64(rand.Intn(sts.Nclasses))
-	}
-
-	plaintextSlice := utils.Batch2PlainSlice(newBatch, params, encoder)
-	return plaintextSlice, newBatchLabels
-}
-
-func GetCommonCryptoParams() {
-
 }
 
 // // DecryptNNFinalWeights decrypt and extracts the cleartext weights for a 1-layer neural network model

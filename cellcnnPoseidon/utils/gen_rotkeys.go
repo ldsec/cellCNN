@@ -113,6 +113,7 @@ func InitDenseRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator,
 	colsMatrix := GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := GenTransposeMap(colsMatrix)
 	diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
+	diagM.N1 = int(maxM1N2Ratio)
 	Btranspose := params.RotationsForDiagMatrixMult(diagM)
 	Binds := append(rotAll, Btranspose...)
 
