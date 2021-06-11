@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/rlwe"
-	"go.dedis.ch/onet/v3/log"
 	"math"
 )
 
@@ -110,6 +109,11 @@ func (c *CellCNNProtocol) CtDC() (*ckks.Ciphertext){
 // CtBoot returns the ciphertext that is supposed to store the bootstrapped ciphertext
 func (c *CellCNNProtocol) CtBoot() (*ckks.Ciphertext){
 	return c.ctBoot
+}
+
+// SetCtBoot sets CtBoot
+func (c *CellCNNProtocol) SetCtBoot(ctBoot *ckks.Ciphertext) {
+	c.ctBoot = ctBoot
 }
 
 func (c *CellCNNProtocol) Encoder() (ckks.Encoder){
@@ -350,9 +354,9 @@ func (c *CellCNNProtocol) Forward(XBatch *Matrix) (*ckks.Ciphertext){
 }
 
 // Refresh refreshes and repack ctBoot using DummyBootWithPrepooling
-func (c *CellCNNProtocol) Refresh(sk *rlwe.SecretKey, ctBoot *ckks.Ciphertext, nbParties int) {
+func (c *CellCNNProtocol) Refresh(sk *rlwe.SecretKey, ctBoot *ckks.Ciphertext, nbParties int) *ckks.Ciphertext{
 	ctBoot = DummyBootWithPrepooling(ctBoot, c.params, sk, nbParties)
-	log.LLvl1(ctBoot.Level())
+	return ctBoot
 }
 
 // Backward applies a backward pass on the given batch and stores the result in ctDC and ctDW

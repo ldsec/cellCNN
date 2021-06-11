@@ -344,11 +344,8 @@ func (p *TrainingProtocol) localComputation() {
 		p.CNNProtocol.BackWardPlain(XBatch, YBatch, p.Tree().Size()) // takes care of pre-applying 1/#Parties
 	} else { // === Ciphertext ===
 		p.CNNProtocol.Forward(XBatch)
-		log.Lvl2("Level BEfore",  p.CNNProtocol.CtBoot().Level())
-		a := p.CNNProtocol.CtBoot().CopyNew()
-		p.CNNProtocol.Refresh(p.CryptoParams.AggregateSk, a, p.Tree().Size())
-		log.Lvl2("Level After",  a.Level())
-		log.Fatal()
+		newCtBoot := p.CNNProtocol.Refresh(p.CryptoParams.AggregateSk, p.CNNProtocol.CtBoot(), p.Tree().Size())
+		p.CNNProtocol.SetCtBoot(newCtBoot)
 		p.CNNProtocol.Backward(XBatch, YBatch, p.Tree().Size())
 
 		/*
