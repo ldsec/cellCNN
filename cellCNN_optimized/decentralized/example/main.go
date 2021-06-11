@@ -25,9 +25,9 @@ func NewParty(params ckks.Parameters) (p *Party){
 
 func main() {
 
-	nParties := 1
+	nParties := 3
 
-	trainEncrypted := true
+	trainEncrypted := false
 	deterministic := true
 
 	if !deterministic{
@@ -43,7 +43,6 @@ func main() {
 	// GlobalWeights
 	C := cellCNN.WeightsInit(cellCNN.Features, cellCNN.Filters, cellCNN.Features)
 	W := cellCNN.WeightsInit(cellCNN.Filters, cellCNN.Classes, cellCNN.Filters) 
-
 
 	P := make([]*Party, nParties)
 
@@ -86,14 +85,12 @@ func main() {
 
 
 	fmt.Println("Loading Data ...")
-	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
-	XValid, YValid := cellCNN.LoadValidDataFrom("../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
 	fmt.Println("Done")
 
 	epoch := 15
 	niter := epoch * cellCNN.Samples / cellCNN.BatchSize
-
-	niter = 1
 
 	fmt.Printf("#Iters : %d\n", niter)
 

@@ -42,8 +42,8 @@ func DecryptPrint(rows, cols int, Real bool, element interface{}, params ckks.Pa
 
 func DecryptPrintMatrix(M *Matrix, Real bool, ciphertext *ckks.Ciphertext, params ckks.Parameters, sk *rlwe.SecretKey) {
 
-	rows := M.Rows()
-	cols := M.Cols()
+	rows := M.Rows
+	cols := M.Cols
 
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)

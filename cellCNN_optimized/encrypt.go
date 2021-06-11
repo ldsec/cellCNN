@@ -12,10 +12,12 @@ func EncryptRightForNaiveMul(W *Matrix, batchSize int, params ckks.Parameters, l
 
 	values := make([]complex128, params.Slots())
 
-	for i := 0; i < Wt.Rows(); i++{
+	rows := Wt.Rows
+	cols := Wt.Cols
+	for i := 0; i < rows; i++{
 		for j := 0; j < batchSize; j++{
-			idx := i*Wt.Cols()*batchSize
-			copy(values[idx + j*Wt.Cols(): idx + (j+1)*Wt.Cols()], Wt.M[i*Wt.Cols():(i+1)*Wt.Cols()])
+			idx := i*Wt.Cols*batchSize
+			copy(values[idx + j*cols: idx + (j+1)*cols], Wt.M[i*cols:(i+1)*cols])
 		}
 	}
 

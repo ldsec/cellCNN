@@ -120,17 +120,17 @@ func (p *TrainingProtocol) Start() error {
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " started a cellCNN Protocol")
 
 	// STEP 1: weight init
-	C := cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
-	W := cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
+	CMatrix := cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
+	WMatrix := cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
 
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights")
 
 	// serialize C and W
-	Cb, err := cellCNN.MarshalBinary(C)
+	Cb, err := CMatrix.MarshalBinary()
 	if err != nil {
 		return err
 	}
-	Wb, err := cellCNN.MarshalBinary(W)
+	Wb, err := WMatrix.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (p *TrainingProtocol) Start() error {
 	}
 
 	// STEP 3. set and encrypt weights
-	p.CNNProtocol.SetWeights(C, W)
+	p.CNNProtocol.SetWeights(CMatrix, WMatrix)
 	if p.TrainEncrypted {
 		p.CNNProtocol.EncryptWeights()
 	}
@@ -176,20 +176,20 @@ func (p *TrainingProtocol) Dispatch() error {
 
 			if p.IterationNumber == 0 {
 				// STEP 1: weight init
-				C := cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
-				W := cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
+				CMatrix := new(cellCNN.Matrix)
+				WMatrix := new(cellCNN.Matrix)
 
 				// STEP 3. set and encrypt weights
-				err = cellCNN.UnmarshalBinary(C, msg.C)
+				err = CMatrix.UnmarshalBinary(msg.C)
 				if err != nil {
 					return err
 				}
-				err = cellCNN.UnmarshalBinary(W, msg.W)
+				err = WMatrix.UnmarshalBinary(msg.W)
 				if err != nil {
 					return err
 				}
 
-				p.CNNProtocol.SetWeights(C, W)
+				p.CNNProtocol.SetWeights(CMatrix, WMatrix)
 				if p.TrainEncrypted {
 					p.CNNProtocol.EncryptWeights()
 				}
@@ -199,11 +199,11 @@ func (p *TrainingProtocol) Dispatch() error {
 			} else {
 				// replace weights
 				if !p.TrainEncrypted {
-					err = cellCNN.UnmarshalBinary(p.CNNProtocol.C, msg.C)
+					err = p.CNNProtocol.C.UnmarshalBinary(msg.C)
 					if err != nil {
 						return err
 					}
-					err = cellCNN.UnmarshalBinary(p.CNNProtocol.W, msg.W)
+					err = p.CNNProtocol.W.UnmarshalBinary(msg.W)
 					if err != nil {
 						return err
 					}
@@ -236,14 +236,15 @@ func (p *TrainingProtocol) Dispatch() error {
 				var newIterationMessage NewIterationMessage
 				// STEP 4. update weights
 				if !p.TrainEncrypted {
+
 					p.CNNProtocol.UpdatePlain(p.DCPool, p.DWPool)
 
 					// serialize C and W
-					Cb, err := cellCNN.MarshalBinary(p.CNNProtocol.C)
+					Cb, err := p.CNNProtocol.C.MarshalBinary()
 					if err != nil {
 						return err
 					}
-					Wb, err := cellCNN.MarshalBinary(p.CNNProtocol.W)
+					Wb, err := p.CNNProtocol.W.MarshalBinary()
 					if err != nil {
 						return err
 					}
@@ -273,6 +274,59 @@ func (p *TrainingProtocol) Dispatch() error {
 	if p.IsRoot() {
 		time.Sleep(10*time.Second)
 		p.FeedbackChannel <- struct{}{}
+
+		log.Lvl2("Loading Validation Data...")
+		XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+		log.Lvl2("Done")
+		p.CNNProtocol.C.Print()
+		p.CNNProtocol.W.Print()
+
+		r := 0
+		for i := 0; i < 2000/cellCNN.BatchSize; i++{
+
+			XPrePool := new(cellCNN.Matrix)
+			XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
+			YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
+
+			for j := 0; j < cellCNN.BatchSize; j++ {
+
+				X := XValid[cellCNN.BatchSize * i + j]
+				Y := YValid[cellCNN.BatchSize * i + j]
+
+				XPrePool.SumColumns(X)
+				XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
+
+				XBatch.SetRow(j, XPrePool.M)
+				YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
+			}
+
+			v := p.CNNProtocol.PredictPlain(XBatch)
+
+			if p.TrainEncrypted {
+				v.Print()
+				ctv := p.CNNProtocol.Predict(XBatch, p.CryptoParams.AggregateSk)
+				ctv.Print()
+				precisionStats := ckks.GetPrecisionStats(*p.CryptoParams.Params, p.CNNProtocol.Encoder(), nil, v.M, ctv.M, p.CryptoParams.Params.LogSlots(), 0)
+				fmt.Printf("Batch[%2d]", i)
+				fmt.Println(precisionStats.String())
+			}
+			
+			var y int
+			for i := 0; i < cellCNN.BatchSize; i++{
+
+				if real(v.M[i*2]) > real(v.M[i*2+1]){
+					y = 1
+				}else{
+					y = 0
+				}
+
+				if y != int(real(YBatch.M[i*2])){
+					r++
+				}
+			}
+		}
+
+		log.Lvl2("error :", 100.0*float64(r)/float64(2000), "%")
 	}
 
 	return nil
@@ -306,14 +360,13 @@ func (p *TrainingProtocol) ascendingUpdateGeneralModelPhase() error {
 	return nil
 }
 
-func (p *TrainingProtocol) LoadData() ([]*cellCNN.Matrix, []*cellCNN.Matrix, []*cellCNN.Matrix, []*cellCNN.Matrix){
+func (p *TrainingProtocol) LoadTrainingData() ([]*cellCNN.Matrix, []*cellCNN.Matrix){
 
-	log.Lvl2("Loading Data ...")
+	log.Lvl2("Loading Training Data ...")
 	XTrain, YTrain := cellCNN.LoadTrainDataFrom(p.Path, p.Samples, p.Cells, p.Features)
-	XValid, YValid := cellCNN.LoadValidDataFrom(p.Path, p.Samples, p.Cells, p.Features)
 	log.Lvl2("Done")
 
-	return XTrain, YTrain, XValid, YValid
+	return XTrain, YTrain
 }
 
 func (p *TrainingProtocol) localComputation() {
@@ -373,25 +426,34 @@ func (p *TrainingProtocol) broadcast() error {
 		p.ctDCPool = p.CNNProtocol.CtDC().CopyNew()
 	}
 
+	// If leaf, directly aggregates on DC and DW Pool (else it sends 0 values)
+	if p.IsLeaf(){
+		p.DCPool.Add(p.DCPool, p.CNNProtocol.DC)
+		p.DWPool.Add(p.DWPool, p.CNNProtocol.DW)
+	}
+
+	// If not leaf, waits on the children and 
+	// aggregates from the children in the DC and DW pools
 	if !p.IsLeaf() {
 		// this reads all the data that were sent by all the children
 		for _, v := range <-p.ChildDataChannel {
 
 			// deserialize child contribution
 			if !p.TrainEncrypted{
-				childDC := p.DCPool.Copy()
-				err := cellCNN.UnmarshalBinary(childDC, v.DC)
+				childDC := new(cellCNN.Matrix)
+				err := childDC.UnmarshalBinary(v.DC)
 				if err != nil {
 					return err
 				}
-				childDW := p.DWPool.Copy()
-				err = cellCNN.UnmarshalBinary(childDW, v.DW)
+				childDW := new(cellCNN.Matrix)
+				err = childDW.UnmarshalBinary(v.DW)
 				if err != nil {
 					return err
 				}
 
 				p.DCPool.Add(p.DCPool, childDC)
 				p.DWPool.Add(p.DWPool, childDW)
+
 			} else {
 				childDW := p.CNNProtocol.CtDW().CopyNew()
 				childDC := p.CNNProtocol.CtDC().CopyNew()
@@ -411,15 +473,15 @@ func (p *TrainingProtocol) broadcast() error {
 		}
 	}
 
-	// send DW and DC up the tree
+	// If leaf or not root, send DWPool and DCPool up the tree
 	if !p.IsRoot() {
 		// serialize DCPool and DWPool
 		if !p.TrainEncrypted {
-			DCb, err := cellCNN.MarshalBinary(p.DCPool)
+			DCb, err := p.DCPool.MarshalBinary()
 			if err != nil {
 				return err
 			}
-			DWb, err := cellCNN.MarshalBinary(p.DWPool)
+			DWb, err := p.DWPool.MarshalBinary()
 			if err != nil {
 				return err
 			}
@@ -449,6 +511,11 @@ func (p *TrainingProtocol) broadcast() error {
 				return fmt.Errorf("send to parent: %v", err)
 			}
 		}
+	}
+
+	if p.Tree().Size() == 1 {
+		p.DCPool.Add(p.DCPool, p.CNNProtocol.DC)
+		p.DWPool.Add(p.DWPool, p.CNNProtocol.DW)
 	}
 
 	return nil

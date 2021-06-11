@@ -25,7 +25,7 @@ func TestRegEncryptedTraining(t *testing.T) {
 	t.Run("CellCNN", genTest(
 		"cellCNN", "../../normalized/",
 		3,
-		true, false,
+		false, false,
 		cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Filters, cellCNN.Classes,
 		15, 2000,
 		true,
@@ -80,7 +80,7 @@ func genTest(
 				protocol.InitVars(cryptoParamsList[tni.Index()], vars)
 
 				// 1) Load Data
-				protocol.XTrain, protocol.YTrain, _, _ = protocol.LoadData()
+				protocol.XTrain, protocol.YTrain = protocol.LoadTrainingData()
 
 				return protocol, err
 			})
