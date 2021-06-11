@@ -1,7 +1,8 @@
 package cellCNN
 
-import(
+import (
 	"github.com/ldsec/lattigo/v2/ckks"
+	"go.dedis.ch/onet/v3/log"
 	"math"
 )
 
@@ -43,11 +44,14 @@ func ActivationDeriv(x complex128) complex128{
 func ActivationsCt(ctU0 *ckks.Ciphertext, params ckks.Parameters, eval ckks.Evaluator) (ctL1, ctL1Deriv *ckks.Ciphertext){
 	var err error
 
+	log.LLvl1("AQUIIIQ")
+
 	if ctL1, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivation), params.Scale()); err != nil {
 		panic(err)
 	}
 
 	depthDeriv := int(math.Ceil(math.Log2(float64(len(coeffsActivationDeriv)+1))))
+	log.LLvl1("AQUIIIQ", ctU0.Level(), depthDeriv)
 	scaleDeriv := float64(params.Q()[ctU0.Level() - depthDeriv]) * float64(params.Q()[ctU0.Level() - depthDeriv-1]) / params.Scale()
 
 	if ctL1Deriv, err = eval.EvaluatePoly(ctU0, ckks.NewPoly(coeffsActivationDeriv), scaleDeriv); err != nil {

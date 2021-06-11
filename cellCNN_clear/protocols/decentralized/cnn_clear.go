@@ -41,7 +41,7 @@ type IterationMessage struct {
 	Weights         common.WeightsVector
 }
 
-// ChildUpdatedEncryptedLocalWeightsMessage contains one node's weights update.
+// ChildUpdatedDataMessage contains one node's weights update.
 type ChildLocalUpdateMessage struct {
 	ChildLocalDeltas common.WeightsVector
 }

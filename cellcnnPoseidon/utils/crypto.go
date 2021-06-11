@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"github.com/ldsec/lattigo/v2/rlwe"
 
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
@@ -41,9 +42,9 @@ type CryptoParams struct {
 // CryptoParamsForNetwork stores all crypto info to save to file
 type CryptoParamsForNetwork struct {
 	params      *ckks.Parameters
-	sk          []*ckks.SecretKey
-	aggregateSk *ckks.SecretKey
-	pk          *ckks.PublicKey
+	sk          []*rlwe.SecretKey
+	aggregateSk *rlwe.SecretKey
+	pk          *rlwe.PublicKey
 	// rlk         *ckks.EvaluationKey
 	// rotKs       *ckks.RotationKeys
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"go.dedis.ch/onet/v3/log"
 	"io/ioutil"
 	"os"
@@ -16,11 +17,11 @@ import (
 
 // CryptoParams aggregates all ckks scheme information
 type CryptoParams struct {
-	Sk          *ckks.SecretKey
-	AggregateSk *ckks.SecretKey
-	Pk          *ckks.PublicKey
-	Rlk         *ckks.RelinearizationKey
-	RotKs       *ckks.RotationKeySet
+	Sk          *rlwe.SecretKey
+	AggregateSk *rlwe.SecretKey
+	Pk          *rlwe.PublicKey
+	Rlk         *rlwe.RelinearizationKey
+	RotKs       *rlwe.RotationKeySet
 	Params      *ckks.Parameters
 
 	encoders   chan ckks.Encoder
@@ -32,30 +33,30 @@ type CryptoParams struct {
 // CryptoParamsForNetwork stores all crypto info to save to file
 type CryptoParamsForNetwork struct {
 	params      *ckks.Parameters
-	sk          []*ckks.SecretKey
-	aggregateSk *ckks.SecretKey
-	pk          *ckks.PublicKey
-	rlk         *ckks.RelinearizationKey
-	rotKs       *ckks.RotationKeySet
+	sk          []*rlwe.SecretKey
+	aggregateSk *rlwe.SecretKey
+	pk          *rlwe.PublicKey
+	rlk         *rlwe.RelinearizationKey
+	rotKs       *rlwe.RotationKeySet
 }
 
 type cryptoParamsMarshalable struct {
 	Params      *ckks.Parameters
-	Sk          []*ckks.SecretKey
-	AggregateSk *ckks.SecretKey
-	Pk          *ckks.PublicKey
-	Rlk         *ckks.RelinearizationKey
-	RotKs       *ckks.RotationKeySet
+	Sk          []*rlwe.SecretKey
+	AggregateSk *rlwe.SecretKey
+	Pk          *rlwe.PublicKey
+	Rlk         *rlwe.RelinearizationKey
+	RotKs       *rlwe.RotationKeySet
 }
 
 var _ encoding.BinaryMarshaler = new(CryptoParamsForNetwork)
 var _ encoding.BinaryUnmarshaler = new(CryptoParamsForNetwork)
 
 // NewCryptoParams initializes CryptoParams with the given values
-func NewCryptoParams(params *ckks.Parameters, sk, aggregateSk *ckks.SecretKey, pk *ckks.PublicKey, rlk *ckks.RelinearizationKey) *CryptoParams {
+func NewCryptoParams(params *ckks.Parameters, sk, aggregateSk *rlwe.SecretKey, pk *rlwe.PublicKey, rlk *rlwe.RelinearizationKey) *CryptoParams {
 	evaluators := make(chan ckks.Evaluator, ThreadsCount)
 	for i := 0; i < ThreadsCount; i++ {
-		evaluators <- ckks.NewEvaluator(params, ckks.EvaluationKey{
+		evaluators <- ckks.NewEvaluator(*params, rlwe.EvaluationKey{
 			Rlk:  rlk,
 			Rtks: nil,
 		})
@@ -63,17 +64,17 @@ func NewCryptoParams(params *ckks.Parameters, sk, aggregateSk *ckks.SecretKey, p
 
 	encoders := make(chan ckks.Encoder, ThreadsCount)
 	for i := 0; i < ThreadsCount; i++ {
-		encoders <- ckks.NewEncoder(params)
+		encoders <- ckks.NewEncoder(*params)
 	}
 
 	encryptors := make(chan ckks.Encryptor, ThreadsCount)
 	for i := 0; i < ThreadsCount; i++ {
-		encryptors <- ckks.NewEncryptorFromPk(params, pk)
+		encryptors <- ckks.NewEncryptorFromPk(*params, pk)
 	}
 
 	decryptors := make(chan ckks.Decryptor, ThreadsCount)
 	for i := 0; i < ThreadsCount; i++ {
-		decryptors <- ckks.NewDecryptor(params, aggregateSk)
+		decryptors <- ckks.NewDecryptor(*params, aggregateSk)
 	}
 
 	return &CryptoParams{
@@ -92,11 +93,11 @@ func NewCryptoParams(params *ckks.Parameters, sk, aggregateSk *ckks.SecretKey, p
 
 // NewCryptoParamsForNetwork initializes a set of nbrNodes CryptoParams each containing: keys, encoder, encryptor, decryptor, etc.
 func NewCryptoParamsForNetwork(params *ckks.Parameters, nbrNodes int) []*CryptoParams {
-	kgen := ckks.NewKeyGenerator(params)
+	kgen := ckks.NewKeyGenerator(*params)
 
-	aggregateSk := ckks.NewSecretKey(params)
-	skList := make([]*ckks.SecretKey, nbrNodes)
-	rq, _ := ring.NewRing(params.N(), append(params.Qi(), params.Pi()...))
+	aggregateSk := ckks.NewSecretKey(*params)
+	skList := make([]*rlwe.SecretKey, nbrNodes)
+	rq, _ := ring.NewRing(params.N(), append(params.Q(), params.P()...))
 
 	for i := 0; i < nbrNodes; i++ {
 		skList[i] = kgen.GenSecretKey()
@@ -133,8 +134,15 @@ func NewCryptoParamsFromPath(path string) ([]*CryptoParams, error) {
 	return cryptoParamsList, nil
 }
 
+// SetRotKeys sets/adds new rotation keys
+func (cp *CryptoParams) SetRotKeys(nbrRot []int) {
+	kgen := ckks.NewKeyGenerator(*cp.Params)
+	rotKeys := kgen.GenRotationKeysForRotations(nbrRot, true, cp.AggregateSk)
+	cp.RotKs = rotKeys
+}
+
 // ReadOrGenerateCryptoParams reads (if files already exist) or creates the crypto information and stores it in files for future use
-func ReadOrGenerateCryptoParams(hosts int, defaultN *ckks.Parameters, rootPath string, generateRotKeys bool) []*CryptoParams {
+func ReadOrGenerateCryptoParams(hosts int, defaultN *ckks.Parameters, rootPath string) []*CryptoParams {
 	var cryptoParamsAreNew bool
 	cryptoParamsList, err := NewCryptoParamsFromPath(rootPath)
 	if errors.Is(err, os.ErrNotExist) {
@@ -149,26 +157,16 @@ func ReadOrGenerateCryptoParams(hosts int, defaultN *ckks.Parameters, rootPath s
 		cryptoParamsAreNew = true
 	}
 
-	if generateRotKeys || cryptoParamsList[0].RotKs == nil {
-		log.Warn("generating new rotation keys")
-		rP.Slots = cryptoParamsList[0].GetSlots()
-		rotations, err := GetRotationsForMLType(mltype, rP, nnP)
-		if err != nil {
-			panic(fmt.Errorf("generate rotation keys: %v", err))
-		}
-		cryptoParamsList[0].SetRotKeys(rotations)
+	secretKeysList := make([]*rlwe.SecretKey, len(cryptoParamsList))
+	for i, cp := range cryptoParamsList {
+		secretKeysList[i] = cp.Sk
+		cryptoParamsList[i].RotKs = cryptoParamsList[0].RotKs
+	}
 
-		secretKeysList := make([]*ckks.SecretKey, len(cryptoParamsList))
-		for i, cp := range cryptoParamsList {
-			secretKeysList[i] = cp.Sk
-			cryptoParamsList[i].RotKs = cryptoParamsList[0].RotKs
-		}
-
-		if cryptoParamsAreNew {
-			log.Warnf("writing new crypto params to %v", rootPath)
-			if err := cryptoParamsList[0].WriteParamsToFile(rootPath, secretKeysList); err != nil {
-				panic(err)
-			}
+	if cryptoParamsAreNew {
+		log.Warnf("writing new crypto params to %v", rootPath)
+		if err := cryptoParamsList[0].WriteParamsToFile(rootPath, secretKeysList); err != nil {
+			panic(err)
 		}
 	}
 
@@ -215,7 +213,7 @@ func (cp *CryptoParamsForNetwork) UnmarshalBinary(data []byte) error {
 }
 
 // WriteParamsToFile writes the crypto params to a toml file including the keys' filenames
-func (cp *CryptoParams) WriteParamsToFile(path string, secretKeysList []*ckks.SecretKey) error {
+func (cp *CryptoParams) WriteParamsToFile(path string, secretKeysList []*rlwe.SecretKey) error {
 	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
 		return fmt.Errorf("creating parents dirs of %v: %w", path, err)
 	}

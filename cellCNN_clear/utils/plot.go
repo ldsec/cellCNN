@@ -14,10 +14,7 @@ func Histogram(v []float64, filename string) {
 	fmt.Printf("\n n = %d", n)
 	vals := plotter.Values(v)
 
-	p, err := plot.New()
-	if err != nil {
-		panic(err)
-	}
+	p := plot.New()
 	p.Title.Text = "histogram"
 
 	h, err := plotter.NewHist(vals, n)

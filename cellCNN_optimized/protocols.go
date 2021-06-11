@@ -1,10 +1,11 @@
 package cellCNN
 
-import(
+import (
+	"fmt"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/rlwe"
+	"go.dedis.ch/onet/v3/log"
 	"math"
-	"fmt"
 )
 
 // CellCNNProtocol is a structure storing all the necessary elements and ciphertext
@@ -349,8 +350,9 @@ func (c *CellCNNProtocol) Forward(XBatch *Matrix) (*ckks.Ciphertext){
 }
 
 // Refresh refreshes and repack ctBoot using DummyBootWithPrepooling
-func (c *CellCNNProtocol) Refresh(sk *rlwe.SecretKey, ctBoot *ckks.Ciphertext, nbParties int){
+func (c *CellCNNProtocol) Refresh(sk *rlwe.SecretKey, ctBoot *ckks.Ciphertext, nbParties int) {
 	ctBoot = DummyBootWithPrepooling(ctBoot, c.params, sk, nbParties)
+	log.LLvl1(ctBoot.Level())
 }
 
 // Backward applies a backward pass on the given batch and stores the result in ctDC and ctDW
@@ -637,7 +639,6 @@ func DummyBootWithPrepooling(ciphertext *ckks.Ciphertext, params ckks.Parameters
 	pt := ckks.NewPlaintext(params, params.MaxLevel(), params.Scale())
 	encoder.EncodeNTT(pt, newv, params.LogSlots())
 	newCt := encryptor.EncryptNew(pt)
-
 	return newCt
 }
 

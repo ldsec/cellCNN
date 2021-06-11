@@ -1,10 +1,11 @@
 package cellCNN
 
-
-import(
+import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
-	"math"
 	"github.com/ldsec/lattigo/v2/utils"
+	"math"
 )
 
 // Matrix is a struct holding a row flatened complex matrix.
@@ -383,4 +384,24 @@ func (m *Matrix) Print() {
 		}
 		fmt.Printf("]\n")
 	}
+}
+
+// MarshalBinary serializes a matrix struct to an array of bytes
+func MarshalBinary(m *Matrix) ([]byte, error) {
+	var b bytes.Buffer
+	e := gob.NewEncoder(&b)
+	if err := e.Encode(m); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// UnmarshalBinary generates a matrix struct from an array of bytes
+func UnmarshalBinary(m *Matrix, bMatrix []byte) error {
+	b := bytes.NewBuffer(bMatrix)
+	d := gob.NewDecoder(b)
+	if err := d.Decode(m); err != nil {
+		return err
+	}
+	return nil
 }
