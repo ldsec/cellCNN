@@ -9,7 +9,6 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
-	"math/rand"
 	"time"
 )
 
@@ -79,6 +78,8 @@ type TrainingProtocol struct {
 	YTrain			[]*cellCNN.Matrix
 
 	TrainEncrypted  bool
+	Deterministic	bool
+	PrngInt         *cellCNN.PRNGInt
 
 	IterationNumber int
 	Epochs          int
@@ -120,8 +121,25 @@ func (p *TrainingProtocol) Start() error {
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " started a cellCNN Protocol")
 
 	// STEP 1: weight init
-	CMatrix := cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
-	WMatrix := cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
+	var CMatrix, WMatrix *cellCNN.Matrix
+	if p.Deterministic{
+
+		CMatrix = new(cellCNN.Matrix)
+		CMatrix.Rows = cellCNN.Features
+		CMatrix.Cols = cellCNN.Filters
+		CMatrix.M = cellCNN.C[:CMatrix.Rows*CMatrix.Cols]
+		CMatrix.Real = true
+
+		WMatrix = new(cellCNN.Matrix)
+		WMatrix.Rows = cellCNN.Filters
+		WMatrix.Cols = cellCNN.Classes
+		WMatrix.M = cellCNN.W[:WMatrix.Rows*WMatrix.Cols]
+		WMatrix.Real = true
+	}else{
+		CMatrix = cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
+		WMatrix = cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
+	}
+	
 
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights")
 
@@ -360,15 +378,6 @@ func (p *TrainingProtocol) ascendingUpdateGeneralModelPhase() error {
 	return nil
 }
 
-func (p *TrainingProtocol) LoadTrainingData() ([]*cellCNN.Matrix, []*cellCNN.Matrix){
-
-	log.Lvl2("Loading Training Data ...")
-	XTrain, YTrain := cellCNN.LoadTrainDataFrom(p.Path, p.Samples, p.Cells, p.Features)
-	log.Lvl2("Done")
-
-	return XTrain, YTrain
-}
-
 func (p *TrainingProtocol) localComputation() {
 
 	XPrePool := new(cellCNN.Matrix)
@@ -378,7 +387,7 @@ func (p *TrainingProtocol) localComputation() {
 	// Pre-pools the cells
 	for k := 0; k < cellCNN.BatchSize; k++ {
 
-		randi := rand.Intn(p.PartyDataSize)
+		randi := p.PrngInt.RandInt()
 
 		X := p.XTrain[randi]
 		Y := p.YTrain[randi]
@@ -513,7 +522,7 @@ func (p *TrainingProtocol) broadcast() error {
 		}
 	}
 
-	if p.Tree().Size() == 1 {
+	if p.IsRoot() {
 		p.DCPool.Add(p.DCPool, p.CNNProtocol.DC)
 		p.DWPool.Add(p.DWPool, p.CNNProtocol.DW)
 	}

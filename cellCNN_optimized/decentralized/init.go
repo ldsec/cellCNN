@@ -9,7 +9,8 @@ type InitCellCNNVars struct {
 	PartyDataSize   int
 
 	TrainEncrypted  bool
-
+	Deterministic   bool
+	
 	Epochs          int
 
 	Samples 		int
@@ -38,6 +39,9 @@ func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, vars Ini
 	p.PartyDataSize = vars.PartyDataSize
 
 	p.TrainEncrypted = vars.TrainEncrypted
+	p.Deterministic = vars.Deterministic
+
+	p.PrngInt = cellCNN.NewPRNTInt(vars.Samples, vars.Deterministic)
 
 	p.Epochs = vars.Epochs
 
@@ -49,3 +53,4 @@ func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, vars Ini
 
 	p.Debug = vars.Debug
 }
+

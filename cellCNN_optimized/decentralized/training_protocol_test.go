@@ -7,9 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"math/rand"
 	"testing"
-	"time"
 
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 )
@@ -23,12 +21,19 @@ func TestRegEncryptedTraining(t *testing.T) {
 	log.SetDebugVisible(2)
 
 	t.Run("CellCNN", genTest(
-		"cellCNN", "../../normalized/",
-		3,
-		false, false,
-		cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Filters, cellCNN.Classes,
-		15, 2000,
-		true,
+		"cellCNN", 				//protoID
+		"../../normalized/", // datapath
+		3,				// hosts
+		false, 			// trainEncrypted
+		true,			// deterministic
+		cellCNN.Samples, //samples
+		cellCNN.Cells,   //cells
+		cellCNN.Features,// features
+		cellCNN.Filters, // filters
+		cellCNN.Classes, // labels
+		15,   //epoch
+		2000, // party dataSize
+		true, // debug
 		))
 }
 
@@ -49,15 +54,30 @@ func genTest(
 
 		servers, _, tree := local.GenTree(hosts, true)
 
-		if !deterministic{
-			rand.Seed(time.Now().Unix())
-		}
 		params := cellCNN.GenParams()
 
 		cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PATH_CRYPTO_FILES)
 		require.NotNil(t, cryptoParamsList)
 
-		for _, s := range servers {
+		// 1) Load Data
+		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, samples, cells, features)
+
+		samplesPerHost := (samples/hosts)
+
+		for i, s := range servers {
+			var XTrainS, YTrainS []*cellCNN.Matrix
+			
+			if i-1 == hosts{
+				XTrainS = XTrain[i*samplesPerHost:]
+				YTrainS = YTrain[i*samplesPerHost:]
+
+				samplesPerHost = (samples/hosts) + (samples%hosts)
+
+			}else{
+				XTrainS = XTrain[i*samplesPerHost:(i+1)*samplesPerHost]
+				YTrainS = YTrain[i*samplesPerHost:(i+1)*samplesPerHost]
+			}
+				
 			_, err := s.ProtocolRegister(protoName, func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 				pi, err := decentralized.NewTrainingProtocol(tni)
 				if err != nil {
@@ -69,8 +89,9 @@ func genTest(
 					Path:           path,
 					PartyDataSize:  partyDataSize/tni.Tree().Size(),
 					TrainEncrypted: trainEncrypted,
-					Epochs:         epoch * cellCNN.Samples / cellCNN.BatchSize,
-					Samples:        samples,
+					Deterministic:  deterministic,
+					Epochs:         epoch * samples / cellCNN.BatchSize,
+					Samples:        samplesPerHost,
 					Cells:          cells,
 					Features:       features,
 					Filters:        filters,
@@ -79,8 +100,8 @@ func genTest(
 				}
 				protocol.InitVars(cryptoParamsList[tni.Index()], vars)
 
-				// 1) Load Data
-				protocol.XTrain, protocol.YTrain = protocol.LoadTrainingData()
+				protocol.XTrain = XTrainS
+				protocol.YTrain = YTrainS
 
 				return protocol, err
 			})

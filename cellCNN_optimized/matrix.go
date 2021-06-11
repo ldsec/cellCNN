@@ -357,7 +357,7 @@ func (m *Matrix) Print() {
 		for i := 0; i < m.Rows; i++ {
 			fmt.Printf("[ ")
 			for j := 0; j < m.Cols; j++ {
-				fmt.Printf("%11.8f, ", real(m.M[i*m.Cols+j]))
+				fmt.Printf("%18.15f, ", real(m.M[i*m.Cols+j]))
 			}
 			fmt.Printf("],\n")
 		}
