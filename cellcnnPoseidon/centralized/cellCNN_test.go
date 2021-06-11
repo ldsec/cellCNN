@@ -2,77 +2,34 @@ package centralized
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 
 	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"gonum.org/v1/gonum/mat"
 )
 
-func GetRandomBatch(
-	dataset *common.CnnDataset, batchSize int, params *ckks.Parameters, encoder ckks.Encoder,
-	sts *utils.CellCnnSettings,
-) ([]*ckks.Plaintext, []float64) {
-	// X := dataset.X
-	// y := dataset.Y
-
-	// // make a new batch
-	// newBatch := make([]*mat.Dense, batchSize)
-	// newBatchLabels := make([]float64, batchSize)
-	// for j := 0; j < len(newBatch); j++ {
-	// 	randi := rand.Intn(len(X))
-	// 	newBatch[j] = X[randi]
-	// 	newBatchLabels[j] = y[randi]
-	// }
-	newBatch := make([]*mat.Dense, batchSize)
-	newBatchLabels := make([]float64, batchSize)
-
-	for i := 0; i < batchSize; i++ {
-		newBatch[i] = utils.GenRandomMatrix(sts.Ncells, sts.Nmakers)
-		newBatchLabels[i] = float64(rand.Intn(sts.Nclasses))
+func CustomizedParams() ckks.Parameters {
+	pl := ckks.ParametersLiteral{
+		LogN:     15,
+		LogSlots: 14,
+		LogQ:     []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
+		LogP:     []int{61, 61, 61},                             //183
+		Scale:    1 << 52,
+		Sigma:    rlwe.DefaultSigma,
 	}
-
-	plaintextSlice := utils.Batch2PlainSlice(newBatch, params, encoder)
-	return plaintextSlice, newBatchLabels
-}
-
-func CustomizedParams() *ckks.Parameters {
-	LogN := 15
-	LogSlots := 14
-	// logN=15: max 881 logQP
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
-		LogPi: []int{61, 61, 61},                             //90
-	}
-	// sum of first 3 logQi == Scale +128
-	Scale := float64(1 << 52)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+	params, err := ckks.NewParametersFromLiteral(pl)
 	if err != nil {
 		panic(err)
 	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
 	return params
 }
 
 func TestOne(t *testing.T) {
 
-	LogN := 14
-	LogSlots := 13
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40, 40},
-		LogPi: []int{30, 30},
-	}
-	Scale := float64(1 << 40)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
+	params := CustomizedParams()
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -130,7 +87,7 @@ func TestOne(t *testing.T) {
 	}
 
 	input := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), values, params.LogSlots())
-	output, tt := model.ForwardOne(input, nil, nil, nil, nil)
+	output, tt := model.ForwardOne(input, nil, nil, nil)
 
 	fmt.Printf("level of output in forward one: %v\n", output.Level())
 
@@ -150,190 +107,178 @@ func TestOne(t *testing.T) {
 	utils.PrintDebug(params, output, res, decryptor, encoder)
 }
 
-func TestBatch(t *testing.T) {
+// func TestBatch(t *testing.T) {
 
-	LogN := 14
-	LogSlots := 13
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
-		LogPi: []int{45, 45},
-	}
-	Scale := float64(1 << 40)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
-	fmt.Println()
-	fmt.Println("=========================================")
-	fmt.Println("         INSTANTIATING SCHEME            ")
-	fmt.Println("=========================================")
-	fmt.Println()
+// 	LogN := 14
+// 	LogSlots := 13
+// 	LogModuli := ckks.LogModuli{
+// 		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
+// 		LogPi: []int{45, 45},
+// 	}
+// 	Scale := float64(1 << 40)
+// 	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	params.SetScale(Scale)
+// 	params.SetLogSlots(LogSlots)
+// 	fmt.Println()
+// 	fmt.Println("=========================================")
+// 	fmt.Println("         INSTANTIATING SCHEME            ")
+// 	fmt.Println("=========================================")
+// 	fmt.Println()
 
-	kgen := ckks.NewKeyGenerator(params)
-	sk := kgen.GenSecretKey()
-	rlk := kgen.GenRelinearizationKey(sk)
-	encryptor := ckks.NewEncryptorFromSk(params, sk)
-	// decryptor := ckks.NewDecryptor(params, sk)
-	encoder := ckks.NewEncoder(params)
+// 	kgen := ckks.NewKeyGenerator(params)
+// 	sk := kgen.GenSecretKey()
+// 	rlk := kgen.GenRelinearizationKey(sk)
+// 	encryptor := ckks.NewEncryptorFromSk(params, sk)
+// 	// decryptor := ckks.NewDecryptor(params, sk)
+// 	encoder := ckks.NewEncoder(params)
 
-	ncells := 200
-	nmakers := 37
-	nfilters := 15
-	nclasses := 2
-	var sigDegree uint = 3
-	sigInterval := 7
-	maxM1N2Ratio := 8.0
+// 	ncells := 200
+// 	nmakers := 37
+// 	nfilters := 15
+// 	nclasses := 2
+// 	var sigDegree uint = 3
+// 	sigInterval := 7
+// 	maxM1N2Ratio := 8.0
 
-	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+// 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
-	fmt.Printf(
-		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
-		ncells, nmakers, nfilters, nclasses,
-	)
-	fmt.Printf(
-		"settings for sigmoid least square approximation: degree: %v | interval: %v\n",
-		sigDegree, sigInterval,
-	)
+// 	fmt.Printf(
+// 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
+// 		ncells, nmakers, nfilters, nclasses,
+// 	)
+// 	fmt.Printf(
+// 		"settings for sigmoid least square approximation: degree: %v | interval: %v\n",
+// 		sigDegree, sigInterval,
+// 	)
 
-	pk := kgen.GenPublicKey(sk)
-	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
+// 	pk := kgen.GenPublicKey(sk)
+// 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	momentum := 0.3
-	lr := 0.1
-	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
-	model.InitWeights(nil, nil, nil, nil)
-	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
+// 	momentum := 0.3
+// 	lr := 0.1
+// 	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
+// 	model.InitWeights(nil, nil, nil, nil)
+// 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
-	fmt.Println()
-	fmt.Println("=========================================")
-	fmt.Println("        TEST FORWARD OF THE MODEL        ")
-	fmt.Println("=========================================")
-	fmt.Println()
+// 	fmt.Println()
+// 	fmt.Println("=========================================")
+// 	fmt.Println("        TEST FORWARD OF THE MODEL        ")
+// 	fmt.Println("=========================================")
+// 	fmt.Println()
 
-	// load the real input dataset
-	path := "../../semester_project_claire/data/cellCNN/normalized/"
-	trainData := common.LoadTrainDataFrom(path)
+// 	// load the real input dataset
+// 	path := "../../semester_project_claire/data/cellCNN/normalized/"
+// 	trainData := common.LoadTrainDataFrom(path)
 
-	niter := 10
-	batchSize := 50
+// 	niter := 10
+// 	batchSize := 50
 
-	tt := model.MockTrain(niter, trainData, batchSize)
+// 	tt := model.MockTrain(niter, trainData, batchSize)
 
-	fmt.Printf(
-		"AVG Time Consumed on each input (ncells * nmakers) During %v iterations with batchSize %v: Conv1D: %v | Dense: %v | Sum: %v\n",
-		niter, batchSize, tt[0], tt[1], tt[2],
-	)
+// 	fmt.Printf(
+// 		"AVG Time Consumed on each input (ncells * nmakers) During %v iterations with batchSize %v: Conv1D: %v | Dense: %v | Sum: %v\n",
+// 		niter, batchSize, tt[0], tt[1], tt[2],
+// 	)
 
-}
+// }
 
-func TestWithPlainNetForward(t *testing.T) {
-	LogN := 14
-	LogSlots := 13
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
-		LogPi: []int{45, 45},
-	}
-	// sum of first 3 logQi == Scale +128
-	Scale := float64(1 << 40)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
-	fmt.Println()
-	fmt.Println("=========================================")
-	fmt.Println("         INSTANTIATING SCHEME            ")
-	fmt.Println("=========================================")
-	fmt.Println()
+// func TestWithPlainNetForward(t *testing.T) {
+// 	LogN := 14
+// 	LogSlots := 13
+// 	LogModuli := ckks.LogModuli{
+// 		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
+// 		LogPi: []int{45, 45},
+// 	}
+// 	// sum of first 3 logQi == Scale +128
+// 	Scale := float64(1 << 40)
+// 	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	params.SetScale(Scale)
+// 	params.SetLogSlots(LogSlots)
+// 	fmt.Println()
+// 	fmt.Println("=========================================")
+// 	fmt.Println("         INSTANTIATING SCHEME            ")
+// 	fmt.Println("=========================================")
+// 	fmt.Println()
 
-	kgen := ckks.NewKeyGenerator(params)
-	sk := kgen.GenSecretKey()
-	rlk := kgen.GenRelinearizationKey(sk)
-	encryptor := ckks.NewEncryptorFromSk(params, sk)
-	decryptor := ckks.NewDecryptor(params, sk)
-	encoder := ckks.NewEncoder(params)
+// 	kgen := ckks.NewKeyGenerator(params)
+// 	sk := kgen.GenSecretKey()
+// 	rlk := kgen.GenRelinearizationKey(sk)
+// 	encryptor := ckks.NewEncryptorFromSk(params, sk)
+// 	decryptor := ckks.NewDecryptor(params, sk)
+// 	encoder := ckks.NewEncoder(params)
 
-	ncells := 200
-	nmakers := 37
-	nfilters := 7
-	nclasses := 2
-	var sigDegree uint = 3
-	sigInterval := 7
-	maxM1N2Ratio := 8.0
+// 	ncells := 200
+// 	nmakers := 37
+// 	nfilters := 7
+// 	nclasses := 2
+// 	var sigDegree uint = 3
+// 	sigInterval := 7
+// 	maxM1N2Ratio := 8.0
 
-	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+// 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
-	fmt.Printf(
-		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
-		ncells, nmakers, nfilters, nclasses,
-	)
-	fmt.Printf(
-		"settings for sigmoid least square approximation: degree: %v | interval: %v\n",
-		sigDegree, sigInterval,
-	)
+// 	fmt.Printf(
+// 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
+// 		ncells, nmakers, nfilters, nclasses,
+// 	)
+// 	fmt.Printf(
+// 		"settings for sigmoid least square approximation: degree: %v | interval: %v\n",
+// 		sigDegree, sigInterval,
+// 	)
 
-	pk := kgen.GenPublicKey(sk)
-	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
+// 	pk := kgen.GenPublicKey(sk)
+// 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
 
-	momentum := 0.3
-	lr := 0.1
-	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
-	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
-	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
+// 	momentum := 0.3
+// 	lr := 0.1
+// 	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
+// 	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
+// 	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
-	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
-	// cw, dw := eNet.InitWeights(nil, nil, nil, nil)
-	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+// 	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+// 	// cw, dw := eNet.InitWeights(nil, nil, nil, nil)
+// 	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
 
-	fmt.Println()
-	fmt.Println("=========================================")
-	fmt.Println("        TEST FORWARD OF THE MODEL        ")
-	fmt.Println("=========================================")
-	fmt.Println()
+// 	fmt.Println()
+// 	fmt.Println("=========================================")
+// 	fmt.Println("        TEST FORWARD OF THE MODEL        ")
+// 	fmt.Println("=========================================")
+// 	fmt.Println()
 
-	// load the real input dataset
-	path := "../../semester_project_claire/data/cellCNN/normalized/"
-	trainData := common.LoadTrainDataFrom(path)
+// 	// load the real input dataset
+// 	path := "../../semester_project_claire/data/cellCNN/normalized/"
+// 	trainData := common.LoadTrainDataFrom(path)
 
-	niter := 10
-	batchSize := 5
+// 	niter := 10
+// 	batchSize := 5
 
-	pconv := &cl.Conv1D{Nfilters: nfilters}
-	ppool := &cl.Pool{}
-	pdense := &cl.Dense_n{Nclasses: nclasses, ApproxInterval: float64(sigInterval)}
+// 	pconv := &cl.Conv1D{Nfilters: nfilters}
+// 	ppool := &cl.Pool{}
+// 	pdense := &cl.Dense_n{Nclasses: nclasses, ApproxInterval: float64(sigInterval)}
 
-	pNet := &PlainNet{
-		ncells:   ncells,
-		nmakers:  nmakers,
-		nfilters: nfilters,
-		nclasses: nclasses,
-		conv:     pconv,
-		pool:     ppool,
-		dense:    pdense,
-	}
+// 	pNet := &PlainNet{
+// 		ncells:   ncells,
+// 		nmakers:  nmakers,
+// 		nfilters: nfilters,
+// 		nclasses: nclasses,
+// 		conv:     pconv,
+// 		pool:     ppool,
+// 		dense:    pdense,
+// 	}
 
-	CompareTwoNetForward(eNet, pNet, cw, dw, trainData, niter, batchSize, decryptor, encoder, params)
+// 	CompareTwoNetForward(eNet, pNet, cw, dw, trainData, niter, batchSize, decryptor, encoder, params)
 
-}
+// }
 
 func TestInnerSum(t *testing.T) {
 
-	LogN := 14
-	LogSlots := 13
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
-		LogPi: []int{45, 45},
-	}
-	Scale := float64(1 << 40)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
+	params := CustomizedParams()
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -380,13 +325,13 @@ func TestInnerSum(t *testing.T) {
 
 	fmt.Println("Conduct innersum on filter1")
 	// encFilter1 is ciphertext with slots: [1,0,0,0...]
-	ind := kgen.GenRotationIndexesForInnerSum(2, 3)
+	ind := params.RotationsForInnerSumLog(2, 3)
 	rks := kgen.GenRotationKeysForRotations(ind, false, sk)
-	evaluator := ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
+	evaluator := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rks})
 
-	cout := encFilter1.CopyNew().Ciphertext()
+	cout := encFilter1.CopyNew()
 
-	evaluator.InnerSum(encFilter1, 2, 3, cout)
+	evaluator.InnerSumLog(encFilter1, 2, 3, cout)
 	// evaluator = ckks.NewEvaluator(params, ckks.EvaluationKey{Rlk: rlk, Rtks: rks})
 	// evaluator.ShallowCopy().InnerSum(encFilter1, -2, 1, encFilter1)
 
@@ -403,22 +348,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	// 	wg.Add(1)
 	// 	go func() {
 	// 		defer wg.Done()
-	// LogN := 14
-	// LogSlots := 13
-	// LogModuli := ckks.LogModuli{
-	// 	LogQi: []int{55, 40, 40, 40, 40, 40, 40, 40},
-	// 	LogPi: []int{45, 45},
-	// }
-	// // sum of first 3 logQi == Scale +128
-	// Scale := float64(1 << 40)
-	// params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// params.SetScale(Scale)
-	// params.SetLogSlots(LogSlots)
 	params := CustomizedParams()
-	// params := ckks.DefaultParams[ckks.PN14QP438]
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -494,10 +424,6 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	cw, dw := model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, append(filter1[:nmakers], filter2[:nmakers]...), weights[:nfilters*nclasses])
 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
-	// model := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
-	// cw, dw := model.InitWeights()
-	// model.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
-
 	model.sk = sk
 
 	fmt.Println()
@@ -537,7 +463,7 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	}
 
 	// forward one get pred
-	encOut, _ := model.ForwardOne(encodeInput, nil, nil, nil, nil)
+	encOut, _ := model.ForwardOne(encodeInput, nil, nil, nil)
 	plainOut := pNet.ForwardBatch([]*mat.Dense{plainInDense}, cw, dw)
 	fmt.Println("######## Check the forward output #########")
 	utils.DebugWithDense(params, encOut, plainOut, decryptor, encoder, 20, []int{0}, true)
@@ -591,9 +517,8 @@ func TestWithPlainNetBwOne(t *testing.T) {
 	// wg.Wait()
 }
 
-func TestLargeScale(t *testing.T) {
+func TestWithPlainNetBwBatch(t *testing.T) {
 	params := CustomizedParams()
-	// params := ckks.DefaultParams[ckks.PN14QP438]
 	fmt.Println()
 	fmt.Println("=========================================")
 	fmt.Println("         INSTANTIATING SCHEME            ")
@@ -607,13 +532,16 @@ func TestLargeScale(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 200
-	nmakers := 37
-	nfilters := 7
+	ncells := 5
+	nmakers := 2
+	nfilters := 2
 	nclasses := 2
 	var sigDegree uint = 3
-	sigInterval := 7
+	sigInterval := 3
 	maxM1N2Ratio := 8.0
+
+	momentum := 0.1
+	lr := 0.1
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
@@ -626,33 +554,49 @@ func TestLargeScale(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	pk := kgen.GenPublicKey(sk)
-	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
+	slots := params.Slots()
 
-	momentum := 0.3
-	lr := 0.1
+	filter1 := make([]complex128, slots)
+	for i, _ := range filter1 {
+		if i >= ncells*nmakers {
+			break
+		}
+		filter1[i] = complex(float64(i%nmakers)/4, 0)
+	}
 
-	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
-	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
-	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
+	filter2 := make([]complex128, slots)
+	for i, _ := range filter2 {
+		if i >= ncells*nmakers {
+			break
+		}
+		filter2[i] = complex((float64(i%nmakers)+1.0)/4, 0)
+	}
 
-	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
-	// cw, dw := eNet.InitWeights(nil, nil, nil, nil)
-	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+	weights := make([]complex128, slots)
+	for i, _ := range weights {
+		if i >= nfilters*nclasses {
+			break
+		}
+		weights[i] = complex(float64(i%3)/4, 0)
+	}
 
-	fmt.Println()
-	fmt.Println("=========================================")
-	fmt.Println("        TEST FORWARD OF THE MODEL        ")
-	fmt.Println("=========================================")
-	fmt.Println()
+	ef1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
+	ef2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
+	ew := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), weights, params.LogSlots())
+	ecf1 := encryptor.EncryptNew(ef1)
+	ecf2 := encryptor.EncryptNew(ef2)
+	ecw := encryptor.EncryptNew(ew)
 
-	// load the real input dataset
-	path := "../../semester_project_claire/data/cellCNN/normalized/"
-	trainData := common.LoadTrainDataFrom(path)
+	// pk := kgen.GenPublicKey(sk)
+	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, nil, rlk, encoder, encryptor)
 
-	niter := 10
-	batchSize := 5
+	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
+	cw, dw := model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, append(filter1[:nmakers], filter2[:nmakers]...), weights[:nfilters*nclasses])
+	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
+	model.sk = sk
+
+	// init plaintext net
 	pconv := &cl.Conv1D{Nfilters: nfilters}
 	ppool := &cl.Pool{}
 	pdense := &cl.Dense_n{Nclasses: nclasses, ApproxInterval: float64(sigInterval)}
@@ -667,8 +611,215 @@ func TestLargeScale(t *testing.T) {
 		dense:    pdense,
 	}
 
-	CompareTwoNetBackward(eNet, pNet, cw, dw, trainData, niter, batchSize, decryptor, encoder, params)
+	fmt.Println()
+	fmt.Println("=========================================")
+	fmt.Println("        TEST BACKWARD OF THE MODEL       ")
+	fmt.Println("=========================================")
+	fmt.Println()
+
+	batchSize := 2
+	iterrations := 10
+	isMomentum := false
+
+	var plainOut, dConv, dDense *mat.Dense
+
+	for i := 0; i < iterrations; i++ {
+
+		X, matrix, y := utils.GetRandomBatch(nil, batchSize, params, encoder, cnnSettings)
+		yMat := utils.ScalarToOneHot(y, nclasses)
+
+		// forward & backward
+		encOut := model.BatchProcessing(X, y, isMomentum)
+		if i == 0 {
+			plainOut = pNet.ForwardBatch(matrix, cw, dw)
+		} else {
+			plainOut = pNet.ForwardBatch(matrix, nil, nil)
+		}
+
+		errDense := mat.NewDense(batchSize, nclasses, nil)
+		errDense.Sub(plainOut, yMat)
+		pNet.Backward(errDense, lr, momentum)
+
+		fmt.Printf("ROUND %v ######## Check the forward output #########\n", i)
+		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 4, []int{0}, true)
+
+		dConv = pNet.conv.GetWeights()
+		dDense = pNet.dense.GetWeights()
+
+		// get scaled gradients
+		grad := &Gradients{model.conv1d.GetGradient(), model.dense.GetGradient()}
+
+		if model.FisrtMomentum() {
+			// if first momentum, btp scaled_g to level 9 and kept as vt
+			grad.Bootstrapping(encoder, params, sk)
+			model.UpdateMomentum(grad)
+		} else {
+			// else, compute scaled_m at level 8
+			grad := model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
+			grad.Bootstrapping(encoder, params, sk)
+			model.UpdateMomentum(grad)
+		}
+
+		model.UpdateWithGradients(grad)
+
+		// if i == iterrations-1 {
+		fmt.Println("######## Check the backward gradient for filter0 #########")
+		utils.DebugWithDense(params, model.conv1d.GetWeights()[0], dConv, decryptor, encoder, 10, []int{0}, false)
+		fmt.Println("######## Check the backward gradient for filter1 #########")
+		utils.DebugWithDense(params, model.conv1d.GetWeights()[1], dConv, decryptor, encoder, 10, []int{1}, false)
+		fmt.Println("######## Check the backward gradient for dense #########")
+		utils.DebugWithDense(params, model.dense.GetWeights(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
+		// }
+
+		// runtime.GC()
+
+	}
+
+	// nwfilters := pNet.conv.GetWeights()
+	// nwdense := pNet.dense.GetWeights()
+
+	// fmt.Println("######## Check the backward gradient for filter0 #########")
+	// utils.DebugWithDense(params, model.conv1d.GetWeights()[0], nwfilters, decryptor, encoder, 20, []int{0}, false)
+	// fmt.Println("######## Check the backward gradient for filter1 #########")
+	// utils.DebugWithDense(params, model.conv1d.GetWeights()[1], nwfilters, decryptor, encoder, 20, []int{1}, false)
+	// fmt.Println("######## Check the backward gradient for dense #########")
+	// utils.DebugWithDense(params, model.dense.GetWeights(), nwdense, decryptor, encoder, 20, []int{0, 1}, false)
+
+	// start at level 9 and scaled gradient end at level 3
+
 }
+
+func TestScaling(t *testing.T) {
+	params := CustomizedParams()
+	fmt.Println()
+	fmt.Println("=========================================")
+	fmt.Println("         INSTANTIATING SCHEME            ")
+	fmt.Println("=========================================")
+	fmt.Println()
+
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk)
+	encryptor := ckks.NewEncryptorFromSk(params, sk)
+	decryptor := ckks.NewDecryptor(params, sk)
+	encoder := ckks.NewEncoder(params)
+
+	eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: nil})
+
+	slice := make([]complex128, params.Slots())
+	slice[0] = complex(2, 0)
+
+	x1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), slice, params.LogSlots())
+	x2 := encryptor.EncryptNew(x1)
+
+	// x22 := x2.CopyNew()
+
+	utils.PrintDebug(params, x2, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	x3 := eval.MultByConstNew(x2, 0.5)
+
+	if err := eval.Rescale(x3, params.Scale(), x3); err != nil {
+		panic("fail to rescale, conv.gradient[i]")
+	}
+
+	fmt.Println("x")
+	utils.PrintDebug(params, x3, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	y := encryptor.EncryptNew(encoder.EncodeNTTAtLvlNew(params.MaxLevel(), slice, params.LogSlots()))
+
+	fmt.Println("y")
+	utils.PrintDebug(params, y, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	f := eval.AddNew(x3, y)
+
+	fmt.Println("sum")
+	utils.PrintDebug(params, f, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	// utils.PrintDebug(params, x3, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+
+	// x22.MulScale(2.0)
+
+	// utils.PrintDebug(params, x22, []complex128{0, 1, 2, 3, 4}, decryptor, encoder)
+}
+
+// func TestLargeScale(t *testing.T) {
+// 	params := CustomizedParams()
+// 	// params := ckks.DefaultParams[ckks.PN14QP438]
+// 	fmt.Println()
+// 	fmt.Println("=========================================")
+// 	fmt.Println("         INSTANTIATING SCHEME            ")
+// 	fmt.Println("=========================================")
+// 	fmt.Println()
+
+// 	kgen := ckks.NewKeyGenerator(params)
+// 	sk := kgen.GenSecretKey()
+// 	rlk := kgen.GenRelinearizationKey(sk)
+// 	encryptor := ckks.NewEncryptorFromSk(params, sk)
+// 	decryptor := ckks.NewDecryptor(params, sk)
+// 	encoder := ckks.NewEncoder(params)
+
+// 	ncells := 200
+// 	nmakers := 37
+// 	nfilters := 7
+// 	nclasses := 2
+// 	var sigDegree uint = 3
+// 	sigInterval := 7
+// 	maxM1N2Ratio := 8.0
+
+// 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
+
+// 	fmt.Printf(
+// 		"settings for cellCNN: ncells: %v | nmakers: %v | nfilters: %v | nclasses: %v\n",
+// 		ncells, nmakers, nfilters, nclasses,
+// 	)
+// 	fmt.Printf(
+// 		"settings for sigmoid least square approximation: degree: %v | interval: %v\n",
+// 		sigDegree, sigInterval,
+// 	)
+
+// 	pk := kgen.GenPublicKey(sk)
+// 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, pk, rlk, encoder, encryptor)
+
+// 	momentum := 0.3
+// 	lr := 0.1
+
+// 	eNet := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
+// 	cw, dw := eNet.InitWeights(nil, nil, nil, nil)
+// 	eNet.InitEvaluator(cryptoParams, maxM1N2Ratio)
+
+// 	// eNet := NewCellCNN(cnnSettings, params, rlk, encoder, encryptor)
+// 	// cw, dw := eNet.InitWeights(nil, nil, nil, nil)
+// 	// eNet.InitEvaluator(kgen, sk, encoder, params, maxM1N2Ratio)
+
+// 	fmt.Println()
+// 	fmt.Println("=========================================")
+// 	fmt.Println("        TEST FORWARD OF THE MODEL        ")
+// 	fmt.Println("=========================================")
+// 	fmt.Println()
+
+// 	// load the real input dataset
+// 	path := "../../semester_project_claire/data/cellCNN/normalized/"
+// 	trainData := common.LoadTrainDataFrom(path)
+
+// 	niter := 10
+// 	batchSize := 5
+
+// 	pconv := &cl.Conv1D{Nfilters: nfilters}
+// 	ppool := &cl.Pool{}
+// 	pdense := &cl.Dense_n{Nclasses: nclasses, ApproxInterval: float64(sigInterval)}
+
+// 	pNet := &PlainNet{
+// 		ncells:   ncells,
+// 		nmakers:  nmakers,
+// 		nfilters: nfilters,
+// 		nclasses: nclasses,
+// 		conv:     pconv,
+// 		pool:     ppool,
+// 		dense:    pdense,
+// 	}
+
+// 	CompareTwoNetBackward(eNet, pNet, cw, dw, trainData, niter, batchSize, decryptor, encoder, params)
+// }
 
 func TestTimeForwardBackward(t *testing.T) {
 	params := CustomizedParams()

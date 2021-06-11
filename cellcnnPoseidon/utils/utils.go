@@ -32,11 +32,11 @@ func PrintTime(tl []float64, i *int, label string) {
 	fmt.Printf(info)
 }
 
-func PrintCipherLevel(cipher *ckks.Ciphertext, params *ckks.Parameters) string {
+func PrintCipherLevel(cipher *ckks.Ciphertext, params ckks.Parameters) string {
 	return fmt.Sprintf("Level: %d (logQ = %d), Scale: 2^%f\n", cipher.Level(), params.LogQLvl(cipher.Level()), math.Log2(cipher.Scale()))
 }
 
-func PrintDebug(params *ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
+func PrintDebug(params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
 
 	valuesTest = encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
 
@@ -103,4 +103,12 @@ func CiphertextsToBytes(ct []*ckks.Ciphertext) [][]byte {
 		}
 	}
 	return data
+}
+
+func CopyCiphertextSlice(input []*ckks.Ciphertext) []*ckks.Ciphertext {
+	res := make([]*ckks.Ciphertext, len(input))
+	for i, each := range input {
+		res[i] = each.CopyNew()
+	}
+	return res
 }

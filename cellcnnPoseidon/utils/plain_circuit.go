@@ -208,7 +208,7 @@ func PlaintextLoss(pred []complex128, labels []float64) []complex128 {
 }
 
 func DebugWithPlain(
-	params *ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128,
+	params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, inds []int,
 ) {
 
@@ -252,7 +252,7 @@ func GetCol(arr *mat.Dense, ind int) []float64 {
 }
 
 func DebugWithDense(
-	params *ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant *mat.Dense,
+	params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant *mat.Dense,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, firstN int, inds []int, isRow bool,
 ) {
 	// r, c := valuesWant.Dims()

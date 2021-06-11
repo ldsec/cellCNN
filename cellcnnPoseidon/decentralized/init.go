@@ -4,24 +4,27 @@ import (
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/centralized"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
-func CustomizedParams() *utils.CryptoParams {
-	LogN := 15
-	LogSlots := 14
-	// logN=15: max 881 logQP
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
-		LogPi: []int{61, 61, 61},                             //90
+func Params() ckks.Parameters {
+	pl := ckks.ParametersLiteral{
+		LogN:     15,
+		LogSlots: 14,
+		LogQ:     []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
+		LogP:     []int{61, 61, 61},                             //183
+		Scale:    1 << 52,
+		Sigma:    rlwe.DefaultSigma,
 	}
-	// sum of first 3 logQi == Scale +128
-	Scale := float64(1 << 52)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
+	params, err := ckks.NewParametersFromLiteral(pl)
 	if err != nil {
 		panic(err)
 	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
+	return params
+}
+
+func CustomizedParams() *utils.CryptoParams {
+	params := Params()
 
 	kgen := ckks.NewKeyGenerator(params)
 	sk := kgen.GenSecretKey()
@@ -32,23 +35,7 @@ func CustomizedParams() *utils.CryptoParams {
 }
 
 func CustomizedNetworkKeysList(nbrNodes int) []*utils.CryptoParams {
-	LogN := 15
-	LogSlots := 14
-	// logN=15: max 881 logQP
-	LogModuli := ckks.LogModuli{
-		LogQi: []int{60, 60, 60, 52, 52, 52, 52, 52, 52, 52}, //60*3 + 45*6 = 180 + 270 = 450
-		LogPi: []int{61, 61, 61},                             //90
-	}
-	// sum of first 3 logQi == Scale +128
-	Scale := float64(1 << 52)
-	params, err := ckks.NewParametersFromLogModuli(LogN, &LogModuli)
-	if err != nil {
-		panic(err)
-	}
-	params.SetScale(Scale)
-	params.SetLogSlots(LogSlots)
-
-	return utils.NewCryptoParamsForNetwork(params, nbrNodes)
+	return utils.NewCryptoParamsForNetwork(Params(), nbrNodes)
 }
 
 // Init initializes variables for cellCNN
