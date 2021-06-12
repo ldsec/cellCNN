@@ -60,7 +60,9 @@ func genTest(
 		require.NotNil(t, cryptoParamsList)
 
 		// 1) Load Data
+		log.Lvl2("Loading data...")
 		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, samples, cells, features)
+		log.Lvl2("Done")
 
 		samplesPerHost := (samples/hosts)
 

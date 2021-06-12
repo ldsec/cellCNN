@@ -90,9 +90,6 @@ type TrainingProtocol struct {
 	Filters			int
 	Classes			int
 
-	DWPool 			*cellCNN.Matrix
-	DCPool			*cellCNN.Matrix
-
 	ctDWPool		*ckks.Ciphertext
 	ctDCPool 		*ckks.Ciphertext
 
@@ -255,7 +252,7 @@ func (p *TrainingProtocol) Dispatch() error {
 				// STEP 4. update weights
 				if !p.TrainEncrypted {
 
-					p.CNNProtocol.UpdatePlain(p.DCPool, p.DWPool)
+					p.CNNProtocol.UpdatePlain(p.CNNProtocol.DC, p.CNNProtocol.DW)
 
 					// serialize C and W
 					Cb, err := p.CNNProtocol.C.MarshalBinary()
@@ -290,9 +287,7 @@ func (p *TrainingProtocol) Dispatch() error {
 
 	// STEP 4. Report final weights
 	if p.IsRoot() {
-		time.Sleep(10*time.Second)
-		p.FeedbackChannel <- struct{}{}
-
+		
 		log.Lvl2("Loading Validation Data...")
 		XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
 		log.Lvl2("Done")
@@ -345,6 +340,9 @@ func (p *TrainingProtocol) Dispatch() error {
 		}
 
 		log.Lvl2("error :", 100.0*float64(r)/float64(2000), "%")
+
+		time.Sleep(10*time.Second)
+		p.FeedbackChannel <- struct{}{}
 	}
 
 	return nil
@@ -427,18 +425,9 @@ func (p *TrainingProtocol) localComputation() {
 
 func (p *TrainingProtocol) broadcast() error {
 
-	if !p.TrainEncrypted {
-		p.DWPool = cellCNN.NewMatrix(cellCNN.Filters, cellCNN.Classes)
-		p.DCPool = cellCNN.NewMatrix(cellCNN.Features, cellCNN.Filters)
-	} else {
+	if p.TrainEncrypted {
 		p.ctDWPool = p.CNNProtocol.CtDW().CopyNew()
 		p.ctDCPool = p.CNNProtocol.CtDC().CopyNew()
-	}
-
-	// If leaf, directly aggregates on DC and DW Pool (else it sends 0 values)
-	if p.IsLeaf(){
-		p.DCPool.Add(p.DCPool, p.CNNProtocol.DC)
-		p.DWPool.Add(p.DWPool, p.CNNProtocol.DW)
 	}
 
 	// If not leaf, waits on the children and 
@@ -460,8 +449,8 @@ func (p *TrainingProtocol) broadcast() error {
 					return err
 				}
 
-				p.DCPool.Add(p.DCPool, childDC)
-				p.DWPool.Add(p.DWPool, childDW)
+				p.CNNProtocol.DC.Add(p.CNNProtocol.DC, childDC)
+				p.CNNProtocol.DW.Add(p.CNNProtocol.DW, childDW)
 
 			} else {
 				childDW := p.CNNProtocol.CtDW().CopyNew()
@@ -486,11 +475,11 @@ func (p *TrainingProtocol) broadcast() error {
 	if !p.IsRoot() {
 		// serialize DCPool and DWPool
 		if !p.TrainEncrypted {
-			DCb, err := p.DCPool.MarshalBinary()
+			DCb, err := p.CNNProtocol.DC.MarshalBinary()
 			if err != nil {
 				return err
 			}
-			DWb, err := p.DWPool.MarshalBinary()
+			DWb, err := p.CNNProtocol.DW.MarshalBinary()
 			if err != nil {
 				return err
 			}
@@ -520,11 +509,6 @@ func (p *TrainingProtocol) broadcast() error {
 				return fmt.Errorf("send to parent: %v", err)
 			}
 		}
-	}
-
-	if p.IsRoot() {
-		p.DCPool.Add(p.DCPool, p.CNNProtocol.DC)
-		p.DWPool.Add(p.DWPool, p.CNNProtocol.DW)
 	}
 
 	return nil

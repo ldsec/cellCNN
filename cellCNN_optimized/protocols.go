@@ -302,17 +302,17 @@ func (c *CellCNNProtocol) BackWardPlain(XBatch, YBatch *Matrix, nParties int){
 
 func (c *CellCNNProtocol) UpdatePlain(DC, DW *Matrix){
 
-	c.DW.Add(c.DW, c.DWPrev)
 	c.DC.Add(c.DC, c.DCPrev)
-
+	c.DW.Add(c.DW, c.DWPrev)
+	
 	// Stores the current weights
 	// W_i = learning_rate * Wt + W_i-1 * momentum
-	c.DWPrev.MultConst(DW, complex(Momentum, 0))
-	c.DCPrev.MultConst(DC, complex(Momentum, 0))
-
+	c.DCPrev.MultConst(c.DC, complex(Momentum, 0))
+	c.DWPrev.MultConst(c.DW, complex(Momentum, 0))
+	
 	// Updates the matrices
-	c.W.Sub(c.W, DW)
 	c.C.Sub(c.C, DC)
+	c.W.Sub(c.W, DW)
 }
 
 func (c *CellCNNProtocol) PredictPlain(XBatch *Matrix) (*Matrix){

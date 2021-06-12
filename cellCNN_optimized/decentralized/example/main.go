@@ -135,9 +135,6 @@ func main() {
 		XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
 		YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
 
-		DWPool := cellCNN.NewMatrix(cellCNN.Filters, cellCNN.Classes)
-		DCPool := cellCNN.NewMatrix(cellCNN.Features, cellCNN.Filters)
-
 		var ctDWPool, ctDCPool *ckks.Ciphertext
 
 		for j := range P{
@@ -158,9 +155,6 @@ func main() {
 
 			P[j].ForwardPlain(XBatch)
 			P[j].BackWardPlain(XBatch, YBatch, hosts) // takes care of pre-applying 1/#Parties
-
-			DWPool.Add(DWPool, P[j].DW)
-			DCPool.Add(DCPool, P[j].DC)
 
 			// === Ciphertext === 
 			if trainEncrypted{
@@ -197,7 +191,14 @@ func main() {
 		}
 
 		for j := range P{
-			P[j].UpdatePlain(DCPool, DWPool)
+			if j != 0{
+				P[0].DC.Add(P[0].DC, P[j].DC)
+				P[0].DW.Add(P[0].DW, P[j].DW)
+			}
+		}
+
+		for j := range P{
+			P[j].UpdatePlain(P[0].DC, P[0].DW)
 
 			if trainEncrypted{
 				P[j].Update(ctDCPool, ctDWPool)
@@ -206,11 +207,11 @@ func main() {
 
 		if trainEncrypted{
 			fmt.Println("DCPool")
-			DCPool.Print()
+			P[0].DC.Print()
 			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, ctDCPool, params, masterSk)
 
 			fmt.Println("DWPool")
-			DWPool.Transpose().Print()
+			P[0].DW.Transpose().Print()
 			for i := 0; i < cellCNN.Classes; i++{
 				cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[0].Eval().RotateNew(ctDWPool, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
 			}
