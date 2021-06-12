@@ -28,10 +28,10 @@ const TrainingProtocolName = "TrainingProtocol"
 // NewIterationMessage is the message sent by the root node to start a new global iteration
 type NewIterationMessage struct {
 	IterationNumber int
-	C 	[]byte
-	W 	[]byte
-	CtC []byte
-	CtW []byte
+	C               []byte
+	W               []byte
+	CtC             []byte
+	CtW             []byte
 }
 
 // ChildUpdatedDataMessage is the message sent by the children to update its local cleartext information
@@ -72,26 +72,26 @@ type TrainingProtocol struct {
 	CryptoParams *cellCNN.CryptoParams
 
 	// protocol params
-	Path			string
-	PartyDataSize   int
-	XTrain 			[]*cellCNN.Matrix
-	YTrain			[]*cellCNN.Matrix
+	Path          string
+	PartyDataSize int
+	XTrain        []*cellCNN.Matrix
+	YTrain        []*cellCNN.Matrix
 
-	TrainEncrypted  bool
-	Deterministic	bool
-	PrngInt         *cellCNN.PRNGInt
+	TrainEncrypted bool
+	Deterministic  bool
+	PrngInt        *cellCNN.PRNGInt
 
 	IterationNumber int
 	Epochs          int
 
-	Samples 		int
-	Cells			int
-	Features		int
-	Filters			int
-	Classes			int
+	Samples  int
+	Cells    int
+	Features int
+	Filters  int
+	Classes  int
 
-	ctDWPool		*ckks.Ciphertext
-	ctDCPool 		*ckks.Ciphertext
+	ctDWPool *ckks.Ciphertext
+	ctDCPool *ckks.Ciphertext
 
 	// utils
 	Debug bool
@@ -100,9 +100,9 @@ type TrainingProtocol struct {
 // NewTrainingProtocol initializes the protocol instance.
 func NewTrainingProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	pap := &TrainingProtocol{
-		TreeNodeInstance:    n,
-		WaitChannel:         make(chan struct{}, 1),
-		FeedbackChannel:     make(chan struct{}, 1),
+		TreeNodeInstance: n,
+		WaitChannel:      make(chan struct{}, 1),
+		FeedbackChannel:  make(chan struct{}, 1),
 	}
 
 	err := pap.RegisterChannels(&pap.AnnouncementChannel, &pap.ChildDataChannel)
@@ -119,7 +119,7 @@ func (p *TrainingProtocol) Start() error {
 
 	// STEP 1: weight init
 	var CMatrix, WMatrix *cellCNN.Matrix
-	if p.Deterministic{
+	if p.Deterministic {
 
 		CMatrix = new(cellCNN.Matrix)
 		CMatrix.Rows = cellCNN.Features
@@ -132,11 +132,10 @@ func (p *TrainingProtocol) Start() error {
 		WMatrix.Cols = cellCNN.Classes
 		WMatrix.M = cellCNN.W[:WMatrix.Rows*WMatrix.Cols]
 		WMatrix.Real = true
-	}else{
+	} else {
 		CMatrix = cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
 		WMatrix = cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
 	}
-	
 
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights")
 
@@ -287,7 +286,7 @@ func (p *TrainingProtocol) Dispatch() error {
 
 	// STEP 4. Report final weights
 	if p.IsRoot() {
-		
+
 		log.Lvl2("Loading Validation Data...")
 		XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
 		log.Lvl2("Done")
@@ -295,7 +294,7 @@ func (p *TrainingProtocol) Dispatch() error {
 		p.CNNProtocol.W.Print()
 
 		r := 0
-		for i := 0; i < 2000/cellCNN.BatchSize; i++{
+		for i := 0; i < 2000/cellCNN.BatchSize; i++ {
 
 			XPrePool := new(cellCNN.Matrix)
 			XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
@@ -303,8 +302,8 @@ func (p *TrainingProtocol) Dispatch() error {
 
 			for j := 0; j < cellCNN.BatchSize; j++ {
 
-				X := XValid[cellCNN.BatchSize * i + j]
-				Y := YValid[cellCNN.BatchSize * i + j]
+				X := XValid[cellCNN.BatchSize*i+j]
+				Y := YValid[cellCNN.BatchSize*i+j]
 
 				XPrePool.SumColumns(X)
 				XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
@@ -323,17 +322,17 @@ func (p *TrainingProtocol) Dispatch() error {
 				fmt.Printf("Batch[%2d]", i)
 				fmt.Println(precisionStats.String())
 			}
-			
-			var y int
-			for i := 0; i < cellCNN.BatchSize; i++{
 
-				if real(v.M[i*2]) > real(v.M[i*2+1]){
+			var y int
+			for i := 0; i < cellCNN.BatchSize; i++ {
+
+				if real(v.M[i*2]) > real(v.M[i*2+1]) {
 					y = 1
-				}else{
+				} else {
 					y = 0
 				}
 
-				if y != int(real(YBatch.M[i*2])){
+				if y != int(real(YBatch.M[i*2])) {
 					r++
 				}
 			}
@@ -341,7 +340,7 @@ func (p *TrainingProtocol) Dispatch() error {
 
 		log.Lvl2("error :", 100.0*float64(r)/float64(2000), "%")
 
-		time.Sleep(10*time.Second)
+		time.Sleep(10 * time.Second)
 		p.FeedbackChannel <- struct{}{}
 	}
 
@@ -430,14 +429,14 @@ func (p *TrainingProtocol) broadcast() error {
 		p.ctDCPool = p.CNNProtocol.CtDC().CopyNew()
 	}
 
-	// If not leaf, waits on the children and 
+	// If not leaf, waits on the children and
 	// aggregates from the children in the DC and DW pools
 	if !p.IsLeaf() {
 		// this reads all the data that were sent by all the children
 		for _, v := range <-p.ChildDataChannel {
 
 			// deserialize child contribution
-			if !p.TrainEncrypted{
+			if !p.TrainEncrypted {
 				childDC := new(cellCNN.Matrix)
 				err := childDC.UnmarshalBinary(v.DC)
 				if err != nil {
@@ -513,4 +512,3 @@ func (p *TrainingProtocol) broadcast() error {
 
 	return nil
 }
-

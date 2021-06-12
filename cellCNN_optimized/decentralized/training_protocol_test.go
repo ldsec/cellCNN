@@ -21,20 +21,20 @@ func TestRegEncryptedTraining(t *testing.T) {
 	log.SetDebugVisible(2)
 
 	t.Run("CellCNN", genTest(
-		"cellCNN", 				//protoID
+		"cellCNN",           //protoID
 		"../../normalized/", // datapath
-		3,				// hosts
-		false, 			// trainEncrypted
-		true,			// deterministic
-		cellCNN.Samples, //samples
-		cellCNN.Cells,   //cells
-		cellCNN.Features,// features
-		cellCNN.Filters, // filters
-		cellCNN.Classes, // labels
-		15,   //epoch
-		2000, // party dataSize
-		true, // debug
-		))
+		3,                   // hosts
+		false,               // trainEncrypted
+		true,                // deterministic
+		cellCNN.Samples,     //samples
+		cellCNN.Cells,       //cells
+		cellCNN.Features,    // features
+		cellCNN.Filters,     // filters
+		cellCNN.Classes,     // labels
+		15,                  //epoch
+		2000,                // party dataSize
+		true,                // debug
+	))
 }
 
 func genTest(
@@ -64,22 +64,22 @@ func genTest(
 		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, samples, cells, features)
 		log.Lvl2("Done")
 
-		samplesPerHost := (samples/hosts)
+		samplesPerHost := (samples / hosts)
 
 		for i, s := range servers {
 			var XTrainS, YTrainS []*cellCNN.Matrix
-			
-			if i-1 == hosts{
+
+			if i-1 == hosts {
 				XTrainS = XTrain[i*samplesPerHost:]
 				YTrainS = YTrain[i*samplesPerHost:]
 
-				samplesPerHost = (samples/hosts) + (samples%hosts)
+				samplesPerHost = (samples / hosts) + (samples % hosts)
 
-			}else{
-				XTrainS = XTrain[i*samplesPerHost:(i+1)*samplesPerHost]
-				YTrainS = YTrain[i*samplesPerHost:(i+1)*samplesPerHost]
+			} else {
+				XTrainS = XTrain[i*samplesPerHost : (i+1)*samplesPerHost]
+				YTrainS = YTrain[i*samplesPerHost : (i+1)*samplesPerHost]
 			}
-				
+
 			_, err := s.ProtocolRegister(protoName, func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 				pi, err := decentralized.NewTrainingProtocol(tni)
 				if err != nil {
@@ -89,7 +89,7 @@ func genTest(
 
 				vars := decentralized.InitCellCNNVars{
 					Path:           path,
-					PartyDataSize:  partyDataSize/tni.Tree().Size(),
+					PartyDataSize:  partyDataSize / tni.Tree().Size(),
 					TrainEncrypted: trainEncrypted,
 					Deterministic:  deterministic,
 					Epochs:         epoch * samples / cellCNN.BatchSize,

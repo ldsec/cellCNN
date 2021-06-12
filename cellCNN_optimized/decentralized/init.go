@@ -5,21 +5,21 @@ import (
 )
 
 type InitCellCNNVars struct {
-	Path			string
-	PartyDataSize   int
+	Path          string
+	PartyDataSize int
 
-	TrainEncrypted  bool
-	Deterministic   bool
-	
-	Epochs          int
+	TrainEncrypted bool
+	Deterministic  bool
 
-	Samples 		int
-	Cells			int
-	Features		int
-	Filters			int
-	Classes			int
+	Epochs int
 
-	Debug 			bool
+	Samples  int
+	Cells    int
+	Features int
+	Filters  int
+	Classes  int
+
+	Debug bool
 }
 
 func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, vars InitCellCNNVars) {
@@ -53,4 +53,3 @@ func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, vars Ini
 
 	p.Debug = vars.Debug
 }
-
