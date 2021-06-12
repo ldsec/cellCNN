@@ -3,6 +3,7 @@ package centralized
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
@@ -532,15 +533,14 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 5
-	nmakers := 2
-	nfilters := 2
+	ncells := 200
+	nmakers := 37
+	nfilters := 6
 	nclasses := 2
 	var sigDegree uint = 3
 	sigInterval := 3
 	maxM1N2Ratio := 8.0
-
-	momentum := 0.1
+	momentum := 0.9
 	lr := 0.1
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
@@ -554,44 +554,45 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 		sigDegree, sigInterval,
 	)
 
-	slots := params.Slots()
+	// slots := params.Slots()
 
-	filter1 := make([]complex128, slots)
-	for i, _ := range filter1 {
-		if i >= ncells*nmakers {
-			break
-		}
-		filter1[i] = complex(float64(i%nmakers)/4, 0)
-	}
+	// filter1 := make([]complex128, slots)
+	// for i, _ := range filter1 {
+	// 	if i >= ncells*nmakers {
+	// 		break
+	// 	}
+	// 	filter1[i] = complex(float64(i%nmakers)/4, 0)
+	// }
 
-	filter2 := make([]complex128, slots)
-	for i, _ := range filter2 {
-		if i >= ncells*nmakers {
-			break
-		}
-		filter2[i] = complex((float64(i%nmakers)+1.0)/4, 0)
-	}
+	// filter2 := make([]complex128, slots)
+	// for i, _ := range filter2 {
+	// 	if i >= ncells*nmakers {
+	// 		break
+	// 	}
+	// 	filter2[i] = complex((float64(i%nmakers)+1.0)/4, 0)
+	// }
 
-	weights := make([]complex128, slots)
-	for i, _ := range weights {
-		if i >= nfilters*nclasses {
-			break
-		}
-		weights[i] = complex(float64(i%3)/4, 0)
-	}
+	// weights := make([]complex128, slots)
+	// for i, _ := range weights {
+	// 	if i >= nfilters*nclasses {
+	// 		break
+	// 	}
+	// 	weights[i] = complex(float64(i%3)/4, 0)
+	// }
 
-	ef1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
-	ef2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
-	ew := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), weights, params.LogSlots())
-	ecf1 := encryptor.EncryptNew(ef1)
-	ecf2 := encryptor.EncryptNew(ef2)
-	ecw := encryptor.EncryptNew(ew)
+	// ef1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
+	// ef2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
+	// ew := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), weights, params.LogSlots())
+	// ecf1 := encryptor.EncryptNew(ef1)
+	// ecf2 := encryptor.EncryptNew(ef2)
+	// ecw := encryptor.EncryptNew(ew)
 
 	// pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, nil, rlk, encoder, encryptor)
 
 	model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
-	cw, dw := model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, append(filter1[:nmakers], filter2[:nmakers]...), weights[:nfilters*nclasses])
+	// cw, dw := model.InitWeights([]*ckks.Ciphertext{ecf1, ecf2}, ecw, append(filter1[:nmakers], filter2[:nmakers]...), weights[:nfilters*nclasses])
+	cw, dw := model.InitWeights(nil, nil, nil, nil)
 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 
 	model.sk = sk
@@ -617,17 +618,20 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 	fmt.Println("=========================================")
 	fmt.Println()
 
-	batchSize := 2
+	batchSize := 5
 	iterrations := 10
 	isMomentum := false
 
 	var plainOut, dConv, dDense *mat.Dense
+	measure := make([]float64, iterrations)
+	sumt := 0.0
 
 	for i := 0; i < iterrations; i++ {
 
 		X, matrix, y := utils.GetRandomBatch(nil, batchSize, params, encoder, cnnSettings)
 		yMat := utils.ScalarToOneHot(y, nclasses)
 
+		t1 := time.Now()
 		// forward & backward
 		encOut := model.BatchProcessing(X, y, isMomentum)
 		if i == 0 {
@@ -635,16 +639,6 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 		} else {
 			plainOut = pNet.ForwardBatch(matrix, nil, nil)
 		}
-
-		errDense := mat.NewDense(batchSize, nclasses, nil)
-		errDense.Sub(plainOut, yMat)
-		pNet.Backward(errDense, lr, momentum)
-
-		fmt.Printf("ROUND %v ######## Check the forward output #########\n", i)
-		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 4, []int{0}, true)
-
-		dConv = pNet.conv.GetWeights()
-		dDense = pNet.dense.GetWeights()
 
 		// get scaled gradients
 		grad := &Gradients{model.conv1d.GetGradient(), model.dense.GetGradient()}
@@ -662,6 +656,20 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 
 		model.UpdateWithGradients(grad)
 
+		t2 := time.Since(t1).Seconds()
+		measure[i] = t2
+		sumt += t2
+
+		errDense := mat.NewDense(batchSize, nclasses, nil)
+		errDense.Sub(plainOut, yMat)
+		pNet.Backward(errDense, lr, momentum)
+
+		fmt.Printf("ROUND %v ######## Check the forward output #########\n", i)
+		utils.DebugWithDense(params, encOut[0], plainOut, decryptor, encoder, 4, []int{0}, true)
+
+		dConv = pNet.conv.GetWeights()
+		dDense = pNet.dense.GetWeights()
+
 		// if i == iterrations-1 {
 		fmt.Println("######## Check the backward gradient for filter0 #########")
 		utils.DebugWithDense(params, model.conv1d.GetWeights()[0], dConv, decryptor, encoder, 10, []int{0}, false)
@@ -674,6 +682,14 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 		// runtime.GC()
 
 	}
+
+	fmt.Printf("Time for each iterations: %v, average time for one batch: %v\n", measure, sumt/float64(len(measure)))
+
+	/*
+		Time for each iterations:
+		[61.8286198 61.805674 62.2464964 70.1403757 62.0171105 61.9871862 61.8934326 64.8046148 67.4176655 61.6899849],
+		average time for one batch: 63.58311603999999
+	*/
 
 	// nwfilters := pNet.conv.GetWeights()
 	// nwdense := pNet.dense.GetWeights()
