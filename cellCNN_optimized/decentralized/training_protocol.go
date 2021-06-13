@@ -9,6 +9,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"runtime"
 	"time"
 )
 
@@ -36,8 +37,10 @@ type NewIterationMessage struct {
 
 // ChildUpdatedDataMessage is the message sent by the children to update its local cleartext information
 type ChildUpdatedDataMessage struct {
-	DC []byte
-	DW []byte
+	DC   []byte
+	DW   []byte
+	CtDC []byte
+	CtDW []byte
 }
 
 // Structs
@@ -59,9 +62,6 @@ type TrainingProtocol struct {
 
 	CNNProtocol *cellCNN.CellCNNProtocol
 
-	// Root Channel
-	WaitChannel chan struct{}
-
 	// Feedback Channels
 	FeedbackChannel chan struct{}
 
@@ -77,21 +77,13 @@ type TrainingProtocol struct {
 	XTrain        []*cellCNN.Matrix
 	YTrain        []*cellCNN.Matrix
 
+	TrainPlain     bool
 	TrainEncrypted bool
 	Deterministic  bool
 	PrngInt        *cellCNN.PRNGInt
 
 	IterationNumber int
 	Epochs          int
-
-	Samples  int
-	Cells    int
-	Features int
-	Filters  int
-	Classes  int
-
-	ctDWPool *ckks.Ciphertext
-	ctDCPool *ckks.Ciphertext
 
 	// utils
 	Debug bool
@@ -101,7 +93,6 @@ type TrainingProtocol struct {
 func NewTrainingProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	pap := &TrainingProtocol{
 		TreeNodeInstance: n,
-		WaitChannel:      make(chan struct{}, 1),
 		FeedbackChannel:  make(chan struct{}, 1),
 	}
 
@@ -118,88 +109,81 @@ func (p *TrainingProtocol) Start() error {
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " started a cellCNN Protocol")
 
 	// STEP 1: weight init
-	var CMatrix, WMatrix *cellCNN.Matrix
 	if p.Deterministic {
 
-		CMatrix = new(cellCNN.Matrix)
-		CMatrix.Rows = cellCNN.Features
-		CMatrix.Cols = cellCNN.Filters
-		CMatrix.M = cellCNN.C[:CMatrix.Rows*CMatrix.Cols]
-		CMatrix.Real = true
+		p.CNNProtocol.C = new(cellCNN.Matrix)
+		p.CNNProtocol.C.Rows = cellCNN.Features
+		p.CNNProtocol.C.Cols = cellCNN.Filters
+		p.CNNProtocol.C.M = make([]complex128, cellCNN.Features*cellCNN.Filters)
+		copy(p.CNNProtocol.C.M, cellCNN.C)
+		p.CNNProtocol.C.Real = true
 
-		WMatrix = new(cellCNN.Matrix)
-		WMatrix.Rows = cellCNN.Filters
-		WMatrix.Cols = cellCNN.Classes
-		WMatrix.M = cellCNN.W[:WMatrix.Rows*WMatrix.Cols]
-		WMatrix.Real = true
+		p.CNNProtocol.W = new(cellCNN.Matrix)
+		p.CNNProtocol.W.Rows = cellCNN.Filters
+		p.CNNProtocol.W.Cols = cellCNN.Classes
+		p.CNNProtocol.W.M = make([]complex128, cellCNN.Filters*cellCNN.Classes)
+		copy(p.CNNProtocol.W.M, cellCNN.W)
+		p.CNNProtocol.W.Real = true
 	} else {
-		CMatrix = cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
-		WMatrix = cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
+		p.CNNProtocol.C = cellCNN.WeightsInit(cellCNN.Features, cellCNN.Filters, cellCNN.Features)
+		p.CNNProtocol.W = cellCNN.WeightsInit(cellCNN.Filters, cellCNN.Classes, cellCNN.Filters)
 	}
 
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights")
 
+	var bC, bW []byte
+	var err error
+
 	// serialize C and W
-	Cb, err := CMatrix.MarshalBinary()
-	if err != nil {
+	if bC, err = p.CNNProtocol.C.MarshalBinary(); err != nil {
 		return err
 	}
-	Wb, err := WMatrix.MarshalBinary()
-	if err != nil {
+
+	if bW, err = p.CNNProtocol.W.MarshalBinary(); err != nil {
 		return err
 	}
 
 	// STEP 2: send clear initial weights down the tree
-	newIterationMessage := NewIterationMessage{0, Cb, Wb, nil, nil}
-	if err := p.SendToChildren(&newIterationMessage); err != nil {
+	if err = p.SendToChildren(&NewIterationMessage{0, bC, bW, nil, nil}); err != nil {
 		return fmt.Errorf("send to children: %v", err)
 	}
-
-	// STEP 3. set and encrypt weights
-	p.CNNProtocol.SetWeights(CMatrix, WMatrix)
-	if p.TrainEncrypted {
-		p.CNNProtocol.EncryptWeights()
-	}
-
-	// Unlock channel (root node can continue with Dispatch)
-	p.WaitChannel <- struct{}{}
-	close(p.WaitChannel)
 
 	return nil
 }
 
 // Dispatch is called at each node and handle incoming messages.
 func (p *TrainingProtocol) Dispatch() error {
+
 	defer p.Done()
 
-	// Wait for the initialization of the weights (this is done in the Start())
-	if p.IsRoot() {
-		<-p.WaitChannel
-	}
-
 	for p.IterationNumber < p.Epochs { // protocol iterations
+
 		// 1. Forward Pass announcement phase
+
 		finished := false
+
 		if !p.IsRoot() {
+
 			// if it is not the root each node gets and forwards the general updated weights down
 			msg, err := p.newIterationAnnouncementPhase()
 			if err != nil {
 				return fmt.Errorf("encrypted iteration announcement phase: %v", err)
 			}
+
 			p.IterationNumber = msg.IterationNumber
 
 			if p.IterationNumber == 0 {
+
 				// STEP 1: weight init
 				CMatrix := new(cellCNN.Matrix)
 				WMatrix := new(cellCNN.Matrix)
 
 				// STEP 3. set and encrypt weights
-				err = CMatrix.UnmarshalBinary(msg.C)
-				if err != nil {
+				if err = CMatrix.UnmarshalBinary(msg.C); err != nil {
 					return err
 				}
-				err = WMatrix.UnmarshalBinary(msg.W)
-				if err != nil {
+
+				if err = WMatrix.UnmarshalBinary(msg.W); err != nil {
 					return err
 				}
 
@@ -211,23 +195,26 @@ func (p *TrainingProtocol) Dispatch() error {
 				log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights")
 
 			} else {
+
 				// replace weights
-				if !p.TrainEncrypted {
-					err = p.CNNProtocol.C.UnmarshalBinary(msg.C)
-					if err != nil {
+				if p.TrainPlain {
+
+					if err = p.CNNProtocol.C.UnmarshalBinary(msg.C); err != nil {
 						return err
 					}
-					err = p.CNNProtocol.W.UnmarshalBinary(msg.W)
-					if err != nil {
+
+					if err = p.CNNProtocol.W.UnmarshalBinary(msg.W); err != nil {
 						return err
 					}
-				} else {
-					err = p.CNNProtocol.CtC().UnmarshalBinary(msg.CtC)
-					if err != nil {
+				}
+
+				if p.TrainEncrypted {
+
+					if err = p.CNNProtocol.CtC.UnmarshalBinary(msg.CtC); err != nil {
 						return err
 					}
-					err = p.CNNProtocol.CtW().UnmarshalBinary(msg.CtW)
-					if err != nil {
+
+					if err = p.CNNProtocol.CtW.UnmarshalBinary(msg.CtW); err != nil {
 						return err
 					}
 				}
@@ -235,49 +222,57 @@ func (p *TrainingProtocol) Dispatch() error {
 
 			//need to check as new number is part of the message for non root nodes
 			finished = p.IterationNumber >= p.Epochs
+
+		} else if p.IterationNumber == 0 && p.IsRoot() {
+
+			if p.TrainEncrypted {
+				p.CNNProtocol.EncryptWeights()
+			}
 		}
 
 		if !finished {
+
 			// get results of local iterations
-			err := p.ascendingUpdateGeneralModelPhase()
-			if err != nil {
+			if err := p.ascendingUpdateGeneralModelPhase(); err != nil {
 				return err
 			}
 
 			if p.IsRoot() {
+
 				p.IterationNumber = p.IterationNumber + 1
 
-				var newIterationMessage NewIterationMessage
-				// STEP 4. update weights
-				if !p.TrainEncrypted {
+				var bC, bW, bCtC, bCtW []byte
+				var err error
 
-					p.CNNProtocol.UpdatePlain(p.CNNProtocol.DC, p.CNNProtocol.DW)
+				// STEP 4. update weights and broadcast the updated weights
+				if p.TrainPlain {
 
-					// serialize C and W
-					Cb, err := p.CNNProtocol.C.MarshalBinary()
-					if err != nil {
-						return err
-					}
-					Wb, err := p.CNNProtocol.W.MarshalBinary()
-					if err != nil {
+					p.CNNProtocol.UpdatePlain()
+
+					if bC, err = p.CNNProtocol.C.MarshalBinary(); err != nil {
 						return err
 					}
 
-					newIterationMessage = NewIterationMessage{p.IterationNumber, Cb, Wb, nil, nil}
-				} else {
-					p.CNNProtocol.Update(p.ctDCPool, p.ctDWPool)
-					bCtC, err := p.CNNProtocol.CtC().MarshalBinary()
-					if err != nil {
+					if bW, err = p.CNNProtocol.W.MarshalBinary(); err != nil {
 						return err
 					}
-					bCtW, err := p.CNNProtocol.CtW().MarshalBinary()
-					if err != nil {
-						return err
-					}
-					newIterationMessage = NewIterationMessage{p.IterationNumber, nil, nil, bCtC, bCtW}
 				}
+
+				if p.TrainEncrypted {
+
+					p.CNNProtocol.Update()
+
+					if bCtC, err = p.CNNProtocol.CtC.MarshalBinary(); err != nil {
+						return err
+					}
+
+					if bCtW, err = p.CNNProtocol.CtW.MarshalBinary(); err != nil {
+						return err
+					}
+				}
+
 				// send new weights
-				if err := p.SendToChildren(&newIterationMessage); err != nil {
+				if err := p.SendToChildren(&NewIterationMessage{p.IterationNumber, bC, bW, bCtC, bCtW}); err != nil {
 					return fmt.Errorf("send to children: %v", err)
 				}
 			}
@@ -290,8 +285,21 @@ func (p *TrainingProtocol) Dispatch() error {
 		log.Lvl2("Loading Validation Data...")
 		XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
 		log.Lvl2("Done")
-		p.CNNProtocol.C.Print()
-		p.CNNProtocol.W.Print()
+
+		if p.TrainPlain && p.TrainEncrypted {
+			p.CNNProtocol.PrintCtCPrecision(p.CryptoParams.AggregateSk)
+			p.CNNProtocol.PrintCtWPrecision(p.CryptoParams.AggregateSk)
+		} else if p.TrainPlain {
+			p.CNNProtocol.C.Print()
+			p.CNNProtocol.W.Print()
+		} else if p.TrainEncrypted {
+
+			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, p.CNNProtocol.CtDC, *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+
+			for i := 0; i < cellCNN.Classes; i++ {
+				cellCNN.DecryptPrint(1, cellCNN.Filters, true, p.CNNProtocol.Eval.RotateNew(p.CNNProtocol.CtDW, i*cellCNN.BatchSize*cellCNN.Filters), *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+			}
+		}
 
 		r := 0
 		for i := 0; i < 2000/cellCNN.BatchSize; i++ {
@@ -318,7 +326,7 @@ func (p *TrainingProtocol) Dispatch() error {
 				v.Print()
 				ctv := p.CNNProtocol.Predict(XBatch, p.CryptoParams.AggregateSk)
 				ctv.Print()
-				precisionStats := ckks.GetPrecisionStats(*p.CryptoParams.Params, p.CNNProtocol.Encoder(), nil, v.M, ctv.M, p.CryptoParams.Params.LogSlots(), 0)
+				precisionStats := ckks.GetPrecisionStats(*p.CryptoParams.Params, p.CNNProtocol.Encoder, nil, v.M, ctv.M, p.CryptoParams.Params.LogSlots(), 0)
 				fmt.Printf("Batch[%2d]", i)
 				fmt.Println(precisionStats.String())
 			}
@@ -372,6 +380,8 @@ func (p *TrainingProtocol) ascendingUpdateGeneralModelPhase() error {
 		return err
 	}
 
+	runtime.GC() // Forces garbage collection
+
 	return nil
 }
 
@@ -396,117 +406,105 @@ func (p *TrainingProtocol) localComputation() {
 		YBatch.SetRow(k, []complex128{Y.M[1], Y.M[0]})
 	}
 
-	start := time.Now()
-	// === Cleartext ===
-	if !p.TrainEncrypted {
+	if p.TrainPlain {
 		p.CNNProtocol.ForwardPlain(XBatch)
 		p.CNNProtocol.BackWardPlain(XBatch, YBatch, p.Tree().Size()) // takes care of pre-applying 1/#Parties
-	} else { // === Ciphertext ===
-		p.CNNProtocol.Forward(XBatch)
-		newCtBoot := p.CNNProtocol.Refresh(p.CryptoParams.AggregateSk, p.CNNProtocol.CtBoot(), p.Tree().Size())
-		p.CNNProtocol.SetCtBoot(newCtBoot)
-		p.CNNProtocol.Backward(XBatch, YBatch, p.Tree().Size())
-
-		/*
-			log.Lvl2("DC")
-			p.CNNProtocol.DC.Print()
-			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, p.CNNProtocol.CtDC(), *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
-
-			log.Lvl2("DW")
-			p.CNNProtocol.DW.Transpose().Print()
-			for i := 0; i < cellCNN.Classes; i++{
-				cellCNN.DecryptPrint(1, cellCNN.Filters, true, p.CNNProtocol.Eval().RotateNew(p.CNNProtocol.CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
-			}
-		*/
 	}
+
+	start := time.Now()
+
+	if p.TrainEncrypted {
+		p.CNNProtocol.Forward(XBatch)
+		p.CNNProtocol.Refresh(p.CryptoParams.AggregateSk, p.Tree().Size())
+		p.CNNProtocol.Backward(XBatch, YBatch, p.Tree().Size())
+	}
+
 	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
 }
 
 func (p *TrainingProtocol) broadcast() error {
 
-	if p.TrainEncrypted {
-		p.ctDWPool = p.CNNProtocol.CtDW().CopyNew()
-		p.ctDCPool = p.CNNProtocol.CtDC().CopyNew()
-	}
-
-	// If not leaf, waits on the children and
-	// aggregates from the children in the DC and DW pools
 	if !p.IsLeaf() {
-		// this reads all the data that were sent by all the children
+
+		// This reads all the data that were sent by all the children
 		for _, v := range <-p.ChildDataChannel {
 
-			// deserialize child contribution
-			if !p.TrainEncrypted {
+			// Deserialize child contribution and aggregates on local weights
+
+			if p.TrainPlain {
+
 				childDC := new(cellCNN.Matrix)
-				err := childDC.UnmarshalBinary(v.DC)
-				if err != nil {
+				childDW := new(cellCNN.Matrix)
+
+				if err := childDC.UnmarshalBinary(v.DC); err != nil {
 					return err
 				}
-				childDW := new(cellCNN.Matrix)
-				err = childDW.UnmarshalBinary(v.DW)
-				if err != nil {
+
+				if err := childDW.UnmarshalBinary(v.DW); err != nil {
 					return err
 				}
 
 				p.CNNProtocol.DC.Add(p.CNNProtocol.DC, childDC)
 				p.CNNProtocol.DW.Add(p.CNNProtocol.DW, childDW)
 
-			} else {
-				childDW := p.CNNProtocol.CtDW().CopyNew()
-				childDC := p.CNNProtocol.CtDC().CopyNew()
+			}
 
-				err := childDW.UnmarshalBinary(v.DW)
-				if err != nil {
-					return err
-				}
-				err = childDC.UnmarshalBinary(v.DC)
-				if err != nil {
+			if p.TrainEncrypted {
+
+				childDC := p.CNNProtocol.CtDC.CopyNew()
+				childDW := p.CNNProtocol.CtDW.CopyNew()
+
+				if err := childDC.UnmarshalBinary(v.CtDC); err != nil {
 					return err
 				}
 
-				p.CNNProtocol.Eval().Add(p.ctDWPool, childDW, p.ctDWPool)
-				p.CNNProtocol.Eval().Add(p.ctDCPool, childDC, p.ctDCPool)
+				if err := childDW.UnmarshalBinary(v.CtDW); err != nil {
+					return err
+				}
+
+				p.CNNProtocol.Eval.Add(p.CNNProtocol.CtDC, childDC, p.CNNProtocol.CtDC)
+				p.CNNProtocol.Eval.Add(p.CNNProtocol.CtDW, childDW, p.CNNProtocol.CtDW)
 			}
 		}
 	}
 
 	// If leaf or not root, send DWPool and DCPool up the tree
 	if !p.IsRoot() {
-		// serialize DCPool and DWPool
-		if !p.TrainEncrypted {
-			DCb, err := p.CNNProtocol.DC.MarshalBinary()
-			if err != nil {
-				return err
-			}
-			DWb, err := p.CNNProtocol.DW.MarshalBinary()
-			if err != nil {
+
+		// Serialize local weights
+
+		var bDC, bDW, bCtDC, bCtDW []byte
+		var err error
+
+		if p.TrainPlain {
+
+			if bDC, err = p.CNNProtocol.DC.MarshalBinary(); err != nil {
 				return err
 			}
 
-			err = p.SendToParent(&ChildUpdatedDataMessage{
-				DC: DCb,
-				DW: DWb,
-			})
-			if err != nil {
-				return fmt.Errorf("send to parent: %v", err)
-			}
-		} else {
-			bDW, err := p.ctDWPool.MarshalBinary()
-			if err != nil {
+			if bDW, err = p.CNNProtocol.DW.MarshalBinary(); err != nil {
 				return err
 			}
-			bDC, err := p.ctDCPool.MarshalBinary()
-			if err != nil {
+		}
+
+		if p.TrainEncrypted {
+
+			if bCtDC, err = p.CNNProtocol.CtDC.MarshalBinary(); err != nil {
 				return err
 			}
 
-			err = p.SendToParent(&ChildUpdatedDataMessage{
-				DC: bDW,
-				DW: bDC,
-			})
-			if err != nil {
-				return fmt.Errorf("send to parent: %v", err)
+			if bCtDW, err = p.CNNProtocol.CtDW.MarshalBinary(); err != nil {
+				return err
 			}
+		}
+
+		if err = p.SendToParent(&ChildUpdatedDataMessage{
+			DC:   bDC,
+			DW:   bDW,
+			CtDC: bCtDC,
+			CtDW: bCtDW,
+		}); err != nil {
+			return fmt.Errorf("send to parent: %v", err)
 		}
 	}
 

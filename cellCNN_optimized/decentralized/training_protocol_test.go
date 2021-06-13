@@ -24,15 +24,10 @@ func TestRegEncryptedTraining(t *testing.T) {
 		"cellCNN",           //protoID
 		"../../normalized/", // datapath
 		3,                   // hosts
-		false,               // trainEncrypted
+		true,                // trainPlain
+		true,                // trainEncrypted
 		true,                // deterministic
-		cellCNN.Samples,     //samples
-		cellCNN.Cells,       //cells
-		cellCNN.Features,    // features
-		cellCNN.Filters,     // filters
-		cellCNN.Classes,     // labels
-		15,                  //epoch
-		2000,                // party dataSize
+		150,                 // Number of epochs
 		true,                // debug
 	))
 }
@@ -40,9 +35,8 @@ func TestRegEncryptedTraining(t *testing.T) {
 func genTest(
 	protoID, path string,
 	hosts int,
-	trainEncrypted, deterministic bool,
-	samples, cells, features, filters, classes int,
-	epoch, partyDataSize int,
+	trainPlain, trainEncrypted, deterministic bool,
+	epoch int,
 	debug bool,
 ) func(*testing.T) {
 	protoName := "CellCNN_optimized/" + protoID
@@ -61,23 +55,24 @@ func genTest(
 
 		// 1) Load Data
 		log.Lvl2("Loading data...")
-		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, samples, cells, features)
+		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, cellCNN.Samples, cellCNN.Cells, cellCNN.Features)
 		log.Lvl2("Done")
 
-		samplesPerHost := (samples / hosts)
+		localSamples := (cellCNN.Samples / hosts) // splits the data set
 
 		for i, s := range servers {
 			var XTrainS, YTrainS []*cellCNN.Matrix
 
+			// Splits the data set
 			if i-1 == hosts {
-				XTrainS = XTrain[i*samplesPerHost:]
-				YTrainS = YTrain[i*samplesPerHost:]
+				XTrainS = XTrain[i*localSamples:]
+				YTrainS = YTrain[i*localSamples:]
 
-				samplesPerHost = (samples / hosts) + (samples % hosts)
+				localSamples = (cellCNN.Samples / hosts) + (cellCNN.Samples % hosts)
 
 			} else {
-				XTrainS = XTrain[i*samplesPerHost : (i+1)*samplesPerHost]
-				YTrainS = YTrain[i*samplesPerHost : (i+1)*samplesPerHost]
+				XTrainS = XTrain[i*localSamples : (i+1)*localSamples]
+				YTrainS = YTrain[i*localSamples : (i+1)*localSamples]
 			}
 
 			_, err := s.ProtocolRegister(protoName, func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -89,15 +84,11 @@ func genTest(
 
 				vars := decentralized.InitCellCNNVars{
 					Path:           path,
-					PartyDataSize:  partyDataSize / tni.Tree().Size(),
+					TrainPlain:     trainPlain,
 					TrainEncrypted: trainEncrypted,
 					Deterministic:  deterministic,
-					Epochs:         epoch * samples / cellCNN.BatchSize,
-					Samples:        samplesPerHost,
-					Cells:          cells,
-					Features:       features,
-					Filters:        filters,
-					Classes:        classes,
+					Epochs:         epoch,
+					LocalSamples:   localSamples,
 					Debug:          debug,
 				}
 				protocol.InitVars(cryptoParamsList[tni.Index()], vars)
