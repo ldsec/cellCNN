@@ -10,7 +10,8 @@ import (
 
 // Matrix is a struct holding a row flatened complex matrix.
 type Matrix struct {
-	rows, cols int
+	Rows int
+	Cols int
 	Real       bool
 	M          []complex128
 }
@@ -19,8 +20,8 @@ type Matrix struct {
 func NewMatrix(rows, cols int) (m *Matrix) {
 	m = new(Matrix)
 	m.M = make([]complex128, rows*cols)
-	m.rows = rows
-	m.cols = cols
+	m.Rows = rows
+	m.Cols = cols
 	m.Real = true
 	return
 }
@@ -29,8 +30,8 @@ func (m *Matrix) Copy() (mCopy *Matrix){
 	mCopy = new(Matrix)
 	mCopy.M = make([]complex128, len(m.M))
 	copy(mCopy.M, m.M)
-	mCopy.rows = m.rows
-	mCopy.cols = m.cols
+	mCopy.Rows = m.Rows
+	mCopy.Cols = m.Cols
 	mCopy.Real = m.Real
 	return
 }
@@ -38,27 +39,15 @@ func (m *Matrix) Copy() (mCopy *Matrix){
 func (m *Matrix) Set(rows, cols int, v []complex128){
 	m.M = make([]complex128, len(v))
 	copy(m.M, v)
-	m.rows = rows
-	m.cols = cols
+	m.Rows = rows
+	m.Cols = cols
 }
 
 func (m * Matrix) SetRow(idx int, row []complex128){
 	for i := range row{
-		m.M[i+idx*m.cols] = row[i]
+		m.M[i+idx*m.Cols] = row[i]
 	}
 }
-
-// Rows returns the number of rows of the matrix.
-func (m *Matrix) Rows() int {
-	return m.rows
-}
-
-// Cols returns the number of columns of the matrix.
-func (m *Matrix) Cols() int {
-	return m.cols
-}
-
-
 
 // Add adds matrix A and B and stores the result on the target.
 func (m *Matrix) Add(A, B *Matrix) {
@@ -81,12 +70,12 @@ func (m *Matrix) Add(A, B *Matrix) {
 
 	if m != A && m != B{
 		m.Real = A.Real && B.Real
-		m.rows = A.rows
-		m.cols = A.cols
+		m.Rows = A.Rows
+		m.Cols = A.Cols
 	}else if m != B{
-		m.rows = B.rows
-		m.cols = B.cols
-		m.cols = B.cols
+		m.Real = A.Real && B.Real
+		m.Rows = B.Rows
+		m.Cols = B.Cols
 	}
 }
 
@@ -116,19 +105,19 @@ func (m *Matrix) Sub(A, B *Matrix) {
 
 	if m != A && m != B{
 		m.Real = A.Real && B.Real
-		m.rows = A.rows
-		m.cols = A.cols
+		m.Rows = A.Rows
+		m.Cols = A.Cols
 	}else if m != B{
-		m.rows = B.rows
-		m.cols = B.cols
-		m.cols = B.cols
+		m.Real = A.Real && B.Real
+		m.Rows = B.Rows
+		m.Cols = B.Cols
 	}
 }
 
 func (m *Matrix) SumColumns(A *Matrix){
 
-	rowsA := A.Rows()
-	colsA := A.Cols()
+	rowsA := A.Rows
+	colsA := A.Cols
 
 	acc := make([]complex128, colsA)
 
@@ -139,15 +128,15 @@ func (m *Matrix) SumColumns(A *Matrix){
 	}
 
 	m.M = acc
-	m.rows = 1
-	m.cols = colsA
+	m.Rows = 1
+	m.Cols = colsA
 	m.Real = A.Real
 }
 
 func (m *Matrix) SumRows(A *Matrix){
 
-	rowsA := A.Rows()
-	colsA := A.Cols()
+	rowsA := A.Rows
+	colsA := A.Cols
 
 	acc := make([]complex128, rowsA)
 
@@ -158,18 +147,18 @@ func (m *Matrix) SumRows(A *Matrix){
 	}
 
 	m.M = acc
-	m.rows = rowsA
-	m.cols = 1
+	m.Rows = rowsA
+	m.Cols = 1
 	m.Real = A.Real
 }
 
 func (m *Matrix) Dot(A, B *Matrix){
-	if A.Rows() != B.Rows() || A.Cols() != B.Cols() {
+	if A.Rows != B.Rows || A.Cols != B.Cols {
 		panic("matrices are incompatible for dot product")
 	}
 
-	rowsA := A.Rows()
-	colsA := A.Cols()
+	rowsA := A.Rows
+	colsA := A.Cols
 
 	acc := make([]complex128, rowsA*colsA)
 
@@ -178,8 +167,8 @@ func (m *Matrix) Dot(A, B *Matrix){
 	}
 
 	m.M = acc
-	m.rows = rowsA
-	m.cols = colsA
+	m.Rows = rowsA
+	m.Cols = colsA
 	m.Real = A.Real && B.Real
 }
 
@@ -189,8 +178,8 @@ func (m *Matrix) Func(A *Matrix, f func(x complex128)complex128){
 		acc[i] = f(A.M[i])
 	}
 	m.M = acc
-	m.rows = A.Rows()
-	m.cols = A.Cols()
+	m.Rows = A.Rows
+	m.Cols = A.Cols
 	m.Real = A.Real
 }
 
@@ -200,21 +189,21 @@ func (m *Matrix) MultConst(A *Matrix,c complex128){
 		acc[i] = c*A.M[i]
 	}
 	m.M = acc
-	m.rows = A.Rows()
-	m.cols = A.Cols()
+	m.Rows = A.Rows
+	m.Cols = A.Cols
 	m.Real = A.Real
 }
 
 // MulMat multiplies A with B and returns the result on the target.
 func (m *Matrix) MulMat(A, B *Matrix) {
 
-	if A.Cols() != B.Rows() {
+	if A.Cols != B.Rows {
 		panic("matrices are incompatible for multiplication")
 	}
 
-	rowsA := A.Rows()
-	colsA := A.Cols()
-	colsB := B.Cols()
+	rowsA := A.Rows
+	colsA := A.Cols
+	colsB := B.Cols
 
 	acc := make([]complex128, rowsA*colsB)
 
@@ -227,8 +216,8 @@ func (m *Matrix) MulMat(A, B *Matrix) {
 	}
 
 	m.M = acc
-	m.rows = A.Rows()
-	m.cols = B.Cols()
+	m.Rows = A.Rows
+	m.Cols = B.Cols
 
 	m.Real = A.Real && B.Real
 }
@@ -288,9 +277,9 @@ func GenZeroMatrices(rows, cols, n int) (Matrices []*Matrix) {
 // Equivalent to Transpoe(PermuteCols(Transpose(M)))
 func (m *Matrix) PermuteRows() {
 	var index int
-	tmp := make([]complex128, m.Cols())
-	for i := 0; i < m.Rows(); i++ {
-		index = i * m.Cols()
+	tmp := make([]complex128, m.Cols)
+	for i := 0; i < m.Rows; i++ {
+		index = i * m.Cols
 		for j := range tmp {
 			tmp[j] = m.M[index+j]
 		}
@@ -306,16 +295,16 @@ func (m *Matrix) PermuteRows() {
 // PermuteCols rotates each column by k, where k is the column index.
 // Equivalent to Transpoe(PermuteRows(Transpose(M)))
 func (m *Matrix) PermuteCols() {
-	tmp := make([]complex128, m.Rows())
-	for i := 0; i < m.Cols(); i++ {
+	tmp := make([]complex128, m.Rows)
+	for i := 0; i < m.Cols; i++ {
 		for j := range tmp {
-			tmp[j] = m.M[i+j*m.Cols()]
+			tmp[j] = m.M[i+j*m.Cols]
 		}
 
 		tmp = append(tmp[i:], tmp[:i]...)
 
 		for j, c := range tmp {
-			m.M[i+j*m.Cols()] = c
+			m.M[i+j*m.Cols] = c
 		}
 	}
 }
@@ -323,11 +312,11 @@ func (m *Matrix) PermuteCols() {
 // RotateCols rotates each column by k position to the left.
 func (m *Matrix) RotateCols(k int) {
 
-	k %= m.Cols()
+	k %= m.Cols
 	var index int
-	tmp := make([]complex128, m.Cols())
-	for i := 0; i < m.Rows(); i++ {
-		index = i * m.Cols()
+	tmp := make([]complex128, m.Cols)
+	for i := 0; i < m.Rows; i++ {
+		index = i * m.Cols
 		for j := range tmp {
 			tmp[j] = m.M[index+j]
 		}
@@ -342,14 +331,14 @@ func (m *Matrix) RotateCols(k int) {
 
 // RotateRows rotates each row by k positions to the left.
 func (m *Matrix) RotateRows(k int) {
-	k %= m.Rows()
-	m.M = append(m.M[k*m.Cols():], m.M[:k*m.Cols()]...)
+	k %= m.Rows
+	m.M = append(m.M[k*m.Cols:], m.M[:k*m.Cols]...)
 }
 
 // Transpose transposes the matrix.
 func (m *Matrix) Transpose() (mT *Matrix) {
-	rows := m.Rows()
-	cols := m.Cols()
+	rows := m.Rows
+	cols := m.Cols
 	mT = NewMatrix(cols, rows)
 
 	for i := 0; i < rows; i++ {
@@ -365,20 +354,20 @@ func (m *Matrix) Print() {
 
 	if m.Real {
 		fmt.Printf("[\n")
-		for i := 0; i < m.Rows(); i++ {
+		for i := 0; i < m.Rows; i++ {
 			fmt.Printf("[ ")
-			for j := 0; j < m.Cols(); j++ {
-				fmt.Printf("%11.8f, ", real(m.M[i*m.Cols()+j]))
+			for j := 0; j < m.Cols; j++ {
+				fmt.Printf("%18.15f, ", real(m.M[i*m.Cols+j]))
 			}
 			fmt.Printf("],\n")
 		}
 		fmt.Printf("]\n")
 	} else {
 		fmt.Printf("[")
-		for i := 0; i < m.Rows(); i++ {
+		for i := 0; i < m.Rows; i++ {
 			fmt.Printf("[ ")
-			for j := 0; j < m.Cols(); j++ {
-				fmt.Printf("%11.8f, ", m.M[i*m.Cols()+j])
+			for j := 0; j < m.Cols; j++ {
+				fmt.Printf("%11.8f, ", m.M[i*m.Cols+j])
 			}
 			fmt.Printf("]\n")
 		}
@@ -386,22 +375,42 @@ func (m *Matrix) Print() {
 	}
 }
 
-// MarshalBinary serializes a matrix struct to an array of bytes
-func MarshalBinary(m *Matrix) ([]byte, error) {
-	var b bytes.Buffer
-	e := gob.NewEncoder(&b)
-	if err := e.Encode(m); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+
+type matrixByte struct {
+	Rows int
+	Cols int
+	Real bool
+	M    []complex128
 }
 
+// MarshalBinary serializes a matrix struct to an array of bytes
+func (m *Matrix) MarshalBinary() ([]byte, error) {
+
+	mByte := matrixByte{m.Rows, m.Cols, m.Real, m.M}
+
+	buf := &bytes.Buffer{}
+	if err := gob.NewEncoder(buf).Encode(mByte); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+
 // UnmarshalBinary generates a matrix struct from an array of bytes
-func UnmarshalBinary(m *Matrix, bMatrix []byte) error {
-	b := bytes.NewBuffer(bMatrix)
+func (m *Matrix) UnmarshalBinary(data []byte) error {
+	
+	mByte := matrixByte{}
+
+	b := bytes.NewReader(data)
 	d := gob.NewDecoder(b)
-	if err := d.Decode(m); err != nil {
+	if err := d.Decode(&mByte); err != nil {
 		return err
 	}
+
+	m.Rows = mByte.Rows
+	m.Cols = mByte.Cols
+	m.Real = mByte.Real
+	m.M = mByte.M
+
 	return nil
 }

@@ -7,14 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"math/rand"
 	"testing"
-	"time"
 
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 )
 
-const PATH_CRYPTO_FILES = "secrets/paramsCKKS"
+const PathCryptoFiles = "secrets/paramsCKKS"
 
 // Suite is the type of keys used to secure communication in Onet
 var Suite = edwards25519.NewBlakeSHA256Ed25519()
@@ -23,21 +21,22 @@ func TestRegEncryptedTraining(t *testing.T) {
 	log.SetDebugVisible(2)
 
 	t.Run("CellCNN", genTest(
-		"cellCNN", "../../normalized/",
-		3,
-		false, true,
-		cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Filters, cellCNN.Classes,
-		15, 2000,
-		true,
-		))
+		"cellCNN",           //protoID
+		"../../normalized/", // datapath
+		3,                   // hosts
+		true,                // trainPlain
+		true,                // trainEncrypted
+		true,                // deterministic
+		150,                 // Number of epochs
+		true,                // debug
+	))
 }
 
 func genTest(
 	protoID, path string,
 	hosts int,
-	trainEncrypted, deterministic bool,
-	samples, cells, features, filters, classes int,
-	epoch, partyDataSize int,
+	trainPlain, trainEncrypted, deterministic bool,
+	epoch int,
 	debug bool,
 ) func(*testing.T) {
 	protoName := "CellCNN_optimized/" + protoID
@@ -49,20 +48,33 @@ func genTest(
 
 		servers, _, tree := local.GenTree(hosts, true)
 
-		if !deterministic{
-			rand.Seed(time.Now().Unix())
-		} else {
-			rand.Seed(0)
-		}
 		params := cellCNN.GenParams()
 
-		cryptoParamsList := make([]*cellCNN.CryptoParams, hosts)
-		if trainEncrypted {
-			cryptoParamsList = cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PATH_CRYPTO_FILES)
-			require.NotNil(t, cryptoParamsList)
-		}
+		cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PathCryptoFiles)
+		require.NotNil(t, cryptoParamsList)
 
-		for _, s := range servers {
+		// 1) Load Data
+		log.Lvl2("Loading data...")
+		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, cellCNN.Samples, cellCNN.Cells, cellCNN.Features)
+		log.Lvl2("Done")
+
+		localSamples := cellCNN.Samples / hosts // splits the data set
+
+		for i, s := range servers {
+			var XTrainS, YTrainS []*cellCNN.Matrix
+
+			// Splits the data set
+			if i-1 == hosts {
+				XTrainS = XTrain[i*localSamples:]
+				YTrainS = YTrain[i*localSamples:]
+
+				localSamples = (cellCNN.Samples / hosts) + (cellCNN.Samples % hosts)
+
+			} else {
+				XTrainS = XTrain[i*localSamples : (i+1)*localSamples]
+				YTrainS = YTrain[i*localSamples : (i+1)*localSamples]
+			}
+
 			_, err := s.ProtocolRegister(protoName, func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 				pi, err := decentralized.NewTrainingProtocol(tni)
 				if err != nil {
@@ -72,20 +84,17 @@ func genTest(
 
 				vars := decentralized.InitCellCNNVars{
 					Path:           path,
-					PartyDataSize:  partyDataSize/tni.Tree().Size(),
+					TrainPlain:     trainPlain,
 					TrainEncrypted: trainEncrypted,
-					Epochs:         epoch * cellCNN.Samples / cellCNN.BatchSize,
-					Samples:        samples,
-					Cells:          cells,
-					Features:       features,
-					Filters:        filters,
-					Classes:        classes,
+					Deterministic:  deterministic,
+					Epochs:         epoch,
+					LocalSamples:   localSamples,
 					Debug:          debug,
 				}
 				protocol.InitVars(cryptoParamsList[tni.Index()], &params, vars)
 
-				// 1) Load Data
-				protocol.XTrain, protocol.YTrain, _, _ = protocol.LoadData()
+				protocol.XTrain = XTrainS
+				protocol.YTrain = YTrainS
 
 				return protocol, err
 			})
@@ -100,14 +109,6 @@ func genTest(
 		if err := protocol.Start(); err != nil {
 			log.Panic(fmt.Errorf("start protocol: %v", err))
 		}
-		res := <-feedback
-
-		if !trainEncrypted {
-			log.Lvl2(res.C.M[:10], res.W.M[:10])
-		} else {
-			cellCNN.DecryptPrint(features, filters, true, res.CtC, params, cryptoParamsList[0].AggregateSk)
-			cellCNN.DecryptPrint(features, filters, true, res.CtW, params, cryptoParamsList[0].AggregateSk)
-		}
-
+		_ = <-feedback
 	}
 }

@@ -7,8 +7,8 @@ import (
 
 func EncodeLeftForPtMul(L *Matrix, Bcols int, scaling float64, ptL []*ckks.Plaintext, encoder ckks.Encoder, params ckks.Parameters) {
 
-	rows := L.Rows()
-	cols := L.Cols()
+	rows := L.Rows
+	cols := L.Cols
 
 	// Diagonalized samples encoding (plaintext)
 	var values []complex128
@@ -37,8 +37,8 @@ func EncodeLeftForPtMul(L *Matrix, Bcols int, scaling float64, ptL []*ckks.Plain
 
 func EncryptRightForPtMul(C *Matrix, nbMatrices, cells int, params ckks.Parameters, level int, encoder ckks.Encoder, encryptor ckks.Encryptor) (*ckks.Ciphertext){
 
-	features := C.Rows()
-	filters := C.Cols()
+	features := C.Rows
+	filters := C.Cols
 
 	values := make([]complex128, params.Slots())
 

@@ -122,8 +122,10 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	ouRowPacked := false
 	colsMatrix := utils.GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := utils.GenTransposeMap(colsMatrix)
-	diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
-	diagM.N1 = 8
+	// diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
+	// diagM.N1 = int(maxM1N2Ratio)
+	diagM := encoder.EncodeDiagMatrixBSGSAtLvl(params.MaxLevel(), transposeVec, params.Scale(), maxM1N2Ratio, params.LogSlots())
+
 	dense.diagM = diagM
 	Btranspose := params.RotationsForDiagMatrixMult(diagM)
 	Binds := append(rotAll, Btranspose...)

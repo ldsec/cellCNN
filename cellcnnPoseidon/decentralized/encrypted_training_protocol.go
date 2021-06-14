@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/centralized"
@@ -39,6 +40,7 @@ type NewEncryptedIterationMessage struct {
 // ChildUpdatedLocalGradientsMessage contains the gradients to be aggregated
 type ChildUpdatedLocalGradientsMessage struct {
 	ChildUpdatedLocalGradients [][]byte // first n-1 are conv filters, last one is dense weight
+	CurrentSize                int
 	// SizeCiphers                []*[]int
 }
 
@@ -239,6 +241,8 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 		}
 	}
 
+	t1 := time.Now()
+
 	newEncryptedIterationMessage := NewEncryptedIterationMessage{}
 	for p.IterationNumber < p.MaxIterations { // protocol iterations
 		// 1. Announcement phase
@@ -326,10 +330,27 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 		runtime.GC()
 	}
 
+	t2 := time.Since(t1).Seconds()
+
 	// 3. Results reporting
 	if p.IsRoot() {
+		fmt.Printf("+++++++ Time for %v protocol rounds: %v, avg: %v\n ++++++++", p.MaxIterations, t2, t2/float64(p.MaxIterations))
 		p.FeedbackChannel <- p.model.Marshall()
 	}
+	/*
+		rounds: 3
+		batchsize: 5
+		filters: 6
+
+		gen rotation keys: ~25 seconds
+
+		nodes	makers	cells	Time(each round)	communication(whole in bytes)
+		3		24		50		62.490963			25166034
+		5		24		50		199.61045313333332	50332068
+		3		24 		100		81.7420632			25166034
+		3 		48		50		116.1745403			25166034
+
+	*/
 
 	return nil
 }
@@ -353,6 +374,7 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 	// retrieve data points
 	var gradients *centralized.Gradients
 	var err error
+	messageSize := 0
 
 	if !p.IsRoot() {
 		gradients, err = p.localIteration(p.model.GetEvaluator())
@@ -372,6 +394,8 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 			} else {
 				aggChild.Aggregate(v.ChildUpdatedLocalGradients, p.model.GetEvaluator())
 			}
+			messageSize += v.CurrentSize
+			messageSize += utils.SizeOf2DimSlice(v.ChildUpdatedLocalGradients)
 		}
 
 		if !p.IsRoot() {
@@ -379,8 +403,13 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 			aggChild.Aggregate(gradients, p.model.GetEvaluator())
 		}
 
+		if p.IsRoot() {
+			fmt.Printf("++++++++++ Root Count the communication in bytes: %v +++++++++++++\n", messageSize)
+		}
+
 	} else {
 		aggChild = gradients
+		messageSize = 0
 	}
 
 	fmt.Printf("########\nIs Root: %v, index: %v\nChecking the values of the local agg gradients: %v\n########\n",
@@ -392,7 +421,7 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 	if !p.IsRoot() {
 		data := aggChild.Marshall()
 		log.Lvl3("Gradients to Send (bytes):", len(data)*len(data[0]))
-		if err := p.SendToParent(&ChildUpdatedLocalGradientsMessage{ChildUpdatedLocalGradients: data}); err != nil {
+		if err := p.SendToParent(&ChildUpdatedLocalGradientsMessage{ChildUpdatedLocalGradients: data, CurrentSize: messageSize}); err != nil {
 			return nil, err
 		}
 	}

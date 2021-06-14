@@ -2,22 +2,24 @@ package main
 
 import (
 	"fmt"
-	"time"
 	"math/rand"
+	"time"
 
-	"github.com/ldsec/lattigo/v2/rlwe"
+	"github.com/ldsec/cellCNN/cellCNN_optimized"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
-	"github.com/ldsec/cellCNN/cellCNN_optimized"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"runtime"
 )
 
-
-type Party struct{
+type Party struct {
 	cellCNN.CellCNNProtocol
+	XTrain []*cellCNN.Matrix
+	YTrain []*cellCNN.Matrix
+	prng   *cellCNN.PRNGInt
 }
 
-func NewParty(params ckks.Parameters) (p *Party){
+func NewParty(params ckks.Parameters) (p *Party) {
 	p = new(Party)
 	p.CellCNNProtocol = *cellCNN.NewCellCNNProtocol(params)
 	return
@@ -25,45 +27,76 @@ func NewParty(params ckks.Parameters) (p *Party){
 
 func main() {
 
-	nParties := 1
+	hosts := 3
 
 	trainEncrypted := true
 	deterministic := true
 
-	if !deterministic{
+	fmt.Printf("Loading Data... ")
+	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+	fmt.Printf("Done\n")
+
+	var C, W *cellCNN.Matrix
+	if !deterministic {
 		rand.Seed(time.Now().Unix())
+		C = cellCNN.WeightsInit(cellCNN.Features, cellCNN.Filters, cellCNN.Features)
+		W = cellCNN.WeightsInit(cellCNN.Filters, cellCNN.Classes, cellCNN.Filters)
+	} else {
+		C = new(cellCNN.Matrix)
+		C.Rows = cellCNN.Features
+		C.Cols = cellCNN.Filters
+		C.Real = true
+		C.M = cellCNN.C[:C.Rows*C.Cols]
+
+		W = new(cellCNN.Matrix)
+		W.Rows = cellCNN.Filters
+		W.Cols = cellCNN.Classes
+		W.Real = true
+		W.M = cellCNN.W[:W.Rows*W.Cols]
 	}
-	
+
 	params := cellCNN.GenParams()
 
 	ringQP, _ := ring.NewRing(params.N(), append(params.Q(), params.P()...))
 
-	fmt.Println(params.LogQP())
+	P := make([]*Party, hosts)
 
-	// GlobalWeights
-	C := cellCNN.WeightsInit(cellCNN.Features, cellCNN.Filters, cellCNN.Features)
-	W := cellCNN.WeightsInit(cellCNN.Filters, cellCNN.Classes, cellCNN.Filters) 
+	samplesPerHost := (cellCNN.Samples / hosts)
 
+	for i := range P {
 
-	P := make([]*Party, nParties)
-
-	for i := range P{
 		P[i] = NewParty(params)
 		P[i].SetWeights(C, W)
+
+		if i-1 == hosts {
+			P[i].XTrain = XTrain[i*samplesPerHost:]
+			P[i].YTrain = YTrain[i*samplesPerHost:]
+
+			samplesPerHost = (cellCNN.Samples / hosts) + (cellCNN.Samples % hosts)
+
+		} else {
+			P[i].XTrain = XTrain[i*samplesPerHost : (i+1)*samplesPerHost]
+			P[i].YTrain = YTrain[i*samplesPerHost : (i+1)*samplesPerHost]
+		}
+
+		P[i].prng = cellCNN.NewPRNTInt(samplesPerHost, deterministic)
 	}
 
 	var masterSk *rlwe.SecretKey
 
 	if trainEncrypted {
 
+		fmt.Printf("Gen Keys... ")
+
 		kgen := ckks.NewKeyGenerator(params)
-		
+
 		masterSk = ckks.NewSecretKey(params)
 
-		for i := range P{
+		for i := range P {
 			ski := kgen.GenSecretKey()
 			P[i].SetSecretKey(ski)
-			ringQP.Add(masterSk.Value, P[i].SK().Value, masterSk.Value)
+			ringQP.Add(masterSk.Value, P[i].Sk.Value, masterSk.Value)
 		}
 
 		pk := kgen.GenPublicKey(masterSk)
@@ -73,56 +106,40 @@ func main() {
 
 		rtk := kgen.GenRotationKeysForRotations(rotations, true, masterSk)
 
-		for i := range P{
+		for i := range P {
 			P[i].SetPublicKey(pk)
 			P[i].EncryptWeights()
 			P[i].EvaluatorInit(rlk, rtk)
 		}
+
+		fmt.Printf("Done\n")
 	}
 
-	slotUsage := 3*cellCNN.BatchSize*cellCNN.Filters*cellCNN.Classes + (2*cellCNN.Classes+1) * cellCNN.ConvolutionMatrixSize(cellCNN.BatchSize, cellCNN.Features, cellCNN.Filters)
+	slotUsage := 3*cellCNN.BatchSize*cellCNN.Filters*cellCNN.Classes + (2*cellCNN.Classes+1)*cellCNN.ConvolutionMatrixSize(cellCNN.BatchSize, cellCNN.Features, cellCNN.Filters)
 
-	fmt.Printf("Slots Usage : %d/%d \n", slotUsage, params.Slots()) 
-
-
-	fmt.Println("Loading Data ...")
-	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
-	XValid, YValid := cellCNN.LoadValidDataFrom("../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
-	fmt.Println("Done")
+	fmt.Printf("Slots Usage : %d/%d \n", slotUsage, params.Slots())
 
 	epoch := 15
 	niter := epoch * cellCNN.Samples / cellCNN.BatchSize
 
-	niter = 1
-
 	fmt.Printf("#Iters : %d\n", niter)
-
-	partyDataSize := 2000/nParties
 
 	runtime.GC()
 
-	for i := 0; i < niter; i++{
+	for i := 0; i < niter; i++ {
 
 		XPrePool := new(cellCNN.Matrix)
 		XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
 		YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
 
-		DWPool := cellCNN.NewMatrix(cellCNN.Filters, cellCNN.Classes)
-		DCPool := cellCNN.NewMatrix(cellCNN.Features, cellCNN.Filters)
-
-		var ctDWPool, ctDCPool *ckks.Ciphertext
-
-		for j := range P{
+		for j := range P {
 			// Pre-pools the cells
 			for k := 0; k < cellCNN.BatchSize; k++ {
 
-				partyBatchStart := j*partyDataSize
-				partyBatchEnd := (j+1)*partyDataSize
+				randi := P[j].prng.RandInt()
 
-				randi := rand.Intn(partyDataSize)
-
-				X := XTrain[partyBatchStart:partyBatchEnd][randi]
-				Y := YTrain[partyBatchStart:partyBatchEnd][randi]
+				X := P[j].XTrain[randi]
+				Y := P[j].YTrain[randi]
 
 				XPrePool.SumColumns(X)
 				XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
@@ -132,63 +149,77 @@ func main() {
 			}
 
 			P[j].ForwardPlain(XBatch)
-			P[j].BackWardPlain(XBatch, YBatch, nParties) // takes care of pre-applying 1/#Parties
+			P[j].BackWardPlain(XBatch, YBatch, hosts) // takes care of pre-applying 1/#Parties
 
-			DWPool.Add(DWPool, P[j].DW)
-			DCPool.Add(DCPool, P[j].DC)
-
-			// === Ciphertext === 
-			if trainEncrypted{
+			// === Ciphertext ===
+			if trainEncrypted {
 
 				start := time.Now()
 
 				P[j].Forward(XBatch)
-				P[j].Refresh(masterSk, P[j].CtBoot(), nParties)
-				P[j].Backward(XBatch, YBatch, nParties)
-
+				P[j].Refresh(masterSk, hosts)
+				P[j].Backward(XBatch, YBatch, hosts)
 
 				/*
-				fmt.Println("DC")
-				P[j].DC.Print()
-				cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P[j].CtDC(), params, masterSk)
+					fmt.Println("DC")
+					P[j].DC.Print()
+					cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P[j].CtDC, params, masterSk)
 
-				fmt.Println("DW")
-				P[j].DW.Transpose().Print()
-				for i := 0; i < cellCNN.Classes; i++{
-					cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[j].Eval().RotateNew(P[j].CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
-				}
+
+					fmt.Println("DW")
+					P[j].DW.Transpose().Print()
+					for i := 0; i < cellCNN.Classes; i++{
+						cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[j].Eval.RotateNew(P[j].CtDW, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
+					}
 				*/
 
 				fmt.Printf("Iter[%02d][%d] : %s\n", i, j, time.Since(start))
+			}
+		}
 
-				if j == 0{
-					ctDWPool = P[j].CtDW().CopyNew()
-					ctDCPool = P[j].CtDC().CopyNew()
-				}else{
-					P[0].Eval().Add(ctDWPool, P[j].CtDW(), ctDWPool)
-					P[0].Eval().Add(ctDCPool, P[j].CtDC(), ctDCPool)
+		// Aggregates the partial weights of all nodes
+		for j := range P {
+			if j != 0 {
+				P[0].DC.Add(P[0].DC, P[j].DC)
+				P[0].DW.Add(P[0].DW, P[j].DW)
+
+				if trainEncrypted {
+					P[0].Eval.Add(P[0].CtDC, P[j].CtDC, P[0].CtDC)
+					P[0].Eval.Add(P[0].CtDW, P[j].CtDW, P[0].CtDW)
 				}
 			}
 		}
 
+		if trainEncrypted {
+			fmt.Println("P[0] Aggregated DC Weights")
+			P[0].DC.Print()
+			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P[0].CtDC, params, masterSk)
 
-		for j := range P{
-			P[j].UpdatePlain(DCPool, DWPool)
-
-			if trainEncrypted{
-				P[j].Update(ctDCPool, ctDWPool)
+			fmt.Println("P[0] Aggregated DW Weights")
+			P[0].DW.Transpose().Print()
+			for i := 0; i < cellCNN.Classes; i++ {
+				cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[0].Eval.RotateNew(P[0].CtDW, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
 			}
 		}
 
-		if trainEncrypted{
-			fmt.Println("DCPool")
-			DCPool.Print()
-			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, ctDCPool, params, masterSk)
+		// Updates local weights of the root node
+		P[0].UpdatePlain()
 
-			fmt.Println("DWPool")
-			DWPool.Transpose().Print()
-			for i := 0; i < cellCNN.Classes; i++{
-				cellCNN.DecryptPrint(1, cellCNN.Filters, true, P[0].Eval().RotateNew(ctDWPool, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
+		if trainEncrypted {
+			P[0].Update()
+		}
+
+		// Copies the updated local weights of the root node on all the other nodes
+		for j := range P {
+
+			if j != 0 {
+				copy(P[j].DC.M, P[0].DC.M)
+				copy(P[j].DW.M, P[0].DW.M)
+
+				if trainEncrypted {
+					P[j].CtDC = P[0].CtDC.CopyNew()
+					P[j].CtDW = P[0].CtDW.CopyNew()
+				}
 			}
 		}
 
@@ -198,13 +229,15 @@ func main() {
 	if trainEncrypted {
 		P[0].PrintCtWPrecision(masterSk)
 		P[0].PrintCtCPrecision(masterSk)
+	} else {
+		P[0].C.Print()
+		P[0].W.Print()
 	}
-	
 
 	// Tests resuls :
- 
+
 	r := 0
-	for i := 0; i < 2000/cellCNN.BatchSize; i++{
+	for i := 0; i < 2000/cellCNN.BatchSize; i++ {
 
 		XPrePool := new(cellCNN.Matrix)
 		XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
@@ -230,21 +263,21 @@ func main() {
 			v.Print()
 			ctv := P[0].Predict(XBatch, masterSk)
 			ctv.Print()
-			precisionStats := ckks.GetPrecisionStats(params, P[0].Encoder(), nil, v.M, ctv.M, params.LogSlots(), 0)
+			precisionStats := ckks.GetPrecisionStats(params, P[0].Encoder, nil, v.M, ctv.M, params.LogSlots(), 0)
 			fmt.Printf("Batch[%2d]", i)
 			fmt.Println(precisionStats.String())
 		}
-		
-		var y int
-		for i := 0; i < cellCNN.BatchSize; i++{
 
-			if real(v.M[i*2]) > real(v.M[i*2+1]){
+		var y int
+		for i := 0; i < cellCNN.BatchSize; i++ {
+
+			if real(v.M[i*2]) > real(v.M[i*2+1]) {
 				y = 1
-			}else{
+			} else {
 				y = 0
 			}
 
-			if y != int(real(YBatch.M[i*2])){
+			if y != int(real(YBatch.M[i*2])) {
 				r++
 			}
 		}

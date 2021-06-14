@@ -29,6 +29,7 @@ type CellCNNSimulation struct {
 
 	Path            string
 	PartyDataSize   int
+	LocalSamples    int
 
 	Epoch 		int
 	Samples 	int
@@ -112,14 +113,11 @@ func NewCellCNNSimul(tni *onet.TreeNodeInstance, sim *CellCNNSimulation) (onet.P
 
 	vars := decentralized.InitCellCNNVars{
 		Path:           sim.Path,
-		PartyDataSize:  sim.PartyDataSize/tni.Tree().Size(),
+		TrainPlain:     !sim.TrainEncrypted,
 		TrainEncrypted: sim.TrainEncrypted,
-		Epochs:         sim.Epoch * cellCNN.Samples / cellCNN.BatchSize,
-		Samples:        sim.Samples,
-		Cells:          sim.Cells,
-		Features:       sim.Features,
-		Filters:        sim.Filters,
-		Classes:        sim.Classes,
+		Deterministic:  sim.Deterministic,
+		Epochs:         sim.Epoch,
+		LocalSamples:   sim.LocalSamples,
 		Debug:          sim.Debug,
 	}
 
@@ -127,9 +125,7 @@ func NewCellCNNSimul(tni *onet.TreeNodeInstance, sim *CellCNNSimulation) (onet.P
 	protocol.InitVars(cryptoParamsList[0], sim.CkksParams, vars)
 
 	// 1) Load Data
-	protocol.XTrain, protocol.YTrain, _, _ = protocol.LoadData()
-
+	//protocol.XTrain, protocol.YTrain, _, _ = protocol.LoadData()
 
 	return protocol, nil
-
 }

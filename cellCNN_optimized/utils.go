@@ -2,14 +2,63 @@ package cellCNN
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"github.com/ldsec/lattigo/v2/utils"
 	"log"
 	"math"
+	"math/bits"
 	"os"
 	"strconv"
 	"strings"
 )
+
+type PRNGInt struct{
+	prng utils.PRNG
+	mask uint64
+	max uint64
+	randomBytes []byte
+
+}
+
+func NewPRNTInt(max int, deterministic bool) (prng *PRNGInt){
+	var err error
+
+	prng = new(PRNGInt)
+
+	if deterministic {
+		if prng.prng, err = utils.NewKeyedPRNG(nil); err != nil{
+			panic(err)
+		}
+	}else{
+		if prng.prng, err = utils.NewPRNG(); err != nil{
+			panic(err)
+		}
+	}
+	
+	prng.mask = uint64(1<<bits.Len64(uint64(max)))-1
+	prng.max = uint64(max)
+	prng.randomBytes = make([]byte, 8)
+	return prng
+}
+
+func (prng *PRNGInt) RandInt() (int){
+
+	var c uint64
+
+	mask := prng.mask
+	max := prng.max
+
+	prng.prng.Clock(prng.randomBytes)
+	c = binary.BigEndian.Uint64(prng.randomBytes) & mask
+
+	for c >= max{
+		prng.prng.Clock(prng.randomBytes)
+		c = binary.BigEndian.Uint64(prng.randomBytes) & mask
+	}
+
+	return int(c)
+}
 
 func WeightsInit(rows, cols, inputs int)(m *Matrix){
    m = NewMatrix(rows, cols)

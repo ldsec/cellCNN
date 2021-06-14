@@ -4,7 +4,6 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"math"
-	"fmt"
 )
 
 
@@ -75,8 +74,6 @@ func GenParams() (params ckks.Parameters){
 	if bootstrappModuliSize > 60{
 		panic("scale too high")
 	}
-
-	fmt.Println(bootstrappModuliSize)
 
 	logQi := make([]int, Levels)
 

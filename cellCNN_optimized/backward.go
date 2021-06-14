@@ -122,7 +122,7 @@ func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, p
 
 func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes int, params ckks.Parameters) (*ckks.Plaintext){
 
-	convolutionMatrixSize := ConvolutionMatrixSize(Y.Rows(), features, filters)
+	convolutionMatrixSize := ConvolutionMatrixSize(Y.Rows, features, filters)
 
 	encoder := ckks.NewEncoder(params)
 
@@ -137,7 +137,7 @@ func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes
 	}
 	
 
-	idx := Y.Rows() * classes * filters
+	idx := Y.Rows * classes * filters
 
 	if false {
 		fmt.Println("Y Plaintext")
