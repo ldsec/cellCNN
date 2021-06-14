@@ -2,3 +2,9 @@
 
 normalized/
 cellCNN_optimized/decentralized/secrets
+
+# SIMULATIONS
+build/
+deploy/
+test_data/
+server_list

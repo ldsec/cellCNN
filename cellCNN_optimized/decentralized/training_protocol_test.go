@@ -25,7 +25,7 @@ func TestRegEncryptedTraining(t *testing.T) {
 	t.Run("CellCNN", genTest(
 		"cellCNN", "../../normalized/",
 		3,
-		true, false,
+		false, true,
 		cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Filters, cellCNN.Classes,
 		15, 2000,
 		true,
@@ -51,11 +51,16 @@ func genTest(
 
 		if !deterministic{
 			rand.Seed(time.Now().Unix())
+		} else {
+			rand.Seed(0)
 		}
 		params := cellCNN.GenParams()
 
-		cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PATH_CRYPTO_FILES)
-		require.NotNil(t, cryptoParamsList)
+		cryptoParamsList := make([]*cellCNN.CryptoParams, hosts)
+		if trainEncrypted {
+			cryptoParamsList = cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PATH_CRYPTO_FILES)
+			require.NotNil(t, cryptoParamsList)
+		}
 
 		for _, s := range servers {
 			_, err := s.ProtocolRegister(protoName, func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -77,7 +82,7 @@ func genTest(
 					Classes:        classes,
 					Debug:          debug,
 				}
-				protocol.InitVars(cryptoParamsList[tni.Index()], vars)
+				protocol.InitVars(cryptoParamsList[tni.Index()], &params, vars)
 
 				// 1) Load Data
 				protocol.XTrain, protocol.YTrain, _, _ = protocol.LoadData()
@@ -95,6 +100,14 @@ func genTest(
 		if err := protocol.Start(); err != nil {
 			log.Panic(fmt.Errorf("start protocol: %v", err))
 		}
-		_ = <-feedback
+		res := <-feedback
+
+		if !trainEncrypted {
+			log.Lvl2(res.C.M[:10], res.W.M[:10])
+		} else {
+			cellCNN.DecryptPrint(features, filters, true, res.CtC, params, cryptoParamsList[0].AggregateSk)
+			cellCNN.DecryptPrint(features, filters, true, res.CtW, params, cryptoParamsList[0].AggregateSk)
+		}
+
 	}
 }

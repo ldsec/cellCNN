@@ -60,7 +60,10 @@ github.com/ldsec/lattigo/v2 v2.1.1 h1:UNcnYoYcTiUmrW4k00szP8Jo3/+E4GdyOqVtCB3CYm
 github.com/ldsec/lattigo/v2 v2.1.1/go.mod h1:MrSDX8/hcs/h++1E1kK0Kn7N5TgSl2om9kNwhx+VYcw=
 github.com/ldsec/lattigo/v2 v2.1.2-0.20210604150832-9563e4013d81 h1:t2HIOuJBY5XaxwzQzhSTOnlqWwcM0iqRFTtcB17kNBg=
 github.com/ldsec/lattigo/v2 v2.1.2-0.20210604150832-9563e4013d81/go.mod h1:SRD19FRy5S8KWCHMjQCSac6wp7BHD65D0IaMFAysY2Q=
+github.com/montanaflynn/stats v0.5.0 h1:2EkzeTSqBB4V4bJwWrt5gIIrZmpJBcoIRGS2kWLgzmk=
 github.com/montanaflynn/stats v0.5.0/go.mod h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc=
+github.com/pelletier/go-toml v1.9.2 h1:7NiByeVF4jKSG1lDF3X8LTIkq2/bu+1uYbIm1eS5tzk=
+github.com/pelletier/go-toml v1.9.2/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/phpdave11/gofpdf v1.4.2 h1:KPKiIbfwbvC/wOncwhrpRdXVj2CZTCFlw4wnoyjtHfQ=
 github.com/phpdave11/gofpdf v1.4.2/go.mod h1:zpO6xFn9yxo3YLyMvW8HcKWVdbNqgIfOOp2dXMnm1mY=
 github.com/phpdave11/gofpdi v1.0.12/go.mod h1:vBmVV0Do6hSBHC8uKUQ71JGW+ZGQq74llk/7bXwjDoI=

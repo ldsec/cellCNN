@@ -1,6 +1,5 @@
 package decentralized
 
-import "C"
 import (
 	"errors"
 	"fmt"
@@ -54,6 +53,14 @@ type ChildUpdatedClearDataStruct struct {
 	ChildUpdatedDataMessage
 }
 
+// ResultCellCNN is the final weights after the execution of the protocol
+type ResultCellCNN struct {
+	C	*cellCNN.Matrix
+	W	*cellCNN.Matrix
+	CtC *ckks.Ciphertext
+	CtW *ckks.Ciphertext
+}
+
 // TrainingProtocol keeps the state of the protocol
 type TrainingProtocol struct {
 	*onet.TreeNodeInstance
@@ -64,7 +71,7 @@ type TrainingProtocol struct {
 	WaitChannel chan struct{}
 
 	// Feedback Channels
-	FeedbackChannel chan struct{}
+	FeedbackChannel chan ResultCellCNN
 
 	// Other Channels
 	AnnouncementChannel chan newIterationAnnouncementStruct
@@ -104,7 +111,7 @@ func NewTrainingProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error
 	pap := &TrainingProtocol{
 		TreeNodeInstance:    n,
 		WaitChannel:         make(chan struct{}, 1),
-		FeedbackChannel:     make(chan struct{}, 1),
+		FeedbackChannel:     make(chan ResultCellCNN, 1),
 	}
 
 	err := pap.RegisterChannels(&pap.AnnouncementChannel, &pap.ChildDataChannel)
@@ -123,7 +130,7 @@ func (p *TrainingProtocol) Start() error {
 	C := cellCNN.WeightsInit(p.Features, p.Filters, p.Features)
 	W := cellCNN.WeightsInit(p.Filters, p.Classes, p.Filters)
 
-	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights")
+	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " initialized the weights", C.M[:2], W.M[:2])
 
 	// serialize C and W
 	Cb, err := cellCNN.MarshalBinary(C)
@@ -217,6 +224,8 @@ func (p *TrainingProtocol) Dispatch() error {
 						return err
 					}
 				}
+
+				log.Lvl2("NEW GLOBAL WEIGHTS ", p.CNNProtocol.C.M[:2], p.CNNProtocol.W.M[:2])
 			}
 
 			//need to check as new number is part of the message for non root nodes
@@ -271,8 +280,22 @@ func (p *TrainingProtocol) Dispatch() error {
 
 	// STEP 4. Report final weights
 	if p.IsRoot() {
-		time.Sleep(10*time.Second)
-		p.FeedbackChannel <- struct{}{}
+		if !p.TrainEncrypted {
+			p.FeedbackChannel <- ResultCellCNN{
+				C:   p.CNNProtocol.C,
+				W:   p.CNNProtocol.W,
+				CtC: nil,
+				CtW: nil,
+			}
+		} else {
+			p.FeedbackChannel <- ResultCellCNN{
+				C:   nil,
+				W:   nil,
+				CtC: p.CNNProtocol.CtC(),
+				CtW: p.CNNProtocol.CtW(),
+			}
+		}
+
 	}
 
 	return nil
@@ -325,10 +348,13 @@ func (p *TrainingProtocol) localComputation() {
 	// Pre-pools the cells
 	for k := 0; k < cellCNN.BatchSize; k++ {
 
+		partyBatchStart := p.Index()*p.PartyDataSize
+		partyBatchEnd := (p.Index()+1)*p.PartyDataSize
+
 		randi := rand.Intn(p.PartyDataSize)
 
-		X := p.XTrain[randi]
-		Y := p.YTrain[randi]
+		X := p.XTrain[partyBatchStart:partyBatchEnd][randi]
+		Y := p.YTrain[partyBatchStart:partyBatchEnd][randi]
 
 		XPrePool.SumColumns(X)
 		XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
@@ -390,8 +416,16 @@ func (p *TrainingProtocol) broadcast() error {
 					return err
 				}
 
+				if p.IsRoot() {
+					log.Lvl2(childDC.M[:2], childDW.M[:2])
+				}
+
 				p.DCPool.Add(p.DCPool, childDC)
 				p.DWPool.Add(p.DWPool, childDW)
+
+				if p.IsRoot() {
+					log.Fatal(p.DCPool.M[:2], p.DWPool.M[:2])
+				}
 			} else {
 				childDW := p.CNNProtocol.CtDW().CopyNew()
 				childDC := p.CNNProtocol.CtDC().CopyNew()
@@ -415,6 +449,9 @@ func (p *TrainingProtocol) broadcast() error {
 	if !p.IsRoot() {
 		// serialize DCPool and DWPool
 		if !p.TrainEncrypted {
+			p.DCPool.Add(p.DCPool, p.CNNProtocol.DC)
+			p.DWPool.Add(p.DWPool, p.CNNProtocol.DW)
+
 			DCb, err := cellCNN.MarshalBinary(p.DCPool)
 			if err != nil {
 				return err
@@ -432,6 +469,9 @@ func (p *TrainingProtocol) broadcast() error {
 				return fmt.Errorf("send to parent: %v", err)
 			}
 		} else {
+			p.CNNProtocol.Eval().Add(p.ctDCPool, p.CNNProtocol.CtC(), p.ctDCPool)
+			p.CNNProtocol.Eval().Add(p.ctDWPool, p.CNNProtocol.CtW(), p.ctDWPool)
+
 			bDW, err := p.ctDWPool.MarshalBinary()
 			if err != nil {
 				return err

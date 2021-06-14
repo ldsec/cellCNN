@@ -1,25 +1,24 @@
 package cellCNN
 
-
 import (
-	"github.com/ldsec/lattigo/v2/utils"
-	"math"
 	"bufio"
+	"fmt"
+	"github.com/ldsec/lattigo/v2/utils"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
-	"fmt"
 )
 
 func WeightsInit(rows, cols, inputs int)(m *Matrix){
    m = NewMatrix(rows, cols)
+
    for i := range m.M {
       m.M[i] = complex(utils.RandFloat64(-1, 1) / math.Sqrt(float64(inputs)), 0)
    }
    return 
 }
-
 
 func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*Matrix) {
 	y := String_to_float(Load_file(path+"y_train.txt", samples))

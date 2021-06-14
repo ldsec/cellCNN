@@ -1,3 +1,3 @@
 package cellCNN
 
-const ThreadsCount = 10
+const ThreadsCount = 1

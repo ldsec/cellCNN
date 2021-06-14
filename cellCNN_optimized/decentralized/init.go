@@ -2,6 +2,7 @@ package decentralized
 
 import (
 	cellCNN "github.com/ldsec/cellCNN/cellCNN_optimized"
+	"github.com/ldsec/lattigo/v2/ckks"
 )
 
 type InitCellCNNVars struct {
@@ -21,17 +22,19 @@ type InitCellCNNVars struct {
 	Debug 			bool
 }
 
-func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, vars InitCellCNNVars) {
+func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, params *ckks.Parameters, vars InitCellCNNVars) {
 
 	// party creation
-	p.CNNProtocol = cellCNN.NewCellCNNProtocol(*cryptoParams.Params)
+	p.CNNProtocol = cellCNN.NewCellCNNProtocol(*params)
 
-	// key generation
-	p.CNNProtocol.SetSecretKey(cryptoParams.Sk)
-	p.CNNProtocol.SetPublicKey(cryptoParams.Pk)
-	cryptoParams.SetRotKeys(p.CNNProtocol.RotKeyIndex())
-	p.CryptoParams = cryptoParams
-	p.CNNProtocol.EvaluatorInit(cryptoParams.Rlk, cryptoParams.RotKs)
+	if vars.TrainEncrypted {
+		// key generation
+		p.CNNProtocol.SetSecretKey(cryptoParams.Sk)
+		p.CNNProtocol.SetPublicKey(cryptoParams.Pk)
+		cryptoParams.SetRotKeys(p.CNNProtocol.RotKeyIndex())
+		p.CryptoParams = cryptoParams
+		p.CNNProtocol.EvaluatorInit(cryptoParams.Rlk, cryptoParams.RotKs)
+	}
 
 	// init vars
 	p.Path = vars.Path
