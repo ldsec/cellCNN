@@ -22,11 +22,11 @@ func TestRegEncryptedTraining(t *testing.T) {
 
 	t.Run("CellCNN", genTest(
 		"cellCNN",           //protoID
-		"../../normalized/", // datapath
-		3,                   // hosts
-		true,                // trainPlain
-		true,                // trainEncrypted
-		true,                // deterministic
+		"../../normalized/",   // datapath
+		3,                    // hosts
+		true,              // trainPlain
+		true,          // trainEncrypted
+		true,        	// deterministic
 		150,                 // Number of epochs
 		true,                // debug
 	))
