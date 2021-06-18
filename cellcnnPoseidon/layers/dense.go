@@ -1,7 +1,6 @@
 package layers
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/approx/leastsquares"
@@ -184,7 +183,7 @@ func (dense *Dense) Forward(
 
 	// 5. apply least square approximation to compute the sigmoid
 	cfs, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
-	fmt.Printf("Using approx coefficient: %v\n", cfs)
+	// fmt.Printf("Using approx coefficient: %v\n", cfs)
 	if err != nil {
 		panic("something is wrong in dense least square approximation")
 	}

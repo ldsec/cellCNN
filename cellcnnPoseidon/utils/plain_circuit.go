@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"math"
+	"math/rand"
 
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
@@ -272,4 +273,90 @@ func DebugWithDense(
 	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
 	fmt.Println("--> Values test:")
 	fmt.Printf("    First{%v}: %v\n", firstN, valuesTest[:firstN])
+}
+
+func ComputeDimWithIndex(i, r, c int, rowPacked bool) (int, int) {
+	var dim0, dim1 int
+	if rowPacked {
+		dim0 = i / c
+		dim1 = i % c
+	} else {
+		dim0 = i % r
+		dim1 = i / r
+	}
+	return dim0, dim1
+}
+
+// return the mean square error between the plaintext dense and the ciphertext
+func DebugCtWithDenseStatistic(
+	params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant *mat.Dense,
+	decryptor ckks.Decryptor, encoder ckks.Encoder, rowPacked bool, verbose bool,
+) float64 {
+	r, c := valuesWant.Dims()
+	valuesTest := encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
+	var dim0, dim1 int
+
+	mse := 0.0
+
+	for i := 0; i < r*c; i++ {
+		dim0, dim1 = ComputeDimWithIndex(i, r, c, rowPacked)
+		target := valuesWant.At(dim0, dim1)
+		pred := real(valuesTest[i])
+		mse += math.Pow(target-pred, 2.0)
+	}
+
+	prob := rand.Intn(r * c)
+	dim0, dim1 = ComputeDimWithIndex(prob, r, c, rowPacked)
+	mse = mse / float64(r*c)
+
+	if verbose {
+		fmt.Printf(">> Debug with plaintext | index: %v, want: %v, get: %v, MSE: %v\n",
+			prob, valuesWant.At(dim0, dim1), real(valuesTest[prob]), mse)
+	}
+
+	return mse
+}
+
+// return the mean square error between the plaintext dense and the ciphertext
+func DebugCtSliceWithDenseStatistic(
+	params ckks.Parameters, ciphertexts []*ckks.Ciphertext, valuesWant *mat.Dense,
+	decryptor ckks.Decryptor, encoder ckks.Encoder, rowPacked bool, verbose bool,
+) float64 {
+	r, c := valuesWant.Dims()
+	valuesTest := make([][]complex128, len(ciphertexts))
+	for i, each := range ciphertexts {
+		valuesTest[i] = encoder.Decode(decryptor.DecryptNew(each), params.LogSlots())
+	}
+	var dim0, dim1 int
+	var pred float64
+
+	mse := 0.0
+
+	for i := 0; i < r*c; i++ {
+		dim0, dim1 = ComputeDimWithIndex(i, r, c, rowPacked)
+		target := valuesWant.At(dim0, dim1)
+		if rowPacked {
+			pred = real(valuesTest[dim0][dim1])
+		} else {
+			pred = real(valuesTest[dim1][dim0])
+		}
+		mse += math.Pow(target-pred, 2.0)
+	}
+
+	mse = mse / float64(r*c)
+
+	prob := rand.Intn(r * c)
+	dim0, dim1 = ComputeDimWithIndex(prob, r, c, rowPacked)
+	if rowPacked {
+		pred = real(valuesTest[dim0][dim1])
+	} else {
+		pred = real(valuesTest[dim1][dim0])
+	}
+
+	if verbose {
+		fmt.Printf(">> Debug with plaintext | index: %v, want: %v, get: %v, MSE: %v\n",
+			prob, valuesWant.At(dim0, dim1), pred, mse)
+	}
+
+	return mse
 }

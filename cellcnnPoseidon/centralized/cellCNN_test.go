@@ -533,8 +533,8 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 200
-	nmakers := 37
+	ncells := 10
+	nmakers := 5
 	nfilters := 6
 	nclasses := 2
 	var sigDegree uint = 3
@@ -553,39 +553,6 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 		"settings for sigmoid least square approximation: degree: %v | interval: %v\n",
 		sigDegree, sigInterval,
 	)
-
-	// slots := params.Slots()
-
-	// filter1 := make([]complex128, slots)
-	// for i, _ := range filter1 {
-	// 	if i >= ncells*nmakers {
-	// 		break
-	// 	}
-	// 	filter1[i] = complex(float64(i%nmakers)/4, 0)
-	// }
-
-	// filter2 := make([]complex128, slots)
-	// for i, _ := range filter2 {
-	// 	if i >= ncells*nmakers {
-	// 		break
-	// 	}
-	// 	filter2[i] = complex((float64(i%nmakers)+1.0)/4, 0)
-	// }
-
-	// weights := make([]complex128, slots)
-	// for i, _ := range weights {
-	// 	if i >= nfilters*nclasses {
-	// 		break
-	// 	}
-	// 	weights[i] = complex(float64(i%3)/4, 0)
-	// }
-
-	// ef1 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter1, params.LogSlots())
-	// ef2 := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), filter2, params.LogSlots())
-	// ew := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), weights, params.LogSlots())
-	// ecf1 := encryptor.EncryptNew(ef1)
-	// ecf2 := encryptor.EncryptNew(ef2)
-	// ecw := encryptor.EncryptNew(ew)
 
 	// pk := kgen.GenPublicKey(sk)
 	cryptoParams := utils.NewCryptoPlaceHolder(params, sk, nil, rlk, encoder, encryptor)
@@ -618,7 +585,7 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 	fmt.Println("=========================================")
 	fmt.Println()
 
-	batchSize := 5
+	batchSize := 2
 	iterrations := 10
 	isMomentum := false
 
@@ -633,7 +600,7 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 
 		t1 := time.Now()
 		// forward & backward
-		encOut := model.BatchProcessing(X, y, isMomentum)
+		encOut, _, _ := model.BatchProcessing(X, y, isMomentum)
 		if i == 0 {
 			plainOut = pNet.ForwardBatch(matrix, cw, dw)
 		} else {
@@ -671,12 +638,19 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 		dDense = pNet.dense.GetWeights()
 
 		// if i == iterrations-1 {
+		// fmt.Println("######## Check the backward gradient for filter0 #########")
+		// utils.DebugWithDense(params, model.conv1d.GetWeights()[0], dConv, decryptor, encoder, 10, []int{0}, false)
+		// fmt.Println("######## Check the backward gradient for filter1 #########")
+		// utils.DebugWithDense(params, model.conv1d.GetWeights()[1], dConv, decryptor, encoder, 10, []int{1}, false)
+		// fmt.Println("######## Check the backward gradient for dense #########")
+		// utils.DebugWithDense(params, model.dense.GetWeights(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
+
 		fmt.Println("######## Check the backward gradient for filter0 #########")
-		utils.DebugWithDense(params, model.conv1d.GetWeights()[0], dConv, decryptor, encoder, 10, []int{0}, false)
+		utils.DebugCtSliceWithDenseStatistic(params, model.conv1d.GetWeights(), dConv, decryptor, encoder, false, true)
 		fmt.Println("######## Check the backward gradient for filter1 #########")
-		utils.DebugWithDense(params, model.conv1d.GetWeights()[1], dConv, decryptor, encoder, 10, []int{1}, false)
+		utils.DebugCtSliceWithDenseStatistic(params, model.conv1d.GetWeights(), dConv, decryptor, encoder, false, true)
 		fmt.Println("######## Check the backward gradient for dense #########")
-		utils.DebugWithDense(params, model.dense.GetWeights(), dDense, decryptor, encoder, 10, []int{0, 1}, false)
+		utils.DebugCtWithDenseStatistic(params, model.dense.GetWeights(), dDense, decryptor, encoder, false, true)
 		// }
 
 		// runtime.GC()

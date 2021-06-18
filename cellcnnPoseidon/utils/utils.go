@@ -112,3 +112,21 @@ func CopyCiphertextSlice(input []*ckks.Ciphertext) []*ckks.Ciphertext {
 	}
 	return res
 }
+
+func AVGandStdev(slice []float64) (float64, float64) {
+	avg := 0.0
+	mse := 0.0
+
+	for _, item := range slice {
+		avg += item
+	}
+
+	avg = avg / float64(len(slice))
+
+	for _, item := range slice {
+		mse += math.Pow(item-avg, 2.0)
+	}
+	mse = mse / float64(len(slice))
+	mse = math.Pow(mse, 0.5)
+	return avg, mse
+}

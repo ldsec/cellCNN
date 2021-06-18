@@ -323,7 +323,7 @@ func (conv *Conv1D) Backward(
 		// evaluator.InnerSum(dwSlice[i], -sts.Nmakers, sts.Ncells, dwSlice[i])
 		ts3 := time.Since(tpart3).Seconds()
 		tsum := time.Since(tpart1).Seconds()
-		if i == 0 {
+		if i == -1 {
 			fmt.Printf("Sum: %v, part1: %v(%v), part2: %v(%v), part3: %v(%v)\n",
 				tsum, ts1, ts1/tsum, ts2, ts2/tsum, ts3, ts3/tsum,
 			)

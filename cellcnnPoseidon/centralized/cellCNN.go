@@ -1,7 +1,6 @@
 package centralized
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
@@ -286,7 +285,7 @@ func (c *CellCNN) InitWeights(
 	ncells := c.cnnSettings.Ncells
 	encoder := c.encoder
 	encryptor := c.encryptor
-	fmt.Println("check params: nfilters, nmakers, nclasses, ncells", nfilters, nmakers, nclasses, ncells)
+
 	// generate random conv1d weights
 	if wConv1D == nil {
 		wConv1D = make([]*ckks.Ciphertext, 0)
@@ -309,8 +308,6 @@ func (c *CellCNN) InitWeights(
 	}
 
 	var cm, dm *mat.Dense
-
-	fmt.Println("len of pConv, pDense:", len(pConv), len(pDense))
 
 	if pConv != nil {
 		cw := make([]float64, len(pConv))
@@ -345,7 +342,6 @@ func (c *CellCNN) InitWeights(
 	// c.pooling = layers.NewPool(ncells, nmakers, nfilters)
 	c.dense = layers.NewDense(wDense, c.momentum)
 	c.dense.WithEncoder(encoder)
-	fmt.Printf("==> CellCNN successfully initializing weights\n")
 	return cm, dm
 }
 
@@ -363,7 +359,7 @@ func (c *CellCNN) InitEvaluator(
 	params := cryptoParams.Params
 	sk := cryptoParams.Sk
 
-	t1 := time.Now()
+	// t1 := time.Now()
 
 	Cinds := c.conv1d.InitRotationInds(c.cnnSettings, params)
 	Dinds := c.dense.InitRotationInds(c.cnnSettings, kgen, c.params, encoder, maxM1N2Ratio)
@@ -371,14 +367,14 @@ func (c *CellCNN) InitEvaluator(
 
 	rks := kgen.GenRotationKeysForRotations(Rinds, false, sk)
 
-	t2 := time.Since(t1).Seconds()
+	// t2 := time.Since(t1).Seconds()
 
 	c.evaluator = ckks.NewEvaluator(c.params, rlwe.EvaluationKey{Rlk: c.relikey, Rtks: rks})
 
 	// cryptoParams.SetEvaluator(c.evaluator)
 
-	fmt.Printf("==> CellCNN successfully creating evaluator\n")
-	fmt.Printf("    with %v to generate rotation keys\n", t2)
+	// fmt.Printf("==> CellCNN successfully creating evaluator\n")
+	// fmt.Printf("    with %v to generate rotation keys\n", t2)
 	return c.evaluator
 }
 

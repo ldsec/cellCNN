@@ -1,0 +1,18 @@
+> Settings for cellCNN: ncells: 200 | nmakers: 38 | nfilters: 8 | nclasses: 2
+> Settings for training: degree: 3 | interval: 5 | max iter: 10 | batchsize: 1 | lr: 0.1, momentum: 0.9
+>>>>>> Initialization time (offline): 23.9270678
+>>> Current Round fwd: 6.3041365, bwd: 8.9500461, root update: 0.8327757, mse_conv: 6.7675822710246395e-19, mse_dense: 1.8507975708014483e-23
+>>> Current Round fwd: 6.3191985, bwd: 8.9590483, root update: 0.9264925, mse_conv: 5.002752941024778e-08, mse_dense: 1.3831677069603645e-07
+>>> Current Round fwd: 6.310164, bwd: 8.917161400000001, root update: 0.9185389, mse_conv: 2.3749225347810924e-07, mse_dense: 5.868485778661632e-07
+>>> Current Round fwd: 6.3171125, bwd: 8.9231462, root update: 0.9185133, mse_conv: 6.273674298948879e-07, mse_dense: 1.236063723902601e-06
+>>> Current Round fwd: 6.3021257, bwd: 8.8892632, root update: 0.9095427, mse_conv: 1.20643522545751e-06, mse_dense: 2.1025890279654614e-06
+>>> Current Round fwd: 6.3151494, bwd: 9.2063842, root update: 0.9235373, mse_conv: 1.8303907969970736e-06, mse_dense: 3.026498116996907e-06
+>>> Current Round fwd: 6.3121549, bwd: 8.8932349, root update: 0.9135972, mse_conv: 2.6796173201052823e-06, mse_dense: 4.6693076817677995e-06
+>>> Current Round fwd: 6.2921803, bwd: 8.8822553, root update: 0.9734267, mse_conv: 4.030524707535047e-06, mse_dense: 8.033075816397356e-06
+>>> Current Round fwd: 6.8566457, bwd: 9.312115100000002, root update: 0.9594245, mse_conv: 5.637549533511565e-06, mse_dense: 1.3282864371985713e-05
+>>> Current Round fwd: 6.7030852, bwd: 9.5265238, root update: 0.9444485, mse_conv: 7.456040641163154e-06, mse_dense: 2.0925240997223917e-05
+[6.3041365 6.3191985 6.310164 6.3171125 6.3021257 6.3151494 6.3121549 6.2921803 6.8566457 6.7030852]
+>>>>>> Average over 10 iteration | fwd: 6.40319527, bwd: 9.04591785, root update: 0.92202973
+>>>>>> MSE over 10 iterations | fwd: 0.1915892027473105, bwd: 0.21227800405381275, root update: 0.03575286590739405
+PASS
+ok  	github.com/ldsec/cellCNN/cellcnnPoseidon/centralized	194.207s

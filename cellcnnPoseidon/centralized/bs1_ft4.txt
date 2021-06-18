@@ -1,0 +1,18 @@
+> Settings for cellCNN: ncells: 200 | nmakers: 38 | nfilters: 4 | nclasses: 2
+> Settings for training: degree: 3 | interval: 5 | max iter: 10 | batchsize: 1 | lr: 0.1, momentum: 0.9
+>>>>>> Initialization time (offline): 23.5231223
+>>> Current Round fwd: 3.2233463, bwd: 4.7902253, root update: 0.448803, mse_conv: 1.9914270458865102e-19, mse_dense: 6.4214002390792755e-24
+>>> Current Round fwd: 3.282198, bwd: 4.8420841, root update: 0.5186439, mse_conv: 1.010478014050758e-07, mse_dense: 1.5478090715048554e-07
+>>> Current Round fwd: 3.2832148, bwd: 4.9397663, root update: 0.5126591, mse_conv: 4.2861949847628495e-07, mse_dense: 9.39132257611028e-07
+>>> Current Round fwd: 3.3290689, bwd: 4.8829466, root update: 0.5116589, mse_conv: 1.1459603729336727e-06, mse_dense: 3.2447543907719212e-06
+>>> Current Round fwd: 3.2273707, bwd: 4.8011651, root update: 0.5086679, mse_conv: 2.1882283075682515e-06, mse_dense: 6.800163511551567e-06
+>>> Current Round fwd: 3.2912289, bwd: 4.915831300000001, root update: 0.5146503, mse_conv: 3.7700999120632562e-06, mse_dense: 1.1841306612645842e-05
+>>> Current Round fwd: 3.3131405, bwd: 4.8689548, root update: 0.5076428, mse_conv: 5.9134204923110265e-06, mse_dense: 1.908815825973431e-05
+>>> Current Round fwd: 3.2533039, bwd: 4.846045, root update: 0.5126543, mse_conv: 8.10437356015727e-06, mse_dense: 2.6569223144360072e-05
+>>> Current Round fwd: 3.2822263, bwd: 4.8809468, root update: 0.5156205, mse_conv: 1.0809523886886185e-05, mse_dense: 3.5955783361322896e-05
+>>> Current Round fwd: 3.2662354000000002, bwd: 4.8540239000000005, root update: 0.5166517, mse_conv: 1.3480145638242297e-05, mse_dense: 4.213754794740306e-05
+[3.2233463 3.282198 3.2832148 3.3290689 3.2273707 3.2912289 3.3131405 3.2533039 3.2822263 3.2662354000000002]
+>>>>>> Average over 10 iteration | fwd: 3.27513337, bwd: 4.86219892, root update: 0.50676524
+>>>>>> MSE over 10 iterations | fwd: 0.032089017548658304, bwd: 0.04399822382287258, root update: 0.0195877831048437
+PASS
+ok  	github.com/ldsec/cellCNN/cellcnnPoseidon/centralized	114.113s
