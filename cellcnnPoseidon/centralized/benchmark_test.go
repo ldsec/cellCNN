@@ -24,8 +24,8 @@ func TestLocalTime(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 200
-	nmakers := 38
+	ncells := 10
+	nmakers := 5
 	nfilters := 8
 	nclasses := 2
 	var sigDegree uint = 3
@@ -33,8 +33,8 @@ func TestLocalTime(t *testing.T) {
 	maxM1N2Ratio := 8.0
 	momentum := 0.9
 	lr := 0.1
-	batchSize := 10
-	iterrations := 10
+	batchSize := 1
+	iterrations := 1
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 

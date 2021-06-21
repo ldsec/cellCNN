@@ -436,7 +436,7 @@ func (p *NNEncryptedProtocol) localIteration(eval ckks.Evaluator) (*centralized.
 	X, _, y := utils.GetRandomBatch(p.TrainSet, p.BatchSize, p.CryptoParams.Params, p.encoder, p.CellCNNSettings)
 
 	// batch forward and backward
-	preds := p.model.BatchProcessing(X, y, isMomentum)
+	preds, _, _ := p.model.BatchProcessing(X, y, isMomentum)
 
 	// get scaled gradients
 	grad := p.model.GetGradients()

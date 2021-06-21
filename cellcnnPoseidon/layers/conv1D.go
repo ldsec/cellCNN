@@ -12,9 +12,7 @@ import (
 type Conv1D struct {
 	filters   []*ckks.Ciphertext // len(filters) = Nfilters
 	lastInput *ckks.Plaintext    // packed ncells after encoding
-	// Activation  func(float64) float64
-	// dActivation func(float64) float64
-	// u           []*mat.Dense
+
 	encoder  ckks.Encoder
 	gradient []*ckks.Ciphertext
 	momentum float64
@@ -30,7 +28,7 @@ func NewConv1D(filters []*ckks.Ciphertext, isMomentum float64) *Conv1D {
 	}
 }
 
-//  return the encrypted weights as bytes
+// return the encrypted weights as bytes
 func (conv *Conv1D) Marshall() [][]byte {
 	var err error
 	Nfilters := len(conv.filters)
@@ -84,41 +82,23 @@ func (conv *Conv1D) UpdateMomentum(grad []*ckks.Ciphertext) {
 	conv.vt = grad
 }
 
-// func (conv *Conv1D) SetMomentum() {
-// 	conv.isMomentum = true
-// }
-
 func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Parameters) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
 	ncells := sts.Ncells
-	// nclasses := sts.Nclasses
 
 	// Conv1D Forward
 	// 1. for input weights matrix mult
 	Fmult := params.RotationsForInnerSumLog(1, nmakers*ncells)
 	// 2. for rotation the result to left most slots
-	Fshift := make([]int, 0)
-	for i := 1; i < nfilters; i++ {
-		Fshift = append(Fshift, -i)
-	}
+	Fshift := utils.NegativeSlice(utils.NewSlice(1, nfilters-1, 1))
 	Finds := append(Fmult, Fshift...)
-	// fmt.Printf("Fshift: %v, Finds: %v\n", Fshift, Finds)
 
 	//Conv1D Backward
 	// 3. for replicate the err for each filter
-	// ---------------------------------------
-	// Brep := make([]int, 0)
-	// for i := 0; i < sts.Nfilters; i++ {
-	// 	extInds := utils.GenExtentionInds(i*sts.Nclasses, utils.NewSlice(0, sts.Ncells*sts.Nmakers-1, 1))
-	// 	Brep = append(Brep, extInds...)
-	// }
-	// ---------------------------------------
-	// +++++++++++++++++++++++++++++++++++++++
 	Brep1 := utils.NewSlice(0, (sts.Nfilters-1)*sts.Nclasses, sts.Nclasses)
 	Brep2 := params.RotationsForInnerSumLog(-1, sts.Ncells*sts.Nmakers)
 	Brep := append(Brep1, Brep2...)
-	// +++++++++++++++++++++++++++++++++++++++
 
 	// 4. left collect gradient
 	Bcol := make([]int, sts.Nmakers)
@@ -126,14 +106,10 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Par
 		Bcol[i] = sts.Ncells*i - i
 	}
 	// 5. replicate gradient
-	// ++++++++++++++++++++++++++++
 	Brepg := params.RotationsForInnerSumLog(-sts.Nmakers, sts.Ncells)
 	B0 := params.RotationsForInnerSumLog(1, sts.Ncells)
 	Bcollect := params.RotationsForInnerSumLog(sts.Ncells-1, sts.Nmakers)
-	// eval.InnerSum(mct, step-1, num, mct)
-	// ----------------------------
-	// Brepg := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
-	// ----------------------------
+
 	Binds := append(Brep, Bcol...)
 	Binds = append(Binds, Brepg...)
 	Binds = append(Binds, B0...)
@@ -179,13 +155,9 @@ func (conv *Conv1D) Forward(
 	leftMostMask[0] = complex(1.0/float64(sts.Ncells), 0)
 	poolMask := conv.encoder.EncodeNTTAtLvlNew(params.MaxLevel(), leftMostMask, params.LogSlots())
 
-	// wg := sync.WaitGroup{}
 	// loop over all filters
 	for i, filter := range conv.filters {
 		eval := evaluator.ShallowCopy()
-		// wg.Add(1)
-		// go func(i int, filter *ckks.Ciphertext, eval ckks.Evaluator) {
-		// defer wg.Done()
 
 		// 1. multiply the filters and the input
 		actvs[i] = eval.MulRelinNew(filter, input)
@@ -199,13 +171,7 @@ func (conv *Conv1D) Forward(
 		eval.MulRelin(actvs[i], poolMask, actvs[i])
 
 		eval.Rescale(actvs[i], params.Scale(), actvs[i])
-
-		// 	}(id, ft, evaluator.ShallowCopy())
 	}
-
-	// wg.Wait()
-
-	// output = actvs[0]
 
 	for i := 0; i < len(actvs); i++ {
 		// 5. rotate the result to i-th place and add together

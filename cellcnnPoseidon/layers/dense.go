@@ -9,11 +9,6 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
-// requires rotation keys for:
-//	slots - [1, Nclasses-1] * nfilters
-//  [1, nfilters-1]
-// 	[1, Nclasses-1] * (nfilters - 1)
-
 // Dense output layer for classification (nclasses > 1)
 type Dense struct {
 	weights   *ckks.Ciphertext // column packed weights
@@ -24,8 +19,6 @@ type Dense struct {
 	gradient  *ckks.Ciphertext
 	momentum  float64
 	vt        *ckks.Ciphertext
-	// Activation  func(float64) float64
-	// dActivation func(float64) float64
 }
 
 // NewDense constructor
@@ -84,32 +77,17 @@ func (dense *Dense) UpdateMomentum(grad *ckks.Ciphertext) {
 func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator,
 	params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
 ) []int {
-	// maxM1N2Ratio = 8.0
-	// nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
-	// ncells := sts.Ncells
 	nclasses := sts.Nclasses
 
 	// Dense Forward
 	// 1. for replicate the input mutiple times
-	// Frep := make([]int, 0)
-	// for i := 1; i < nclasses; i++ {
-	// 	Frep = append(Frep, -i*nfilters)
-	// }
 	Frep := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
 	// 2. for input weights matrix mult
 	Fmult := params.RotationsForInnerSumLog(1, nfilters)
-	// 3. for collect the result into the left most slots
-	// step := nfilters - 1
-	// Fshift := utils.NewSlice(0, (nclasses-1)*step, step)
 	Finds := append(Frep, Fmult...)
-	// Finds = append(Finds, Fshift...)
 
 	// Dense Backward
-
-	// 	err mult input
-	// 	rotation keys required: -1 ~ -(k-1)
-	// 	rotation keys required: -k ~ -k*(theta-1)
 	rot1 := params.RotationsForInnerSumLog(-1, sts.Nfilters)
 	rot2 := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
 	rot3 := params.RotationsForInnerSumLog(-sts.Nclasses, sts.Nfilters)
@@ -121,8 +99,6 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	ouRowPacked := false
 	colsMatrix := utils.GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := utils.GenTransposeMap(colsMatrix)
-	// diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
-	// diagM.N1 = int(maxM1N2Ratio)
 	diagM := encoder.EncodeDiagMatrixBSGSAtLvl(params.MaxLevel(), transposeVec, params.Scale(), maxM1N2Ratio, params.LogSlots())
 
 	dense.diagM = diagM
