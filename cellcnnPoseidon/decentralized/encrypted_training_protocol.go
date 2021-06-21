@@ -33,8 +33,6 @@ const NNEncryptedProtocolName = "NNEncryptedProtocol"
 type NewEncryptedIterationMessage struct {
 	IterationNumber int
 	GlobalWeights   [][]byte // first n-1 are conv filters, last one is dense weight
-	GlobalSk        []byte
-	GlobalPk        []byte
 }
 
 // ChildUpdatedLocalGradientsMessage contains the gradients to be aggregated
@@ -110,8 +108,6 @@ type NNEncryptedProtocol struct {
 	ChildUpdatedLocalGradientsChannel chan []childUpdatedLocalGradientsStruct
 	SyncChannel                       chan SyncStruct
 
-	// Weights *ckks.Ciphertext // global initial weights
-
 	model *centralized.CellCNN
 
 	MaxIterations   int
@@ -119,28 +115,12 @@ type NNEncryptedProtocol struct {
 
 	CryptoParams *utils.CryptoParams
 
-	// Debug libspindle.Debug
-
 	// Number of input, hidden and output nodes
 	CellCNNSettings *utils.CellCnnSettings
 
-	// Activations for nodes
-	// InputActivations                           []*ckks.Plaintext
-	// HiddenActivations, HiddenBeforeActivations []libspindle.CipherMatrix
-	// OutputActivations, OutBeforeActivations    libspindle.CipherVector
-
-	// ElmanRNN contexts
-	// Contexts [][]float64
-
-	// X, Y [][]float64
+	// currently not used, using randomly generated data from test
 	TrainSet *common.CnnDataset
 
-	//deltas for batch averaging
-	// EOut, EHidden [][]*ckks.Ciphertext
-	// Last change in weights for momentum
-	// DeltaOut, DeltaHidden [][]*ckks.Ciphertext
-
-	// Mask, Mask2, Mask3, MaskLast, LearningRatePacked *ckks.Plaintext
 	LearningRate float64
 
 	BatchSize int
@@ -152,18 +132,6 @@ type NNEncryptedProtocol struct {
 
 	evaluator ckks.Evaluator
 	encoder   ckks.Encoder
-
-	// InitalGap       []float64 //put this gap for ANY encoded/encrypted vector to get rid of accumulated error
-	// InitalGapSize   int
-	// TotalGapBetween []int
-
-	// NumColsPerCipher     int
-	// NumTotalCiphers      int
-	// NumColsLastCipher    int
-	// IsLastDifferent      bool
-	// InputActivationsLast []*ckks.Plaintext
-
-	// BlockSize int
 }
 
 // NewNNEncryptedProtocol initializes the protocol instance.
@@ -200,9 +168,7 @@ func (p *NNEncryptedProtocol) Start() error {
 	//CN_1 sends the initial weights to initiate the process
 	weightsToSend := p.model.Marshall()
 
-	// use common sk, pk across all nodes for test
-	dsk, spk := p.CryptoParams.MarshalBinary()
-	newEncryptedIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend, dsk, spk}
+	newEncryptedIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend}
 
 	// Unlock channel (root node can continue with Dispatch)
 	if !p.Sync {
@@ -257,24 +223,9 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 
 			// receive iteration_number and weights
 			p.IterationNumber = newEncryptedIterationMessage.IterationNumber
-			// p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
+
 			//need to check as new number is part of the message for non root nodes
 			finished = p.IterationNumber >= p.MaxIterations
-
-			// test: if iter = 0, use common pk, sk
-			// if p.IterationNumber == 0 {
-			// 	p.CryptoParams.RetrieveCommonParams(newEncryptedIterationMessage.GlobalSk, newEncryptedIterationMessage.GlobalPk)
-			// 	//only in root, and root will pass weights down the tree
-			// 	p.model = centralized.NewCellCNN(p.CellCNNSettings, p.CryptoParams)
-			// 	p.model.InitWeights(nil, nil, nil, nil)
-			// 	p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
-			// 	eval := p.model.InitEvaluator(p.CryptoParams, maxM1N2Ratio)
-			// 	p.evaluator = eval
-			// 	// use sk for bootstrapping
-			// 	p.model.WithSk(p.CryptoParams.Sk)
-			// } else {
-			// 	p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
-			// }
 
 			p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
 
@@ -320,7 +271,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 				// send updated weights down the tree
 				weightsToSend := p.model.Marshall()
 
-				newIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend, nil, nil}
+				newIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend}
 
 				if err := p.SendToChildren(&newIterationMessage); err != nil {
 					return err
@@ -338,6 +289,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 		p.FeedbackChannel <- p.model.Marshall()
 	}
 	/*
+		Some micro benchmarks
 		rounds: 3
 		batchsize: 5
 		filters: 6
@@ -452,157 +404,3 @@ func (p *NNEncryptedProtocol) UpdateRootWeights(gradientsAggr *centralized.Gradi
 	//update at root
 	p.model.UpdateWithGradients(gradientsAggr)
 }
-
-// // DecryptNNFinalWeights decrypt and extracts the cleartext weights for a 1-layer neural network model
-// func (p *NNEncryptedProtocol) DecryptNNFinalWeights(weights libspindle.CipherMatrix) [][][]float64 {
-// 	//write the decrypted weights into matrix (don't forget to skip the first initialGap slots)
-// 	inputWeights := libspindle.Matrix(p.NInputs, p.NHiddens[0])
-// 	outputWeights := libspindle.Matrix(p.NHiddens[0], p.NOutputs)
-// 	inputWeightsTemp := make([]float64, 0)
-// 	outputWeightsTemp := make([]float64, 0)
-
-// 	//decrypt weights:
-// 	for i := 0; i < p.NumTotalCiphers; i++ {
-// 		inputWeightsTemp = append(inputWeightsTemp, libspindle.DecryptMultipleFloat(p.CryptoParams, weights[0][i], -1)...)
-// 		outputWeightsTemp = append(outputWeightsTemp, libspindle.DecryptMultipleFloat(p.CryptoParams, weights[1][i], -1)...)
-// 	}
-// 	//calculate total gap at the end of each cipher appended for input weights:
-// 	totalGapEnd := p.CryptoParams.GetSlots() - (p.InitalGapSize + (p.NumColsPerCipher * p.NInputs))
-// 	//merge with next ciphers initial gap:
-// 	totalGapEnd = totalGapEnd + p.InitalGapSize
-// 	//input weights were column packed..
-// 	indE := p.InitalGapSize
-// 	flag := 0
-// 	for i := 0; i < p.NHiddens[0]; i++ {
-// 		for j := 0; j < p.NInputs; j++ {
-// 			inputWeights[j][i] = inputWeightsTemp[indE]
-// 			indE++
-// 		}
-// 		//jump flag
-// 		flag++
-// 		if flag == p.NumColsPerCipher {
-// 			indE = indE + totalGapEnd
-// 			flag = 0
-// 		}
-// 	}
-// 	//output was row packed with a gap in between
-// 	indE = p.InitalGapSize
-// 	flag = 0
-// 	for i := 0; i < p.NHiddens[0]; i++ {
-// 		for j := 0; j < p.NOutputs; j++ {
-// 			outputWeights[i][j] = outputWeightsTemp[indE]
-// 			indE++
-// 		}
-// 		indE += p.NInputs - p.NOutputs
-// 		flag++
-// 		if flag == p.NumColsPerCipher {
-// 			indE = indE + totalGapEnd
-// 			flag = 0
-// 		}
-// 	}
-// 	return [][][]float64{inputWeights, outputWeights}
-// }
-
-// // DecryptModel2Layer decrypt and extracts the cleartext weights for a 2-layer neural network model
-// func (p *NNEncryptedProtocol) DecryptModel2Layer(weights libspindle.CipherMatrix) [][][]float64 {
-// 	//decrypt weights:
-// 	inputWeightsTemp := make([]float64, 0)
-// 	outputWeightsTemp := make([]float64, 0)
-// 	hiddenWeightsTemp := make([]float64, 0)
-
-// 	//decrypt weights:
-// 	for i := 0; i < p.NumTotalCiphers; i++ {
-// 		inputWeightsTemp = append(inputWeightsTemp, libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[0][i], -1)...)
-// 		hiddenWeightsTemp = append(hiddenWeightsTemp, libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[1][i], -1)...)
-// 	}
-// 	outputWeightsTemp = append(outputWeightsTemp, libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[2][0], -1)...)
-
-// 	//write the decrypted weights into matrix (don't forget to skip the first initialGap slots)
-// 	inputWeights := libspindle.Matrix(p.NInputs, p.NHiddens[0])
-// 	hiddenWeights := libspindle.Matrix(p.NHiddens[0], p.NHiddens[1])
-// 	outputWeights := libspindle.Matrix(p.NHiddens[1], p.NOutputs)
-
-// 	totalGapBetweenInput := 0
-// 	totalGapBetweenHidden := 0
-// 	totalGapEnd := 0
-// 	if p.NHiddens[0] > p.NInputs {
-// 		totalGapBetweenInput = p.NHiddens[0] - p.NInputs //put this gap between rows
-// 		totalGapEnd = p.CryptoParams.GetSlots() - (p.InitalGapSize + (p.NumColsPerCipher * p.NHiddens[0]))
-
-// 	}
-// 	if p.NHiddens[0] < p.NInputs {
-// 		totalGapBetweenHidden = p.NInputs - p.NHiddens[0] //put this gap between rows
-// 		totalGapEnd = p.CryptoParams.GetSlots() - (p.InitalGapSize + (p.NumColsPerCipher * p.NInputs))
-// 	}
-
-// 	//calculate total gap at the end of each cipher appended for input weights:
-// 	//merge with next ciphers initial gap:
-// 	totalGapEnd = totalGapEnd + p.InitalGapSize
-// 	//input weights were column packed with a gap in btw..
-// 	indE := p.InitalGapSize
-// 	flag := 0
-// 	for i := 0; i < p.NHiddens[0]; i++ {
-// 		for j := 0; j < p.NInputs; j++ {
-// 			inputWeights[j][i] = inputWeightsTemp[indE]
-// 			indE++
-// 		}
-// 		indE += totalGapBetweenInput
-// 		//jump flag
-// 		flag++
-// 		if flag == (p.NumColsPerCipher) {
-// 			indE = indE + totalGapEnd
-// 			flag = 0
-// 		}
-// 	}
-// 	//output was col packed
-// 	indE = p.InitalGapSize
-// 	for i := 0; i < p.NOutputs; i++ {
-// 		for j := 0; j < p.NHiddens[0]; j++ {
-// 			outputWeights[j][i] = outputWeightsTemp[indE]
-// 			indE++
-// 		}
-// 	}
-
-// 	//hidden was row packed with a gap in between
-// 	indE = p.InitalGapSize
-// 	flag = 0
-// 	for i := 0; i < p.NHiddens[0]; i++ {
-// 		for j := 0; j < p.NHiddens[1]; j++ {
-// 			hiddenWeights[i][j] = hiddenWeightsTemp[indE]
-// 			indE++
-// 		}
-// 		indE += totalGapBetweenHidden
-// 		flag++
-// 		if flag == (p.NumColsPerCipher) {
-// 			indE = indE + totalGapEnd
-// 			flag = 0
-// 		}
-// 	}
-
-// 	/*f4, _ := os.Create("inputWEnc.txt")
-// 	f5, _ := os.Create("hiddenWEnc.txt")
-// 	f6, _ := os.Create("outputWEnc.txt")
-// 	// write a chunk
-// 	for i := 0; i < p.NInputs; i++ {
-// 		for j := 0; j < p.NHiddens[0]; j++ {
-// 			fmt.Fprintf(f4, "%v, ", inputWeights[i][j])
-// 		}
-// 		fmt.Fprintf(f4, "\n")
-// 	}
-// 	for i := 0; i < p.NHiddens[0]; i++ {
-// 		for j := 0; j < p.NHiddens[1]; j++ {
-// 			fmt.Fprintf(f5, "%v, ", hiddenWeights[i][j])
-// 		}
-// 		fmt.Fprintf(f5, "\n")
-// 	}
-// 	for i := 0; i < p.NHiddens[1]; i++ {
-// 		for j := 0; j < p.NOutputs; j++ {
-// 			fmt.Fprintf(f6, "%v, ", outputWeights[i][j])
-// 		}
-// 		fmt.Fprintf(f6, "\n")
-// 	}
-// 	f4.Close()
-// 	f5.Close()
-// 	f6.Close()*/
-// 	return [][][]float64{inputWeights, hiddenWeights, outputWeights}
-// }

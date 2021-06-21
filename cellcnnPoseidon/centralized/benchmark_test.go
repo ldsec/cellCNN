@@ -24,7 +24,7 @@ func TestLocalTime(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 10
+	ncells := 17
 	nmakers := 5
 	nfilters := 8
 	nclasses := 2
@@ -33,8 +33,8 @@ func TestLocalTime(t *testing.T) {
 	maxM1N2Ratio := 8.0
 	momentum := 0.9
 	lr := 0.1
-	batchSize := 1
-	iterrations := 1
+	batchSize := 3
+	iterrations := 3
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
@@ -76,7 +76,7 @@ func TestLocalTime(t *testing.T) {
 
 	// supress the local momentum
 	isMomentum := false
-
+	verbose := true
 	t_fwd_whole := 0.0
 	t_bwd_whole := 0.0
 	t_root_update := 0.0
@@ -114,7 +114,7 @@ func TestLocalTime(t *testing.T) {
 			model.UpdateMomentum(grad)
 		} else {
 			// else, compute scaled_m at level 8
-			grad := model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
+			grad = model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
 			grad.Bootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		}
@@ -132,8 +132,8 @@ func TestLocalTime(t *testing.T) {
 		dConv = pNet.conv.GetWeights()
 		dDense = pNet.dense.GetWeights()
 
-		mse_conv := utils.DebugCtSliceWithDenseStatistic(params, model.conv1d.GetWeights(), dConv, decryptor, encoder, false, false)
-		mse_dense := utils.DebugCtWithDenseStatistic(params, model.dense.GetWeights(), dDense, decryptor, encoder, false, false)
+		mse_conv := utils.DebugCtSliceWithDenseStatistic(params, model.conv1d.GetWeights(), dConv, decryptor, encoder, false, verbose)
+		mse_dense := utils.DebugCtWithDenseStatistic(params, model.dense.GetWeights(), dDense, decryptor, encoder, false, verbose)
 
 		fmt.Printf(">>> Current Round fwd: %v, bwd: %v, root update: %v, mse_conv: %v, mse_dense: %v\n",
 			t_fwd_one, t_bwd_one, t_root_current, mse_conv, mse_dense,

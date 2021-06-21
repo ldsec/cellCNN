@@ -108,6 +108,7 @@ func SliceCollect(arr []complex128, inds []int) []complex128 {
 	return res
 }
 
+// SliceTranspose transpose a matrix with same packing strategy
 func SliceTranspose(arr []complex128, c, r int, rowPacked bool) []complex128 {
 	res := make([]complex128, len(arr))
 	var rid, cid, newi int

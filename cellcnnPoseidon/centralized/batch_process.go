@@ -3,7 +3,6 @@ package centralized
 import (
 	"time"
 
-	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
@@ -12,8 +11,6 @@ import (
 // modified grad (with momentum and lr) called by GetGradient
 func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64, isMomentum bool) ([]*ckks.Ciphertext, float64, float64) {
 
-	LeftMostMask := utils.GenSliceWithOneAt(c.params.Slots(), []int{0})
-	poolMask := c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
 	preds := make([]*ckks.Ciphertext, len(inputBatch))
 	var gradAccumulator *Gradients = nil
 	suppressGradientModify := 0.0
@@ -24,7 +21,7 @@ func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64
 	for i, input := range inputBatch {
 		// forward one
 		t_fwd_start := time.Now()
-		out1 := c.conv1d.Forward(input, nil, c.cnnSettings, c.evaluator, c.params, poolMask)
+		out1 := c.conv1d.Forward(input, nil, c.cnnSettings, c.evaluator, c.params)
 		out2 := c.dense.Forward(out1, nil, c.cnnSettings, c.evaluator, c.encoder, c.params)
 		t_fwd_one := time.Since(t_fwd_start).Seconds()
 

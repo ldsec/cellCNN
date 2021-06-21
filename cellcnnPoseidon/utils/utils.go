@@ -33,7 +33,9 @@ func PrintTime(tl []float64, i *int, label string) {
 }
 
 func PrintCipherLevel(cipher *ckks.Ciphertext, params ckks.Parameters) string {
-	return fmt.Sprintf("Level: %d (logQ = %d), Scale: 2^%f\n", cipher.Level(), params.LogQLvl(cipher.Level()), math.Log2(cipher.Scale()))
+	return fmt.Sprintf("Level: %d (logQ = %d)\n", cipher.Level(), params.LogQLvl(cipher.Level()))
+
+	// return fmt.Sprintf("Level: %d (logQ = %d), Scale: 2^%f\n", cipher.Level(), params.LogQLvl(cipher.Level()), math.Log2(cipher.Scale()))
 }
 
 func PrintDebug(params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
