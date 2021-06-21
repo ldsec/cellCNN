@@ -64,11 +64,42 @@ def plot_micro():
 
      ax_list[0].set_ylabel("Overhead(s)", fontweight='bold')
      
-     
-     
      plt.savefig("micro.pdf")
      plt.show()
 
 
+def plot_collect():
+     # 1. filter num
+     x = np.array([2, 4, 8, 16, 32])
+
+     # 2. data of batch = 1
+     m = {
+          'naive': np.array([0.11589095, 0.21112965, 0.42525762, 0.8394644299999999, 1.686788]),
+          'optimized': np.array([0.12206956999999999, 0.18072242, 0.24185504, 0.30258435000000006, 0.36841513]),
+     }  
+     s = {
+          'naive': np.array([0.004233629991921823, 0.005184689562403907, 0.009112127732840456, 0.022129836125830235, 0.0398392531757311]),
+          'optimized': np.array([0.0027168255203637915, 0.0031780915275680726, 0.0033136974446077447, 0.003245248590555111, 0.004827774608875267]),
+     } 
+     
+     # fig, (ax0, ax1, ax2, ax3, ax4, ax5) = plt.subplots(2, 3, sharey=True)
+     fig, ax = plt.subplots(1, 1, figsize=(7, 4), sharey=False)
+     # ax_list = ax_list.flatten()
+     # ax_list[0].set_ylim([0, 40])
+
+     ax.errorbar(x, m['naive'], yerr=s['naive'], fmt='-o', mec='yellow', ms=5, mew=1, label="naive")
+
+     ax.errorbar(x, m['optimized'], yerr=s['optimized'], fmt='-o', mec='yellow', ms=5, mew=1, label="optimized")
+
+     ax.set_title('Overhead of Collect Operation', fontweight='bold')    
+     
+     ax.set_xlabel("Number of classes", fontweight='bold')
+     ax.legend(loc='upper left')
+     ax.set_ylabel("Overhead(s)", fontweight='bold')
+     
+     plt.savefig("collect.pdf")
+     plt.show()
+
+
 if __name__ == "__main__":
-    plot_micro()
+    plot_collect()

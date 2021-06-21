@@ -17,7 +17,7 @@ params := ckks.ParametersLiteral{
 		Sigma:    rlwe.DefaultSigma,
 	}
 ```
-The initial (or max) level of ciphertext is 9. We use 1 local bootstrapping in each participants during the forward and backward pass. And the aggregate gradients with momentum is at level 2. Then the aggregate server will use one bootstrapping to recover the gradients to level 9 for weights update.
+The initial (or max) level of ciphertext is 9. We use one local bootstrapping in each participants during the forward and backward pass. And the aggregate gradients with momentum is at level 2. Then the aggregate server will use one bootstrapping to recover the gradients to level 9 for weights update.
 
 ## Project Structure
 
@@ -27,8 +27,19 @@ The initial (or max) level of ciphertext is 9. We use 1 local bootstrapping in e
 
 - `cellcnnPoseidon/decentralized`: define a privacy-preserving federate learning protocol where each participant holds local data and together train a global Cell CNN by gradients aggregation.
 
-## How to Run
+## How to Use
 
+To init a local Cell CNN:
+```
+model := NewCellCNN(cnnSettings, cryptoParams, momentum, lr)
+cw, dw := model.InitWeights(nil, nil, nil, nil) // random init weights, output the cleartext weights in matrix for plainnet
+model.InitEvaluator(cryptoParams, maxM1N2Ratio) // init rotation keys, diagM...
+model.sk = sk // for dummy bootstrapping
+```
+
+For batch forward and backward, please refer to `cellcnnPoseidon/benchmark_test.go`
+
+## Quick Test
 - To test the centralized forward and backward with a plaintext net, enter `centralized/` and run `$ go test -run TestWithPlainNetBwBatch`. It will init an encrypted net and a plaintext net, and compare the forward prediction and backward gradients.
 
 - To test the decentralized protocol, enter `decentralized/` and run `$ go test -run TestDemo`. It will init a test according to the parameters in `decentralized/settings.go`.

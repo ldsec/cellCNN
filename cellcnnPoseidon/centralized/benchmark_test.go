@@ -9,6 +9,7 @@ import (
 	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -209,4 +210,79 @@ func TestInit(t *testing.T) {
 	}
 	avg, stdev := utils.AVGandStdev(init_slice)
 	fmt.Printf(">> Initialization time (offline) | avg: %v, stdev: %v\n", avg, stdev)
+}
+
+func TestOptimizedCollect(t *testing.T) {
+	params := CustomizedParams()
+	kgen := ckks.NewKeyGenerator(params)
+	sk := kgen.GenSecretKey()
+	rlk := kgen.GenRelinearizationKey(sk)
+	encryptor := ckks.NewEncryptorFromSk(params, sk)
+	// decryptor := ckks.NewDecryptor(params, sk)
+	encoder := ckks.NewEncoder(params)
+
+	nfilters := 33
+
+	clear := make([]complex128, params.Slots())
+	for i := 0; i < 10; i++ {
+		clear[i*nfilters] = 1
+	}
+	plain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), clear, params.LogSlots())
+	ct := encryptor.EncryptNew(plain)
+
+	nclasses := 1
+	niter := 10
+
+	map_naive_m := make(map[int]float64)
+	map_naive_s := make(map[int]float64)
+	map_fast_m := make(map[int]float64)
+	map_fast_s := make(map[int]float64)
+
+	for k := 1; k <= 5; k++ {
+		nclasses = nclasses * 2
+
+		rotIndicesNaive := utils.NewSlice(0, (nfilters-1)*(nclasses-1), nfilters-1)
+		rotIndicesFast := params.RotationsForInnerSumLog(nfilters-1, nclasses)
+		rotIndices := utils.ClearRotInds(append(rotIndicesNaive, rotIndicesFast...), params.Slots())
+		rks := kgen.GenRotationKeysForRotations(rotIndices, false, sk)
+		eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rks})
+
+		slice_naive := make([]float64, niter)
+		slice_fast := make([]float64, niter)
+		for i := 0; i < niter; i++ {
+			t1 := time.Now()
+			_ = utils.MaskAndCollectToLeft(ct, params, encoder, eval, 0, nfilters, nclasses)
+			t2 := time.Since(t1).Seconds()
+
+			_ = utils.MaskAndCollectToLeftFast(ct, params, encoder, eval, 0, nfilters, nclasses, true, true)
+			t3 := time.Since(t1).Seconds()
+			slice_naive[i] = t2
+			slice_fast[i] = t3 - t2
+		}
+		map_naive_m[nclasses], map_naive_s[nclasses] = utils.AVGandStdev(slice_naive)
+		map_fast_m[nclasses], map_fast_s[nclasses] = utils.AVGandStdev(slice_fast)
+	}
+
+	keys := []int{2, 4, 8, 16, 32}
+	prretyPrint(map_naive_m, keys)
+	prretyPrint(map_naive_s, keys)
+	prretyPrint(map_fast_m, keys)
+	prretyPrint(map_fast_s, keys)
+	// fmt.Printf("Time: naive: avg: %v, std: %v || fast: avg: %v, std: %v (s)\n", naive_m, naive_s, fast_m, fast_s)
+
+	// fmt.Printf("naive: %v\n", rNaive[:20])
+	// fmt.Printf("fast: %v\n", rFast[:20])
+	// fmt.Printf("Time: naive: %v, fast: %v (s)\n", t2, t3-t2)
+}
+
+func prretyPrint(s map[int]float64, keys []int) {
+	res := "["
+	for i, key := range keys {
+		if i != len(keys)-1 {
+			res += fmt.Sprint(s[key]) + ", "
+		} else {
+			res += fmt.Sprint(s[key])
+		}
+	}
+	fmt.Println(res + "]")
 }
