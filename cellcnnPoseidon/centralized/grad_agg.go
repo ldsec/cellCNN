@@ -5,11 +5,14 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
+// Gradients an object to aggregate the gradients of conv and dense
 type Gradients struct {
 	filters []*ckks.Ciphertext
 	dense   *ckks.Ciphertext
 }
 
+// NewGradient initialize a new gradient,
+// when unmarshall first n-1 for filters and last one for dense
 func (g *Gradients) NewGradient(data [][]byte) {
 	g.filters = make([]*ckks.Ciphertext, len(data)-1)
 	for i, each := range data[:len(data)-1] {
@@ -24,7 +27,7 @@ func (g *Gradients) NewGradient(data [][]byte) {
 	}
 }
 
-// aggregate data to self
+// Aggregate conduct: self = self + data
 func (g *Gradients) Aggregate(data interface{}, eval ckks.Evaluator) {
 	switch data := data.(type) {
 	case [][]byte:
@@ -55,7 +58,7 @@ func (g *Gradients) Aggregate(data interface{}, eval ckks.Evaluator) {
 	}
 }
 
-// bootstrap
+// Bootstrapping use sk to re-encrypt the ciphertext for dummy bootstrapping
 func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params ckks.Parameters, sk *rlwe.SecretKey) {
 	ect := ckks.NewEncryptorFromSk(params, sk)
 	dct := ckks.NewDecryptor(params, sk)
@@ -73,6 +76,7 @@ func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params ckks.Parameters, 
 	g.dense = ect.EncryptNew(replain)
 }
 
+// Marshall return the byte representation, first n-1 for filters, last one for dense
 func (g *Gradients) Marshall() [][]byte {
 	res := make([][]byte, len(g.filters)+1)
 	var err error = nil
@@ -89,6 +93,7 @@ func (g *Gradients) Marshall() [][]byte {
 	return res
 }
 
+// Unmarshall first n-1 for filters, last one for dense
 func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
 	res := make([]*ckks.Ciphertext, len(data))
 	for i, each := range data {
@@ -100,6 +105,8 @@ func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
 	return res
 }
 
+//	GetPlaintext for debug only, decrypt a ciphertext according to idx.
+// return return the slots at certain indices according to inds.
 func (g *Gradients) GetPlaintext(idx int, inds []int, params ckks.Parameters, encoder ckks.Encoder, decryptor ckks.Decryptor) []complex128 {
 	var ct *ckks.Ciphertext
 	if idx < len(g.filters) {

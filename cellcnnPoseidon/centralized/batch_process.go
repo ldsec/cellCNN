@@ -6,26 +6,26 @@ import (
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
-// ForwardBatch conduct batch forward.
-// return the preds of each input and the sum forward/backward time in s
-// modified grad (with momentum and lr) called by GetGradient
+// BatchProcessing conduct batch forward and backward.
+// you can set isMomentum=false to compute only the scaled gradients in decentralized version
+// return the predictions as a slice of ciphertext
 func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64, isMomentum bool) ([]*ckks.Ciphertext, float64, float64) {
 
 	preds := make([]*ckks.Ciphertext, len(inputBatch))
 	var gradAccumulator *Gradients = nil
 	suppressGradientModify := 0.0
 
-	t_forward := 0.0
-	t_backward := 0.0
+	tForward := 0.0
+	tBackward := 0.0
 
 	for i, input := range inputBatch {
 		// forward one
-		t_fwd_start := time.Now()
+		tFwdStart := time.Now()
 		out1 := c.conv1d.Forward(input, nil, c.cnnSettings, c.evaluator, c.params)
 		out2 := c.dense.Forward(out1, nil, c.cnnSettings, c.evaluator, c.encoder, c.params)
-		t_fwd_one := time.Since(t_fwd_start).Seconds()
+		tFwdOne := time.Since(tFwdStart).Seconds()
 
-		t_bcw_start := time.Now()
+		tBcwStart := time.Now()
 		// record the preds
 		preds[i] = out2.CopyNew()
 		// backward one
@@ -40,13 +40,13 @@ func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64
 		} else {
 			gradAccumulator.Aggregate(append(pgConv, pgDense), c.evaluator)
 		}
-		t_bcw_one := time.Since(t_bcw_start).Seconds()
+		tBcwOne := time.Since(tBcwStart).Seconds()
 
-		t_forward += t_fwd_one
-		t_backward += t_bcw_one
+		tForward += tFwdOne
+		tBackward += tBcwOne
 	}
 
-	t_scale_start := time.Now()
+	tScaleStart := time.Now()
 	// compute the modified gradients
 	c.conv1d.ComputeScaledGradient(gradAccumulator.filters, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
 	c.dense.ComputeScaledGradient(gradAccumulator.dense, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
@@ -57,9 +57,9 @@ func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64
 		c.dense.ComputeScaledGradientWithMomentum(c.dense.GetGradient(), c.cnnSettings, c.params, c.evaluator, c.encoder, c.momentum)
 	}
 
-	t_scale_one := time.Since(t_scale_start).Seconds()
+	tScaleOne := time.Since(tScaleStart).Seconds()
 
-	t_backward += t_scale_one
+	tBackward += tScaleOne
 
-	return preds, t_forward, t_backward
+	return preds, tForward, tBackward
 }

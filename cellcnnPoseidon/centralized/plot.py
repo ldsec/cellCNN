@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 plt.style.use('seaborn')
 font = {'family' : 'normal',
         'weight' : 'bold',
-        'size'   : 25}
+        'size'   : 35}
 
 plt.rc('font', **font)
 
@@ -44,7 +44,7 @@ def plot_micro():
      }
      
      # fig, (ax0, ax1, ax2, ax3, ax4, ax5) = plt.subplots(2, 3, sharey=True)
-     fig, ax_list = plt.subplots(1, 2, figsize=(20, 5), sharey=False)
+     fig, ax_list = plt.subplots(1, 2, figsize=(20, 7), sharey=False)
      ax_list = ax_list.flatten()
      ax_list[0].set_ylim([0, 40])
      
@@ -102,4 +102,4 @@ def plot_collect():
 
 
 if __name__ == "__main__":
-    plot_collect()
+    plot_micro()

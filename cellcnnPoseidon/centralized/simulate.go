@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
-	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )
 
+// MakeRandomBatch for debug use only, make a random batch of data in [0.0, 1.0)
 func MakeRandomBatch(sts *utils.CellCnnSettings, batchsize int) []*mat.Dense {
 	res := make([]*mat.Dense, batchsize)
 	nm := sts.Nmakers
@@ -25,29 +25,11 @@ func MakeRandomBatch(sts *utils.CellCnnSettings, batchsize int) []*mat.Dense {
 	return res
 }
 
+// ForwardAndBackwardNiter for debug use only, test the forward and backward time on randomly generated data.
 func ForwardAndBackwardNiter(c *CellCNN, niter int, batchSize int) {
-	// preparing public values
-	nfilters := c.cnnSettings.Nfilters
-	nclasses := c.cnnSettings.Nclasses
 
-	// initialize masks required
-	// conv1d left most mask
-	LeftMostMask := make([]complex128, c.params.Slots())
-	LeftMostMask[0] = complex(float64(1), 0)
-	poolMask := c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), LeftMostMask, c.params.LogSlots())
-
-	// dense maskMap to collect all results into one ciphertext
-	maskMap := make(map[int]*ckks.Plaintext)
-	for i := 0; i < nclasses; i++ {
-		maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
-			tmpMask := make([]complex128, c.params.Slots())
-			tmpMask[i] = complex(float64(1), 0)
-			return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
-		}()
-	}
-
-	glb_tf := make([]float64, 3)
-	glb_tb := make([]float64, 3)
+	glbTf := make([]float64, 3)
+	glbTb := make([]float64, 3)
 
 	// start training
 	for i := 1; i <= niter; i++ {
@@ -55,35 +37,35 @@ func ForwardAndBackwardNiter(c *CellCNN, niter int, batchSize int) {
 		batch := MakeRandomBatch(c.cnnSettings, batchSize)
 		plaintextSlice := c.Batch2PlainSlice(batch)
 
-		avg_tf := make([]float64, 3)
-		avg_tb := make([]float64, 3)
+		avgTf := make([]float64, 3)
+		avgTb := make([]float64, 3)
 		for j := 0; j < batchSize; j++ {
-			tf, tb := c.ForwardAndBackwardOne(plaintextSlice[j], nil, nil, poolMask, maskMap)
+			tf, tb := c.ForwardAndBackwardOne(plaintextSlice[j], nil, nil)
 
-			for i := 0; i < len(avg_tf); i++ {
-				avg_tf[i] += tf[i]
-				avg_tb[i] += tb[i]
+			for i := 0; i < len(avgTf); i++ {
+				avgTf[i] += tf[i]
+				avgTb[i] += tb[i]
 			}
 			utils.PrintTime(tf, &j, "Forward One")
 			utils.PrintTime(tb, &j, "Backward One")
 		}
-		for k := 0; k < len(avg_tf); k++ {
-			avg_tf[k] /= float64(batchSize)
-			avg_tb[k] /= float64(batchSize)
+		for k := 0; k < len(avgTf); k++ {
+			avgTf[k] /= float64(batchSize)
+			avgTb[k] /= float64(batchSize)
 		}
-		utils.PrintTime(avg_tf, &i, "\nAVG Forward One in Batch")
-		utils.PrintTime(avg_tb, &i, "\nAVG Backward One in Batch")
+		utils.PrintTime(avgTf, &i, "\nAVG Forward One in Batch")
+		utils.PrintTime(avgTb, &i, "\nAVG Backward One in Batch")
 
-		for q := 0; q < len(glb_tf); q++ {
-			glb_tf[q] += avg_tf[q]
-			glb_tb[q] += avg_tb[q]
+		for q := 0; q < len(glbTf); q++ {
+			glbTf[q] += avgTf[q]
+			glbTb[q] += avgTb[q]
 		}
 	}
-	for q := 0; q < len(glb_tf); q++ {
-		glb_tf[q] /= float64(niter)
-		glb_tb[q] /= float64(niter)
+	for q := 0; q < len(glbTf); q++ {
+		glbTf[q] /= float64(niter)
+		glbTb[q] /= float64(niter)
 	}
 
-	utils.PrintTime(glb_tf, &niter, "\nAVG Forward One in All Batches")
-	utils.PrintTime(glb_tb, &niter, "\nAVG Backward One in All Batches")
+	utils.PrintTime(glbTf, &niter, "\nAVG Forward One in All Batches")
+	utils.PrintTime(glbTb, &niter, "\nAVG Backward One in All Batches")
 }

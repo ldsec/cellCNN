@@ -2,7 +2,7 @@ package decentralized
 
 import "go.dedis.ch/kyber/v3/group/edwards25519"
 
-// Suite is the type of keys used to secure communication in Onet
+// GetSuit is the type of keys used to secure communication in Onet
 func GetSuit() *edwards25519.SuiteEd25519 {
 	return edwards25519.NewBlakeSHA256Ed25519()
 }
@@ -19,4 +19,5 @@ const learningRate float64 = 0.1
 const momentum float64 = 0.9
 const maxIterations int = 3
 
+// HOSTS number of servers (include the aggregate server)
 const HOSTS int = 3

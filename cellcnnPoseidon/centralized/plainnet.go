@@ -5,6 +5,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+// PlainNet is a holder of cellCNN_clear
 type PlainNet struct {
 	ncells   int
 	nmakers  int
@@ -15,6 +16,7 @@ type PlainNet struct {
 	dense    *layers.Dense_n
 }
 
+// ForwardBatch forward a batch of samples, return the prediction as a matrix
 func (p *PlainNet) ForwardBatch(input []*mat.Dense, cw, dw *mat.Dense) *mat.Dense {
 	out1 := p.conv.Forward(input, cw)
 	out2 := p.pool.Forward(out1)
@@ -22,7 +24,7 @@ func (p *PlainNet) ForwardBatch(input []*mat.Dense, cw, dw *mat.Dense) *mat.Dens
 	return out2
 }
 
-// Backward return the gradient for dconv and ddense
+// Backward return the gradient for conv and dense
 func (p *PlainNet) Backward(gradient *mat.Dense, learn_rate float64, momentum float64) (*mat.Dense, *mat.Dense) {
 	delta2, dDense := p.dense.Backward(gradient, learn_rate, momentum)
 	delta1 := p.pool.Backward(delta2)
