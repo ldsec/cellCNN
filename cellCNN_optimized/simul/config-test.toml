@@ -1,5 +1,5 @@
 Simulation = "CellCNN"
-Servers = 4
+Servers = 12
 Bf = 2
 Suite = "Ed25519"
 Rounds = 1
@@ -11,5 +11,7 @@ Deterministic = false
 Path = "../../normalized/"
 PathCryptoFiles = "secrets/"
 
-Hosts, Epochs, PartyDataSize, Samples, Cells, Features, Filters, Classes
-3, 15, 2000, 2000, 200, 38, 6, 2
+Hosts, Epochs, PartyDataSize, Samples, Cells, Features, Filters, Classes, MaxIterations, NodeBatchSize
+3, 1, 500, 1500, 200, 38, 8, 2, 100, 6, 100
+6, 1, 500, 1500, 200, 38, 8, 2, 100, 30, 100
+12, 1, 500, 1500, 200, 38, 8, 2, 100, 6, 100
