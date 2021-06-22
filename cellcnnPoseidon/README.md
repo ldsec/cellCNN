@@ -27,6 +27,8 @@ The initial (or max) level of ciphertext is 9. We use one local bootstrapping in
 
 - `cellcnnPoseidon/decentralized`: define a privacy-preserving federate learning protocol where each participant holds local data and together train a global Cell CNN by gradients aggregation.
 
+- Some code in `cellcnnPoseidon/decentralized` and `utils/crypto`... is copied from spindle with some minor changes.
+
 ## How to Use
 
 To init a local Cell CNN:

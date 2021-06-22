@@ -37,7 +37,7 @@ func CustomizedParams() *utils.CryptoParams {
 	return utils.NewCryptoParams(params, sk, nil, pk, rlk)
 }
 
-// CustomizedParams return a slice of crypto-params object for federate learning use.
+// CustomizedNetworkKeysList return a slice of crypto-params object for federate learning use.
 func CustomizedNetworkKeysList(nbrNodes int) []*utils.CryptoParams {
 	return utils.NewCryptoParamsForNetwork(Params(), nbrNodes)
 }

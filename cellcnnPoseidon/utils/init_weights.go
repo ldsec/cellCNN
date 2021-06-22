@@ -10,6 +10,7 @@ func Random(a, b float64) float64 {
 	return (b-a)*rand.Float64() + a
 }
 
+// WeightsInit init a complect slice in (-1,1) with replication option
 func WeightsInit(slots int, length int, nmakers float64, rep int) ([]complex128, []complex128) {
 	a := make([]complex128, slots)
 	if rep == 1 {
@@ -25,6 +26,5 @@ func WeightsInit(slots int, length int, nmakers float64, rep int) ([]complex128,
 			}
 		}
 	}
-	// fmt.Println("init weights: ", a[:length*rep])
 	return a, a[:length]
 }

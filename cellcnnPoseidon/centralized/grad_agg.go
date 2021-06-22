@@ -105,7 +105,7 @@ func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
 	return res
 }
 
-//	GetPlaintext for debug only, decrypt a ciphertext according to idx.
+// GetPlaintext for debug only, decrypt a ciphertext according to idx.
 // return return the slots at certain indices according to inds.
 func (g *Gradients) GetPlaintext(idx int, inds []int, params ckks.Parameters, encoder ckks.Encoder, decryptor ckks.Decryptor) []complex128 {
 	var ct *ckks.Ciphertext
@@ -122,6 +122,7 @@ func (g *Gradients) GetPlaintext(idx int, inds []int, params ckks.Parameters, en
 	return res
 }
 
+// GetFilters return the filters of the gradient
 func (g *Gradients) GetFilters() []*ckks.Ciphertext {
 	return g.filters
 }

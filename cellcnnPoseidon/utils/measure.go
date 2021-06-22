@@ -1,6 +1,7 @@
 package utils
 
-// return the size of a two dim slice
+// SizeOf2DimSlice return the size of a two dim slice
+// for measuring communication time
 func SizeOf2DimSlice(data interface{}) int {
 	size := 0
 	switch data := data.(type) {

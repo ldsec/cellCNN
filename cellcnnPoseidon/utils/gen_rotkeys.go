@@ -8,7 +8,8 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
-// init evaluator for the distributed training
+// InitEvaluator init evaluator for the distributed training
+// same function for cellcnn.InitEvaluator,for special use in decentralized settings
 func InitEvaluator(cp *CryptoParams, sts *CellCnnSettings, maxM1N2Ratio float64) (ckks.Evaluator, *ckks.PtDiagMatrix) {
 	kgen := cp.Kgen()
 	aggSk := cp.AggregateSk
@@ -30,15 +31,9 @@ func InitEvaluator(cp *CryptoParams, sts *CellCnnSettings, maxM1N2Ratio float64)
 	fmt.Printf("==> Init evaluators for all nodes: %v s\n", t2)
 
 	return eval, diagM
-	// cp.evaluators = make(chan ckks.Evaluator, ThreadsCount)
-	// for i := 0; i < ThreadsCount; i++ {
-	// 	cp.evaluators <- eval.ShallowCopy()
-	// }
 }
 
-// ######################
-// rotation keys for conv
-// ######################
+// InitConvRotationInds rotation keys for conv
 func InitConvRotationInds(sts *CellCnnSettings, params ckks.Parameters) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
@@ -81,12 +76,8 @@ func InitConvRotationInds(sts *CellCnnSettings, params ckks.Parameters) []int {
 	return Inds
 }
 
-// ######################
-// rotation keys for dense
-// ######################
-func InitDenseRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator,
-	params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
-) ([]int, *ckks.PtDiagMatrix) {
+// InitDenseRotationInds rotation keys for dense
+func InitDenseRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator, params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64) ([]int, *ckks.PtDiagMatrix) {
 	nfilters := sts.Nfilters
 	nclasses := sts.Nclasses
 
@@ -112,8 +103,6 @@ func InitDenseRotationInds(sts *CellCnnSettings, kgen ckks.KeyGenerator,
 	ouRowPacked := false
 	colsMatrix := GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := GenTransposeMap(colsMatrix)
-	// diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
-	// diagM.N1 = int(maxM1N2Ratio)
 	diagM := encoder.EncodeDiagMatrixBSGSAtLvl(params.MaxLevel(), transposeVec, params.Scale(), maxM1N2Ratio, params.LogSlots())
 
 	Btranspose := params.RotationsForDiagMatrixMult(diagM)

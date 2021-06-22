@@ -318,7 +318,7 @@ func (conv *Conv1D) GetGradient() []*ckks.Ciphertext {
 	return utils.CopyCiphertextSlice(conv.gradient)
 }
 
-// GetGradient return the gradients represented as byte
+// GetGradientBinary return the gradients represented as byte
 func (conv *Conv1D) GetGradientBinary() [][]byte {
 	var err error
 	Nfilters := len(conv.filters)
@@ -332,9 +332,8 @@ func (conv *Conv1D) GetGradientBinary() [][]byte {
 	return data
 }
 
-func (conv *Conv1D) PlainForwardCircuit(
-	input []complex128, filters [][]complex128, sts *utils.CellCnnSettings,
-) []complex128 {
+// PlainForwardCircuit debug use only, forward a sample to plaintext circuit
+func (conv *Conv1D) PlainForwardCircuit(input []complex128, filters [][]complex128, sts *utils.CellCnnSettings) []complex128 {
 	slots := len(input)
 	res := make([]complex128, slots)
 
@@ -347,6 +346,7 @@ func (conv *Conv1D) PlainForwardCircuit(
 	return res
 }
 
+// PlainBackwardCircuit debug use only, backward an error to plaintext circuit
 func (conv *Conv1D) PlainBackwardCircuit(
 	input []complex128, err0 []complex128, sts *utils.CellCnnSettings,
 ) [][]complex128 {

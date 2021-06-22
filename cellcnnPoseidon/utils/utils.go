@@ -8,6 +8,7 @@ import (
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
+// PrintTime debug use only, the last one of tl shold be the sum
 func PrintTime(tl []float64, i *int, label string) {
 	var info string
 	if len(tl) == 0 {
@@ -32,12 +33,12 @@ func PrintTime(tl []float64, i *int, label string) {
 	fmt.Printf(info)
 }
 
+// PrintCipherLevel return the ciphertext level string
 func PrintCipherLevel(cipher *ckks.Ciphertext, params ckks.Parameters) string {
 	return fmt.Sprintf("Level: %d (logQ = %d)\n", cipher.Level(), params.LogQLvl(cipher.Level()))
-
-	// return fmt.Sprintf("Level: %d (logQ = %d), Scale: 2^%f\n", cipher.Level(), params.LogQLvl(cipher.Level()), math.Log2(cipher.Scale()))
 }
 
+// PrintDebug copied from lattigo test
 func PrintDebug(params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128, decryptor ckks.Decryptor, encoder ckks.Encoder) (valuesTest []complex128) {
 
 	valuesTest = encoder.Decode(decryptor.DecryptNew(ciphertext), params.LogSlots())
@@ -49,13 +50,10 @@ func PrintDebug(params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant 
 	fmt.Printf("Activation Want: %v ...\n", valuesWant[0:4])
 	fmt.Println()
 
-	// precStats := ckks.GetPrecisionStats(params, nil, nil, valuesWant, valuesTest)
-
-	// fmt.Println(precStats.String())
-
 	return
 }
 
+// NewSlice init a new slice
 func NewSlice(start, end, step int) []int {
 	if step <= 0 || end < start {
 		return []int{}
@@ -68,6 +66,7 @@ func NewSlice(start, end, step int) []int {
 	return s
 }
 
+// NegativeSlice (a, b, c) => (-a, -b, -c)
 func NegativeSlice(slice []int) []int {
 	newSlice := make([]int, len(slice))
 	for i := range slice {
@@ -76,10 +75,12 @@ func NegativeSlice(slice []int) []int {
 	return newSlice
 }
 
+// sigmoid function
 func f(x complex128) complex128 {
 	return 1 / (cmplx.Exp(-x) + 1)
 }
 
+// ClearRotInds remove the duplicate element in a slice with respect to a mod
 func ClearRotInds(inds []int, mod int) []int {
 	indSet := make(map[int]bool)
 	for _, id := range inds {
@@ -89,12 +90,13 @@ func ClearRotInds(inds []int, mod int) []int {
 		}
 	}
 	res := make([]int, 0)
-	for k, _ := range indSet {
+	for k := range indSet {
 		res = append(res, k)
 	}
 	return res
 }
 
+// CiphertextsToBytes transform a ciphertext slice to bytes
 func CiphertextsToBytes(ct []*ckks.Ciphertext) [][]byte {
 	data := make([][]byte, len(ct))
 	var err error
@@ -107,6 +109,7 @@ func CiphertextsToBytes(ct []*ckks.Ciphertext) [][]byte {
 	return data
 }
 
+// CopyCiphertextSlice copy a ciphertext slice
 func CopyCiphertextSlice(input []*ckks.Ciphertext) []*ckks.Ciphertext {
 	res := make([]*ckks.Ciphertext, len(input))
 	for i, each := range input {
@@ -115,9 +118,10 @@ func CopyCiphertextSlice(input []*ckks.Ciphertext) []*ckks.Ciphertext {
 	return res
 }
 
+// AVGandStdev compute the avg and stdev of a slice
 func AVGandStdev(slice []float64) (float64, float64) {
 	avg := 0.0
-	mse := 0.0
+	std := 0.0
 
 	for _, item := range slice {
 		avg += item
@@ -126,9 +130,9 @@ func AVGandStdev(slice []float64) (float64, float64) {
 	avg = avg / float64(len(slice))
 
 	for _, item := range slice {
-		mse += math.Pow(item-avg, 2.0)
+		std += math.Pow(item-avg, 2.0)
 	}
-	mse = mse / float64(len(slice))
-	mse = math.Pow(mse, 0.5)
-	return avg, mse
+	std = std / float64(len(slice))
+	std = math.Pow(std, 0.5)
+	return avg, std
 }

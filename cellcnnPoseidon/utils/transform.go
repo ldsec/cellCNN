@@ -5,6 +5,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+// ScalarToOneHot transform a scalar to onehot encoding
 func ScalarToOneHot(labels []float64, nclasses int) *mat.Dense {
 	res := mat.NewDense(len(labels), nclasses, nil)
 	for i, each := range labels {
@@ -15,6 +16,7 @@ func ScalarToOneHot(labels []float64, nclasses int) *mat.Dense {
 	return res
 }
 
+// Float64ToOneHotEncode transform a float to onhot encoding
 func Float64ToOneHotEncode(label float64, nfilters int, params ckks.Parameters, encoder ckks.Encoder) *ckks.Plaintext {
 	res := make([]complex128, params.Slots())
 	res[int(label)*nfilters] = complex(1, 0)
@@ -22,6 +24,7 @@ func Float64ToOneHotEncode(label float64, nfilters int, params ckks.Parameters, 
 	return encoded
 }
 
+// GenSliceWithOneAt generate a new slice with 1 at ind
 func GenSliceWithOneAt(length int, ind []int) []complex128 {
 	res := make([]complex128, length)
 	for _, id := range ind {
@@ -30,6 +33,7 @@ func GenSliceWithOneAt(length int, ind []int) []complex128 {
 	return res
 }
 
+// GenSliceWithAnyAt generate a new slice with any at ind
 func GenSliceWithAnyAt(length int, ind []int, any float64) []complex128 {
 	res := make([]complex128, length)
 	for _, id := range ind {
@@ -38,6 +42,7 @@ func GenSliceWithAnyAt(length int, ind []int, any float64) []complex128 {
 	return res
 }
 
+// GenExtentionInds generate rotation indices
 func GenExtentionInds(from int, to []int) []int {
 	res := make([]int, len(to))
 	for i, v := range to {
@@ -46,7 +51,7 @@ func GenExtentionInds(from int, to []int) []int {
 	return res
 }
 
-// default the matrix is row packed into a vector
+// GenTransposeMatrix default the matrix is row packed into a vector
 // recover the matrix in normal format (r*c) then gen the transform matrix filled with (0, 1)
 // returns a matrix with Dims: cols * rows
 func GenTransposeMatrix(numOfSlots int, r int, c int, inRowPacked bool, ouRowPacked bool) [][]complex128 {
@@ -83,7 +88,8 @@ func GenTransposeMatrix(numOfSlots int, r int, c int, inRowPacked bool, ouRowPac
 	return mt
 }
 
-// input colMatrix has Dims: cols, rows
+// GenTransposeMap input colMatrix has Dims: cols, rows
+// return the diag map (with at least 1 in each)
 func GenTransposeMap(colMatrix [][]complex128) map[int][]complex128 {
 	cols := len(colMatrix)
 	rows := len(colMatrix[0])

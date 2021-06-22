@@ -1,5 +1,6 @@
 package utils
 
+// CellCnnSettings store the cell cnn basic settings
 type CellCnnSettings struct {
 	Ncells   int
 	Nmakers  int
@@ -9,7 +10,7 @@ type CellCnnSettings struct {
 	Interval float64
 }
 
-// NewConv1D constructor
+// NewCellCnnSettings constructor
 func NewCellCnnSettings(
 	ncells, nmakers, nfilters, nclasses int, degree uint, interval float64,
 ) *CellCnnSettings {
