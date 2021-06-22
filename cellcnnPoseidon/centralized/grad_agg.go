@@ -5,6 +5,7 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
+// Gradients a structure for aggregate several ciphertext
 type Gradients struct {
 	filters []*ckks.Ciphertext
 	dense   *ckks.Ciphertext
@@ -113,4 +114,8 @@ func (g *Gradients) GetPlaintext(idx int, inds []int, params ckks.Parameters, en
 		res[i] = plaintext[each]
 	}
 	return res
+}
+
+func (g *Gradients) GetFilters() []*ckks.Ciphertext {
+	return g.filters
 }

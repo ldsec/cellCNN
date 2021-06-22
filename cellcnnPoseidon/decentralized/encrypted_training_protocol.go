@@ -252,6 +252,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 				// if p.Debug.Print {
 				// 	log.Lvl2("ProtoIter: "+strconv.Itoa(p.IterationNumber)+", "+p.ServerIdentity().String()+", NEW WEIGHTS:", libspindle.DecryptMultipleFloat(p.CryptoParams, p.Weights[0][0], 0)[p.InitalGapSize+1:p.InitalGapSize+3])
 				// }
+				print(">>>>>> iteration: ", p.IterationNumber)
 				p.IterationNumber = p.IterationNumber + 1
 
 				if p.model.FisrtMomentum() {
@@ -260,7 +261,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 					p.model.UpdateMomentum(gradAgg)
 				} else {
 					// else, compute scaled_m at level 8 and get momentumed scaled at level 2
-					gradAgg := p.model.ComputeScaledGradientWithMomentum(gradAgg, p.CellCNNSettings, p.CryptoParams.Params, p.model.GetEvaluator(), p.encoder, momentum)
+					gradAgg = p.model.ComputeScaledGradientWithMomentum(gradAgg, p.CellCNNSettings, p.CryptoParams.Params, p.model.GetEvaluator(), p.encoder, momentum)
 					gradAgg.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
 					p.model.UpdateMomentum(gradAgg)
 				}

@@ -25,17 +25,17 @@ func TestLocalTime(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 17
-	nmakers := 5
-	nfilters := 8
+	ncells := 200
+	nmakers := 38
+	nfilters := 4
 	nclasses := 2
 	var sigDegree uint = 3
 	sigInterval := 5
 	maxM1N2Ratio := 8.0
 	momentum := 0.9
 	lr := 0.1
-	batchSize := 3
-	iterrations := 3
+	batchSize := 10
+	iterrations := 50
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
@@ -85,6 +85,8 @@ func TestLocalTime(t *testing.T) {
 	fwd_slice := make([]float64, iterrations)
 	bwd_slice := make([]float64, iterrations)
 	root_slice := make([]float64, iterrations)
+	err_conv_records := make(map[int]float64)
+	err_dense_records := make(map[int]float64)
 
 	for i := 0; i < iterrations; i++ {
 
@@ -140,6 +142,9 @@ func TestLocalTime(t *testing.T) {
 			t_fwd_one, t_bwd_one, t_root_current, mse_conv, mse_dense,
 		)
 
+		err_conv_records[i] = mse_conv
+		err_dense_records[i] = mse_dense
+
 		runtime.GC()
 
 	}
@@ -147,7 +152,6 @@ func TestLocalTime(t *testing.T) {
 	_, fwd_mse := utils.AVGandStdev(fwd_slice)
 	_, bwd_mse := utils.AVGandStdev(bwd_slice)
 	_, root_mse := utils.AVGandStdev(root_slice)
-	fmt.Println(fwd_slice)
 
 	// fmt.Printf(">>> Initialization time (offline): %v", t_init_end)
 	fmt.Printf(">>>>>> Average over %v iteration | fwd: %v, bwd: %v, root update: %v\n",
@@ -156,6 +160,12 @@ func TestLocalTime(t *testing.T) {
 	fmt.Printf(">>>>>> MSE over %v iterations | fwd: %v, bwd: %v, root update: %v\n",
 		iterrations, fwd_mse, bwd_mse, root_mse,
 	)
+
+	fmt.Println("conv err")
+	prettyPrint(err_conv_records, utils.NewSlice(0, iterrations-1, 1))
+	fmt.Println("dense err")
+	prettyPrint(err_dense_records, utils.NewSlice(0, iterrations-1, 1))
+
 }
 
 func TestInit(t *testing.T) {
@@ -264,10 +274,10 @@ func TestOptimizedCollect(t *testing.T) {
 	}
 
 	keys := []int{2, 4, 8, 16, 32}
-	prretyPrint(map_naive_m, keys)
-	prretyPrint(map_naive_s, keys)
-	prretyPrint(map_fast_m, keys)
-	prretyPrint(map_fast_s, keys)
+	prettyPrint(map_naive_m, keys)
+	prettyPrint(map_naive_s, keys)
+	prettyPrint(map_fast_m, keys)
+	prettyPrint(map_fast_s, keys)
 	// fmt.Printf("Time: naive: avg: %v, std: %v || fast: avg: %v, std: %v (s)\n", naive_m, naive_s, fast_m, fast_s)
 
 	// fmt.Printf("naive: %v\n", rNaive[:20])
@@ -275,7 +285,7 @@ func TestOptimizedCollect(t *testing.T) {
 	// fmt.Printf("Time: naive: %v, fast: %v (s)\n", t2, t3-t2)
 }
 
-func prretyPrint(s map[int]float64, keys []int) {
+func prettyPrint(s map[int]float64, keys []int) {
 	res := "["
 	for i, key := range keys {
 		if i != len(keys)-1 {
