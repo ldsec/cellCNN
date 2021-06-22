@@ -160,8 +160,8 @@ func (c *CellCNN) FisrtMomentum() bool {
 
 // UpdateMomentum store the ciphertexts in grad as new momentum for next iteration use
 func (c *CellCNN) UpdateMomentum(grad *Gradients) {
-	c.conv1d.UpdateMomentum(grad.filters)
-	c.dense.UpdateMomentum(grad.dense)
+	c.conv1d.UpdateMomentum(utils.CopyCiphertextSlice(grad.filters))
+	c.dense.UpdateMomentum(grad.dense.CopyNew())
 }
 
 // InitWeights init CellCNN and return the init plaintext weights (conv, dense) as mat.Dense.

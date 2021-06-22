@@ -121,3 +121,7 @@ func (g *Gradients) GetPlaintext(idx int, inds []int, params ckks.Parameters, en
 	}
 	return res
 }
+
+func (g *Gradients) GetFilters() []*ckks.Ciphertext {
+	return g.filters
+}

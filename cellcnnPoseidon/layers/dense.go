@@ -1,7 +1,6 @@
 package layers
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/approx/leastsquares"
@@ -114,9 +113,9 @@ func (dense *Dense) Forward(input *ckks.Ciphertext, newWeights *ckks.Ciphertext,
 	eval ckks.Evaluator, encoder ckks.Encoder, params ckks.Parameters,
 ) *ckks.Ciphertext {
 
-	fmt.Printf("#### Dense forward Level Tracing ####\n")
-	fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(dense.weights, params))
-	fmt.Printf("p2 input: %v\n", utils.PrintCipherLevel(input, params))
+	//fmt.Printf("#### Dense forward Level Tracing ####\n")
+	//fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(dense.weights, params))
+	//fmt.Printf("p2 input: %v\n", utils.PrintCipherLevel(input, params))
 
 	if newWeights != nil {
 		dense.weights = newWeights
@@ -144,7 +143,7 @@ func (dense *Dense) Forward(input *ckks.Ciphertext, newWeights *ckks.Ciphertext,
 
 	// record the last ouput before activation for backward use.
 	dense.u = output.CopyNew()
-	// fmt.Printf("Dense.u" + utils.PrintCipherLevel(dense.u, params))
+	// //fmt.Printf("Dense.u" + utils.PrintCipherLevel(dense.u, params))
 
 	// 4. apply least square approximation to compute the sigmoid
 	cfs, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
@@ -166,7 +165,7 @@ func (dense *Dense) Forward(input *ckks.Ciphertext, newWeights *ckks.Ciphertext,
 		panic("something is wrong in dense least square approximation")
 	}
 
-	fmt.Printf("p3 output: %v\n", utils.PrintCipherLevel(output, params))
+	//fmt.Printf("p3 output: %v\n", utils.PrintCipherLevel(output, params))
 
 	return output
 }
@@ -179,9 +178,9 @@ func (dense *Dense) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params ckks.Parameters,
 	eval ckks.Evaluator, encoder ckks.Encoder, sk *rlwe.SecretKey, lr float64,
 ) (*ckks.Ciphertext, *ckks.Ciphertext) {
-	fmt.Printf("#### Dense backward Level Tracing ####\n")
-	fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
-	fmt.Printf("p2 Dense.u: %v\n", utils.PrintCipherLevel(dense.u, params))
+	//fmt.Printf("#### Dense backward Level Tracing ####\n")
+	//fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
+	//fmt.Printf("p2 Dense.u: %v\n", utils.PrintCipherLevel(dense.u, params))
 	// 1. compute the derivative of the activation function
 	cf, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
 
@@ -198,14 +197,14 @@ func (dense *Dense) Backward(
 	if err != nil {
 		panic("something is wrong in dense least square approximation")
 	}
-	fmt.Printf("p3 dActv(Dense.u): %v\n", utils.PrintCipherLevel(dActv, params))
+	//fmt.Printf("p3 dActv(Dense.u): %v\n", utils.PrintCipherLevel(dActv, params))
 
 	// 2. mult the derivative and the inErr
 	mErr := eval.MulRelinNew(dActv, inErr)
 	if err := eval.Rescale(mErr, params.Scale(), mErr); err != nil {
 		panic("fail to rescale, dense backward")
 	}
-	fmt.Printf("p4 dActv(Dense.u) * InErr: %v\n", utils.PrintCipherLevel(mErr, params))
+	//fmt.Printf("p4 dActv(Dense.u) * InErr: %v\n", utils.PrintCipherLevel(mErr, params))
 
 	// 3. compute the loss by mult last input.T (k*1) with err (1*theta)
 	// because the mErr of dense (u or active(u)) already distributed in 0, k, 2k .. theta k place
@@ -218,13 +217,13 @@ func (dense *Dense) Backward(
 	if err := eval.Rescale(mErr, params.Scale(), mErr); err != nil {
 		panic("fail to rescale in dsbackward mask")
 	}
-	fmt.Printf("p5 mask garb p4: %v\n", utils.PrintCipherLevel(mErr, params))
+	//fmt.Printf("p5 mask garb p4: %v\n", utils.PrintCipherLevel(mErr, params))
 
 	// dummy bootstrapping to recover the cipheretext to the inital level.
 	if sk != nil {
 		mErr = utils.DummyBootstrapping(mErr, params, sk)
 	}
-	fmt.Printf("p6 bootstrap(p5): %v\n", utils.PrintCipherLevel(mErr, params))
+	//fmt.Printf("p6 bootstrap(p5): %v\n", utils.PrintCipherLevel(mErr, params))
 
 	repErr := mErr.CopyNew()
 	eval.InnerSumLog(repErr, -1, sts.Nfilters, repErr)
@@ -232,14 +231,14 @@ func (dense *Dense) Backward(
 	// 4. replicate the last input theta times
 	repInput := dense.lastInput.CopyNew()
 	eval.InnerSumLog(repInput, -sts.Nfilters, sts.Nclasses, repInput)
-	fmt.Printf("p7 dense last input: %v\n", utils.PrintCipherLevel(repInput, params))
+	//fmt.Printf("p7 dense last input: %v\n", utils.PrintCipherLevel(repInput, params))
 
 	// 5. mult the err and the input get the derivative for the dense weights
 	dense.gradient = eval.MulRelinNew(repInput, repErr)
 	if err := eval.Rescale(dense.gradient, params.Scale(), dense.gradient); err != nil {
 		panic("fail to rescale, dense backward dw")
 	}
-	fmt.Printf("p8 gradient: p6 mult p7: %v\n", utils.PrintCipherLevel(dense.gradient, params))
+	//fmt.Printf("p8 gradient: p6 mult p7: %v\n", utils.PrintCipherLevel(dense.gradient, params))
 
 	// keep pure gradient
 	pure_gradient := dense.gradient.CopyNew()
@@ -254,8 +253,8 @@ func (dense *Dense) Backward(
 	if err := eval.Rescale(weightsT, params.Scale(), weightsT); err != nil {
 		panic("fail to rescale, dense backward weightsT")
 	}
-	fmt.Printf("p9 weights transpose: %v\n", utils.PrintCipherLevel(weightsT, params))
-	// fmt.Printf("max-1 " + utils.PrintCipherLevel(weightsT, params))
+	//fmt.Printf("p9 weights transpose: %v\n", utils.PrintCipherLevel(weightsT, params))
+	// //fmt.Printf("max-1 " + utils.PrintCipherLevel(weightsT, params))
 
 	// 8. compute the err to next layer, mask garbage slots and collect the valid slots to left most
 	mErrCollect := utils.MaskAndCollectToLeft(mErr, params, encoder, eval, 0, sts.Nfilters, sts.Nclasses)
@@ -273,7 +272,7 @@ func (dense *Dense) Backward(
 
 	// 2. innerSum to get the err in nclasses * (0~k-1) slots, with garbage
 	eval.InnerSumLog(outErr, 1, sts.Nclasses, outErr)
-	fmt.Printf("p10 weight.T mult mErr: %v\n", utils.PrintCipherLevel(outErr, params))
+	//fmt.Printf("p10 weight.T mult mErr: %v\n", utils.PrintCipherLevel(outErr, params))
 
 	return outErr, pure_gradient
 }

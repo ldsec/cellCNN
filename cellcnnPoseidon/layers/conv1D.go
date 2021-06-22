@@ -24,6 +24,7 @@ func NewConv1D(filters []*ckks.Ciphertext, isMomentum float64) *Conv1D {
 		filters:  filters,
 		momentum: isMomentum,
 		vt:       make([]*ckks.Ciphertext, len(filters)),
+		gradient: make([]*ckks.Ciphertext, len(filters)),
 	}
 }
 
@@ -142,8 +143,8 @@ func (conv *Conv1D) TransposeInput(sts *utils.CellCnnSettings, input *ckks.Plain
 // activation function is identity
 func (conv *Conv1D) Forward(input *ckks.Plaintext, newFilters []*ckks.Ciphertext, sts *utils.CellCnnSettings, eval ckks.Evaluator, params ckks.Parameters) *ckks.Ciphertext {
 
-	fmt.Printf("#### Conv1d forward Level Tracing ####\n")
-	fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(conv.filters[0], params))
+	//fmt.Printf("#### Conv1d forward Level Tracing ####\n")
+	////fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(conv.filters[0], params))
 
 	if newFilters != nil {
 		conv.filters = newFilters
@@ -185,7 +186,7 @@ func (conv *Conv1D) Forward(input *ckks.Plaintext, newFilters []*ckks.Ciphertext
 		}
 	}
 
-	fmt.Printf("p2 output: %v\n", utils.PrintCipherLevel(output, params))
+	//fmt.Printf("p2 output: %v\n", utils.PrintCipherLevel(output, params))
 
 	return output
 }
@@ -198,8 +199,8 @@ func (conv *Conv1D) Backward(
 	evaluator ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) []*ckks.Ciphertext {
 
-	fmt.Printf("#### Conv1d backward Level Tracing ####\n")
-	fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
+	//fmt.Printf("#### Conv1d backward Level Tracing ####\n")
+	//fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
 	// 1. mult the dActv with the income err, currently dActv = 1, skip this part
 
 	// 2. extend the input err, pack each slot of err to length ncells*nmakers, with a factor of 1/n
@@ -226,7 +227,7 @@ func (conv *Conv1D) Backward(
 		evaluator.InnerSumLog(leftMostTmp, -1, sts.Ncells*sts.Nmakers, leftMostTmp)
 		extErrSlice[i] = leftMostTmp
 	}
-	fmt.Printf("p2 upsamling the inErr: %v\n", utils.PrintCipherLevel(maskedErrSlice[0], params))
+	//fmt.Printf("p2 upsamling the inErr: %v\n", utils.PrintCipherLevel(maskedErrSlice[0], params))
 
 	// 3. mult the extended err with the transposed last input
 	dwSlice := make([]*ckks.Ciphertext, sts.Nfilters)
@@ -249,7 +250,7 @@ func (conv *Conv1D) Backward(
 		dwSlice[i] = utils.MaskAndCollectToLeftFast(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers, false, false)
 	}
 
-	fmt.Printf("p3 gradient: %v\n", utils.PrintCipherLevel(dwSlice[0], params))
+	//fmt.Printf("p3 gradient: %v\n", utils.PrintCipherLevel(dwSlice[0], params))
 
 	// pure and no momentum gradient
 	conv.gradient = utils.CopyCiphertextSlice(dwSlice)
@@ -293,6 +294,7 @@ func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 ) []*ckks.Ciphertext {
 	for i := range gradients {
 		if momentum > 0 {
+			fmt.Printf("len vt: %v, grad: %v, self grad: %v\n", len(conv.vt), len(gradients), len(conv.gradient))
 			if conv.vt[i] == nil {
 				conv.vt[i] = gradients[i].CopyNew()
 			} else {
