@@ -10,23 +10,16 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
-// requires rotation keys for:
-//	slots - [1, Nclasses-1] * nfilters
-//  [1, nfilters-1]
-// 	[1, Nclasses-1] * (nfilters - 1)
-
 // Dense output layer for classification (nclasses > 1)
 type Dense struct {
-	weights   *ckks.Ciphertext // column packed weights
-	lastInput *ckks.Ciphertext // nsamples x nfilters
-	u         *ckks.Ciphertext
-	diagM     *ckks.PtDiagMatrix // for backward transpose operation
+	weights   *ckks.Ciphertext   // column packed weights
+	lastInput *ckks.Ciphertext   // nsamples x nfilters
+	u         *ckks.Ciphertext   // output before activation, with garbage slots
+	diagM     *ckks.PtDiagMatrix // for backward transpose operation, pre-computed in init rotation inds
 	encoder   ckks.Encoder
 	gradient  *ckks.Ciphertext
 	momentum  float64
 	vt        *ckks.Ciphertext
-	// Activation  func(float64) float64
-	// dActivation func(float64) float64
 }
 
 // NewDense constructor
@@ -85,32 +78,17 @@ func (dense *Dense) UpdateMomentum(grad *ckks.Ciphertext) {
 func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGenerator,
 	params ckks.Parameters, encoder ckks.Encoder, maxM1N2Ratio float64,
 ) []int {
-	// maxM1N2Ratio = 8.0
-	// nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
-	// ncells := sts.Ncells
 	nclasses := sts.Nclasses
 
 	// Dense Forward
 	// 1. for replicate the input mutiple times
-	// Frep := make([]int, 0)
-	// for i := 1; i < nclasses; i++ {
-	// 	Frep = append(Frep, -i*nfilters)
-	// }
 	Frep := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
 	// 2. for input weights matrix mult
 	Fmult := params.RotationsForInnerSumLog(1, nfilters)
-	// 3. for collect the result into the left most slots
-	// step := nfilters - 1
-	// Fshift := utils.NewSlice(0, (nclasses-1)*step, step)
 	Finds := append(Frep, Fmult...)
-	// Finds = append(Finds, Fshift...)
 
 	// Dense Backward
-
-	// 	err mult input
-	// 	rotation keys required: -1 ~ -(k-1)
-	// 	rotation keys required: -k ~ -k*(theta-1)
 	rot1 := params.RotationsForInnerSumLog(-1, sts.Nfilters)
 	rot2 := params.RotationsForInnerSumLog(-sts.Nfilters, sts.Nclasses)
 	rot3 := params.RotationsForInnerSumLog(-sts.Nclasses, sts.Nfilters)
@@ -122,8 +100,6 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 	ouRowPacked := false
 	colsMatrix := utils.GenTransposeMatrix(params.Slots(), nfilters, nclasses, inRowPacked, ouRowPacked)
 	transposeVec := utils.GenTransposeMap(colsMatrix)
-	// diagM := encoder.EncodeDiagMatrixAtLvl(params.MaxLevel(), transposeVec, params.Scale(), params.LogSlots())
-	// diagM.N1 = int(maxM1N2Ratio)
 	diagM := encoder.EncodeDiagMatrixBSGSAtLvl(params.MaxLevel(), transposeVec, params.Scale(), maxM1N2Ratio, params.LogSlots())
 
 	dense.diagM = diagM
@@ -134,47 +110,35 @@ func (dense *Dense) InitRotationInds(sts *utils.CellCnnSettings, kgen ckks.KeyGe
 }
 
 // Forward pass of the Dense_n layer, using newWeights if not nil
-func (dense *Dense) Forward(
-	input *ckks.Ciphertext,
-	newWeights *ckks.Ciphertext,
-	sts *utils.CellCnnSettings,
-	evaluator ckks.Evaluator,
-	encoder ckks.Encoder,
-	params ckks.Parameters,
-	// maskMap map[int]*ckks.Plaintext,
+func (dense *Dense) Forward(input *ckks.Ciphertext, newWeights *ckks.Ciphertext, sts *utils.CellCnnSettings,
+	eval ckks.Evaluator, encoder ckks.Encoder, params ckks.Parameters,
 ) *ckks.Ciphertext {
+
+	fmt.Printf("#### Dense forward Level Tracing ####\n")
+	fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(dense.weights, params))
+	fmt.Printf("p2 input: %v\n", utils.PrintCipherLevel(input, params))
 
 	if newWeights != nil {
 		dense.weights = newWeights
 	}
 
-	// records the last input for backward
 	dense.lastInput = input.CopyNew()
 
-	var inputRep, output *ckks.Ciphertext
-	inputRep = input
+	var output *ckks.Ciphertext
+	inputRep := input.CopyNew()
 
 	// 1. replicate the input by Nclasses times
-	evaluator.InnerSumLog(inputRep, -sts.Nfilters, sts.Nclasses, inputRep)
+	eval.InnerSumLog(inputRep, -sts.Nfilters, sts.Nclasses, inputRep)
 
 	// 2. mul the weights and the input representation
-	inputRep = evaluator.MulRelinNew(inputRep, dense.weights)
+	inputRep = eval.MulRelinNew(inputRep, dense.weights)
 
-	if err := evaluator.Rescale(inputRep, params.Scale(), inputRep); err != nil {
+	if err := eval.Rescale(inputRep, params.Scale(), inputRep); err != nil {
 		panic("fail to rescale, dense")
 	}
 
 	// 3. innerSum to get the pred for class theta in the theta * nfilters place
-	evaluator.InnerSumLog(inputRep, 1, sts.Nfilters, inputRep)
-
-	// 4. mask and left shift to store the result in left most Nclass slots.
-	// // mask the output slots at (nfilter*0~nclasses-1)
-	// maskOutput := utils.GenSliceWithOneAt(params.Slots(), utils.NewSlice(0, sts.Nfilters*(sts.Nclasses-1), sts.Nfilters))
-	// plainMask := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), maskOutput, params.LogSlots())
-	// evaluator.MulRelin(inputRep, plainMask, inputRep)
-	// if err := evaluator.Rescale(inputRep, params.Scale(), inputRep); err != nil {
-	// 	panic("fail to rescale in dsbackward mask")
-	// }
+	eval.InnerSumLog(inputRep, 1, sts.Nfilters, inputRep)
 
 	output = inputRep
 
@@ -182,14 +146,12 @@ func (dense *Dense) Forward(
 	dense.u = output.CopyNew()
 	// fmt.Printf("Dense.u" + utils.PrintCipherLevel(dense.u, params))
 
-	// 5. apply least square approximation to compute the sigmoid
+	// 4. apply least square approximation to compute the sigmoid
 	cfs, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
-	fmt.Printf("Using approx coefficient: %v\n", cfs)
 	if err != nil {
 		panic("something is wrong in dense least square approximation")
 	}
 
-	// use "leastsquaresOptEco" as implemented in
 	coeffs := make([]complex128, sts.Degree+1)
 	coeffs[0] = complex(cfs[0], 0)
 
@@ -199,11 +161,12 @@ func (dense *Dense) Forward(
 
 	poly := ckks.NewPoly(coeffs)
 
-	// u-2 level output
-	output, err = evaluator.EvaluatePoly(output, poly, params.Scale())
+	output, err = eval.EvaluatePoly(output, poly, params.Scale())
 	if err != nil {
 		panic("something is wrong in dense least square approximation")
 	}
+
+	fmt.Printf("p3 output: %v\n", utils.PrintCipherLevel(output, params))
 
 	return output
 }
@@ -214,14 +177,16 @@ func (dense *Dense) Forward(
 // for momentum one, call ComputeGradientWithMomentumAndLr
 func (dense *Dense) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params ckks.Parameters,
-	evaluator ckks.Evaluator, encoder ckks.Encoder, sk *rlwe.SecretKey, lr float64,
+	eval ckks.Evaluator, encoder ckks.Encoder, sk *rlwe.SecretKey, lr float64,
 ) (*ckks.Ciphertext, *ckks.Ciphertext) {
+	fmt.Printf("#### Dense backward Level Tracing ####\n")
+	fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
+	fmt.Printf("p2 Dense.u: %v\n", utils.PrintCipherLevel(dense.u, params))
 	// 1. compute the derivative of the activation function
 	cf, err := leastsquares.GetCoefficients(sts.Degree, sts.Interval)
 
-	// scale coefficients based on the interval
+	// scale coefficients based on the interval, first coeff will be gone when derivative...
 	coeffs := make([]complex128, sts.Degree)
-	//first coeff will be gone when derivative...
 	coeffs[0] = complex(cf[1]/math.Pow(sts.Interval, float64(1)), 0)
 	for i := 1; i < len(coeffs); i++ {
 		coeffs[i] = complex((cf[i+1]/math.Pow(sts.Interval, float64(i+1)))*float64(i+1), 0)
@@ -229,138 +194,86 @@ func (dense *Dense) Backward(
 
 	poly := ckks.NewPoly(coeffs)
 
-	// ------- u-2 level
-	dActv, err := evaluator.EvaluatePoly(dense.u, poly, params.Scale())
-	// fmt.Printf("u-2 " + utils.PrintCipherLevel(dActv, params))
-	// fmt.Printf("inErr " + utils.PrintCipherLevel(inErr, params))
+	dActv, err := eval.EvaluatePoly(dense.u, poly, params.Scale())
 	if err != nil {
 		panic("something is wrong in dense least square approximation")
 	}
+	fmt.Printf("p3 dActv(Dense.u): %v\n", utils.PrintCipherLevel(dActv, params))
 
-	// ------- b = min{u-3, inErr-1} level
 	// 2. mult the derivative and the inErr
-	mErr := evaluator.MulRelinNew(dActv, inErr)
-	if err := evaluator.Rescale(mErr, params.Scale(), mErr); err != nil {
+	mErr := eval.MulRelinNew(dActv, inErr)
+	if err := eval.Rescale(mErr, params.Scale(), mErr); err != nil {
 		panic("fail to rescale, dense backward")
 	}
-	// fmt.Printf("b = min{u-3, inErr-1} " + utils.PrintCipherLevel(mErr, params))
-	if sk != nil {
-		// fmt.Printf("Before re-encrypt: " + utils.PrintCipherLevel(mErr, params))
-		ect := ckks.NewEncryptorFromSk(params, sk)
-		dct := ckks.NewDecryptor(params, sk)
-		cmplSlice := encoder.Decode(dct.DecryptNew(mErr), params.LogSlots())
-		replain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), cmplSlice, params.LogSlots())
-		mErr = ect.EncryptNew(replain)
-		// fmt.Printf("After re-encrypt: " + utils.PrintCipherLevel(mErr, params))
-	}
+	fmt.Printf("p4 dActv(Dense.u) * InErr: %v\n", utils.PrintCipherLevel(mErr, params))
 
 	// 3. compute the loss by mult last input.T (k*1) with err (1*theta)
 	// because the mErr of dense (u or active(u)) already distributed in 0, k, 2k .. theta k place
 	// here we directly right rotate (1~k-1) times and add together
-	// rotation keys required: -1 ~ -(k-1)
 
-	// here we need mask garbage slots
 	// mask the output slots at (nfilter*0~nclasses-1)
 	maskOutput := utils.GenSliceWithOneAt(params.Slots(), utils.NewSlice(0, sts.Nfilters*(sts.Nclasses-1), sts.Nfilters))
 	plainMask := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), maskOutput, params.LogSlots())
-
-	// ------- b-1 level
-	evaluator.MulRelin(mErr, plainMask, mErr)
-	if err := evaluator.Rescale(mErr, params.Scale(), mErr); err != nil {
+	eval.MulRelin(mErr, plainMask, mErr)
+	if err := eval.Rescale(mErr, params.Scale(), mErr); err != nil {
 		panic("fail to rescale in dsbackward mask")
 	}
-	// fmt.Printf("b-1 " + utils.PrintCipherLevel(mErr, params))
+	fmt.Printf("p5 mask garb p4: %v\n", utils.PrintCipherLevel(mErr, params))
 
-	evaluator.InnerSumLog(mErr, -1, sts.Nfilters, mErr)
-	repErr := mErr
+	// dummy bootstrapping to recover the cipheretext to the inital level.
+	if sk != nil {
+		mErr = utils.DummyBootstrapping(mErr, params, sk)
+	}
+	fmt.Printf("p6 bootstrap(p5): %v\n", utils.PrintCipherLevel(mErr, params))
+
+	repErr := mErr.CopyNew()
+	eval.InnerSumLog(repErr, -1, sts.Nfilters, repErr)
 
 	// 4. replicate the last input theta times
-	// rotation keys required: -k ~ -k*(theta-1)
 	repInput := dense.lastInput.CopyNew()
-	evaluator.InnerSumLog(repInput, -sts.Nfilters, sts.Nclasses, repInput)
+	eval.InnerSumLog(repInput, -sts.Nfilters, sts.Nclasses, repInput)
+	fmt.Printf("p7 dense last input: %v\n", utils.PrintCipherLevel(repInput, params))
 
 	// 5. mult the err and the input get the derivative for the dense weights
-	// ------- min{b-2, input-1} level
-	// repInput = evaluator.MultByConstNew(repInput, 1.0/float64(sts.Ncells))
-	// if err := evaluator.Rescale(repInput, params.Scale(), repInput); err != nil {
-	// 	panic("fail to rescale, dense backward repInput")
-	// }
-	dense.gradient = evaluator.MulRelinNew(repInput, repErr)
-	if err := evaluator.Rescale(dense.gradient, params.Scale(), dense.gradient); err != nil {
+	dense.gradient = eval.MulRelinNew(repInput, repErr)
+	if err := eval.Rescale(dense.gradient, params.Scale(), dense.gradient); err != nil {
 		panic("fail to rescale, dense backward dw")
 	}
+	fmt.Printf("p8 gradient: p6 mult p7: %v\n", utils.PrintCipherLevel(dense.gradient, params))
 
 	// keep pure gradient
 	pure_gradient := dense.gradient.CopyNew()
 
 	// compute scaled gradient
 	if lr != 0 {
-		dense.ComputeScaledGradient(dense.gradient, sts, params, evaluator, encoder, lr)
+		dense.ComputeScaledGradient(dense.gradient, sts, params, eval, encoder, lr)
 	}
 
-	// if lr != 0 {
-	// 	// change the gradient to scaled and momentum one
-	// 	dense.ComputeGradientWithMomentumAndLr(dense.gradient, sts, params, evaluator, encoder, lr)
-	// }
-	// fmt.Printf("min{b-2, input-1} " + utils.PrintCipherLevel(dense.gradient, params))
-
-	// return dw
-
-	// 6. mult the dw with the learning rate
-
-	// 6.5 prepare the transpose weights for later computation
-	// this should be conducted before the updates of w
-
-	// ------- max-1 level
-	weightsT := evaluator.LinearTransform(dense.weights, dense.diagM)[0]
-	if err := evaluator.Rescale(weightsT, params.Scale(), weightsT); err != nil {
+	//  prepare the transpose weights for later computation
+	weightsT := eval.LinearTransform(dense.weights, dense.diagM)[0]
+	if err := eval.Rescale(weightsT, params.Scale(), weightsT); err != nil {
 		panic("fail to rescale, dense backward weightsT")
 	}
+	fmt.Printf("p9 weights transpose: %v\n", utils.PrintCipherLevel(weightsT, params))
 	// fmt.Printf("max-1 " + utils.PrintCipherLevel(weightsT, params))
 
-	// 7. sub the dw from the weights
-	// dense.weights = evaluator.SubNew(dense.weights, dw)
-
-	// 8. compute the err which will be passed to next layer.
-	// first rotate the input to get the results in the left most slots
-	rotIndsCollect := utils.NewSlice(0, (sts.Nfilters-1)*(sts.Nclasses-1), sts.Nfilters-1)
-	rotMapCollect := evaluator.RotateHoisted(mErr, rotIndsCollect)
-
-	// mask and add together
-	// mErrCollect := rotMapCollect[0]
-	var mErrCollect *ckks.Ciphertext
-	for i := 0; i < sts.Nclasses; i++ {
-		mask := utils.GenSliceWithOneAt(params.Slots(), []int{i})
-		maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
-
-		// ------- b = min{u-4, inErr-2} level
-		evaluator.MulRelin(rotMapCollect[i*(sts.Nfilters-1)], maskPlain, rotMapCollect[i*(sts.Nfilters-1)])
-		if err := evaluator.Rescale(rotMapCollect[i*(sts.Nfilters-1)], params.Scale(), rotMapCollect[i*(sts.Nfilters-1)]); err != nil {
-			panic("fail to rescale, dense backward, err collect to left")
-		}
-		// if i == 0 {
-		// 	fmt.Printf("min{u-4, inErr-2, b-2} " + utils.PrintCipherLevel(rotMapCollect[i*(sts.Nfilters-1)], params))
-		// }
-		if i == 0 {
-			mErrCollect = rotMapCollect[0]
-		} else {
-			evaluator.Add(mErrCollect, rotMapCollect[i*(sts.Nfilters-1)], mErrCollect)
-		}
-	}
+	// 8. compute the err to next layer, mask garbage slots and collect the valid slots to left most
+	mErrCollect := utils.MaskAndCollectToLeft(mErr, params, encoder, eval, 0, sts.Nfilters, sts.Nclasses)
+	// Please use this function instead if nfilters > nclasses
+	// mErrCollect := utils.MaskAndCollectToLeftFast(mErr, params, encoder, eval, 0, sts.Nfilters, sts.Nclasses, true, true)
 
 	// replicate the err k times and mult with weightsT
-	mErrRep := mErrCollect
-	evaluator.InnerSumLog(mErrRep, -sts.Nclasses, sts.Nfilters, mErrRep)
+	eval.InnerSumLog(mErrCollect, -sts.Nclasses, sts.Nfilters, mErrCollect)
 
 	// ------- min{u-5, inErr-3, b-3} level
-	outErr := evaluator.MulRelinNew(mErrRep, weightsT)
-	if err := evaluator.Rescale(outErr, params.Scale(), outErr); err != nil {
+	outErr := eval.MulRelinNew(mErrCollect, weightsT)
+	if err := eval.Rescale(outErr, params.Scale(), outErr); err != nil {
 		panic("fail to rescale, dense backward outErr")
 	}
-	// fmt.Printf("min{u-5, inErr-3, b-3} " + utils.PrintCipherLevel(outErr, params))
 
 	// 2. innerSum to get the err in nclasses * (0~k-1) slots, with garbage
-	evaluator.InnerSumLog(outErr, 1, sts.Nclasses, outErr)
+	eval.InnerSumLog(outErr, 1, sts.Nclasses, outErr)
+	fmt.Printf("p10 weight.T mult mErr: %v\n", utils.PrintCipherLevel(outErr, params))
 
 	return outErr, pure_gradient
 }
@@ -415,25 +328,6 @@ func (dense *Dense) GetGradientBinary() []byte {
 func (dense *Dense) UpdateWithGradients(g *ckks.Ciphertext, eval ckks.Evaluator) {
 	eval.Sub(dense.weights, g, dense.weights)
 }
-
-// func (dense *Dense) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {
-// 	if dense.gradient != nil {
-// 		update := eval.MultByConstNew(dense.gradient, lr)
-// 		if dense.isMomentum {
-// 			if dense.vt == nil {
-// 				dense.vt = update.CopyNew()
-// 			} else {
-// 				dense.vt = eval.MultByConstNew(dense.vt, momentum)
-// 				dense.vt = eval.AddNew(dense.vt, update)
-// 			}
-// 			dense.weights = eval.SubNew(dense.weights, dense.vt)
-// 		} else {
-// 			dense.weights = eval.SubNew(dense.weights, update)
-// 		}
-// 		return true
-// 	}
-// 	return false
-// }
 
 func (dense *Dense) PlainForwardCircuit(weights []complex128, input []complex128, sts *utils.CellCnnSettings) ([]complex128, []complex128) {
 

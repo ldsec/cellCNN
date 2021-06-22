@@ -19,18 +19,4 @@ const learningRate float64 = 0.1
 const momentum float64 = 0.9
 const maxIterations int = 3
 
-// const NCELLS = 300
-// const NFEATURES = 16
-// const NSAMPLES = 2250
-// const NSAMPLES_DIST = 400
-// const NCLASSES = 3
-// const NFILTERS = 7
-
 const HOSTS int = 3
-
-// TODO:
-// 1. set the correct lr sign
-// 2. how to process batch backward with momentum:
-//		batch forward
-//		for conv1d: average pure gradients over the batch
-// 		for dense: add pure gradients across the batch

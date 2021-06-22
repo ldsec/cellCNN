@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
 func AddHoistedMap(hm map[int]*ckks.Ciphertext, eval ckks.Evaluator) *ckks.Ciphertext {
@@ -16,35 +17,14 @@ func AddHoistedMap(hm map[int]*ckks.Ciphertext, eval ckks.Evaluator) *ckks.Ciphe
 	return res
 }
 
-// collect the desired slots to left most
-// this function consume one level
-// e.g.
-// input:
-// 		unmasked ciphertext: [a, garb, garb, garb, b, garb, garb, garb, c, garb, garb, garb, ...]
-// result:
-//  	ciphertext: [a, b, c, garb, garb, garb...]
-//		(actually: [a, b, c, 0, b, c, 0, 0, c, 0, 0, 0,...])
+// MaskAndCollectToLeft is a naive implementation of collect slots to left
+// comsume one level
+// output ct without garbage slots
 func MaskAndCollectToLeft(
 	ct *ckks.Ciphertext, params ckks.Parameters,
 	encoder ckks.Encoder, eval ckks.Evaluator,
 	start, step, num int,
 ) *ckks.Ciphertext {
-	// +++++++++++++++++++++++++++++
-	// if num > step-1 {
-	// 	panic("cannot fast collect, num > step-1")
-	// }
-	// // fist mask the slots I want
-	// maskInds := NewSlice(0, step*(num-1), step)
-	// mask := GenSliceWithOneAt(params.Slots(), maskInds)
-	// maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
-	// mct := eval.MulRelinNew(ct, maskPlain)
-	// // conduct innerSum to collect to left most with garbage slots
-	// eval.InnerSum(mct, step-1, num, mct)
-	// return mct
-	// +++++++++++++++++++++++++++++
-
-	// -----------------------------
-	// first rotate hoisted to put the slots into the place I want:
 	rotInds := make([]int, num)
 	for i := 0; i < num; i++ {
 		rotInds[i] = (start + step*i) - i
@@ -60,39 +40,62 @@ func MaskAndCollectToLeft(
 
 		// mult with mask plaintext
 		tmp := eval.MulRelinNew(rotMap[(start+step*i)-i], maskPlain)
+		if err := eval.Rescale(tmp, params.Scale(), tmp); err != nil {
+			panic("fail to rescale, utils.MaskAndCollectToLeft")
+		}
 		if i == 0 {
 			ctCollect = tmp
 		} else {
 			eval.Add(ctCollect, tmp, ctCollect)
 		}
 	}
-	if err := eval.Rescale(ctCollect, params.Scale(), ctCollect); err != nil {
-		panic("fail to rescale, utils.MaskAndCollectToLeft")
-	}
-	// fmt.Printf("MaskAndCollectToLeft " + PrintCipherLevel(ctCollect, params))
 
 	return ctCollect
-	// -----------------------------
 }
 
+// MaskAndCollectToLeftFast is a fast implementation of collect slots to left
+// input ct with garbage slots
+// output ct with garbage slots
+// this funtion comsume (isMasked+outMask) level
+// outMask: if mask garbage slots in output
 func MaskAndCollectToLeftFast(
 	ct *ckks.Ciphertext, params ckks.Parameters,
 	encoder ckks.Encoder, eval ckks.Evaluator,
-	start, step, num int,
+	start, step, num int, inMasked bool, outMask bool,
 ) *ckks.Ciphertext {
-	// +++++++++++++++++++++++++++++
 	if num > step-1 {
 		panic("cannot fast collect, num > step-1")
 	}
-	// fist mask the slots I want
-	maskInds := NewSlice(0, step*(num-1), step)
-	mask := GenSliceWithOneAt(params.Slots(), maskInds)
-	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
-	mct := eval.MulRelinNew(ct, maskPlain)
-	if err := eval.Rescale(mct, params.Scale(), mct); err != nil {
-		panic("fail to rescale, utils.MaskAndCollectToLeftFast")
+	var mct *ckks.Ciphertext
+	if !inMasked {
+		// fist mask the slots I want
+		maskInds := NewSlice(0, step*(num-1), step)
+		mask := GenSliceWithOneAt(params.Slots(), maskInds)
+		maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
+		mct = eval.MulRelinNew(ct, maskPlain)
+		if err := eval.Rescale(mct, params.Scale(), mct); err != nil {
+			panic("fail to rescale, utils.MaskAndCollectToLeftFast")
+		}
+	} else {
+		mct = ct.CopyNew()
 	}
 	// conduct innerSum to collect to left most with garbage slots
 	eval.InnerSumLog(mct, step-1, num, mct)
+	if outMask {
+		outMask := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), GenSliceWithOneAt(params.Slots(), NewSlice(0, num-1, 1)), params.LogSlots())
+		mct = eval.MulRelinNew(mct, outMask)
+		if err := eval.Rescale(mct, params.Scale(), mct); err != nil {
+			panic("fail to rescale, utils.MaskAndCollectToLeftFast")
+		}
+	}
 	return mct
+}
+
+func DummyBootstrapping(ct *ckks.Ciphertext, params ckks.Parameters, sk *rlwe.SecretKey) *ckks.Ciphertext {
+	ect := ckks.NewEncryptorFromSk(params, sk)
+	dct := ckks.NewDecryptor(params, sk)
+	encoder := ckks.NewEncoder(params)
+	cmplSlice := encoder.Decode(dct.DecryptNew(ct), params.LogSlots())
+	replain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), cmplSlice, params.LogSlots())
+	return ect.EncryptNew(replain)
 }

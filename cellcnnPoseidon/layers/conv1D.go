@@ -2,7 +2,6 @@ package layers
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
@@ -12,9 +11,7 @@ import (
 type Conv1D struct {
 	filters   []*ckks.Ciphertext // len(filters) = Nfilters
 	lastInput *ckks.Plaintext    // packed ncells after encoding
-	// Activation  func(float64) float64
-	// dActivation func(float64) float64
-	// u           []*mat.Dense
+
 	encoder  ckks.Encoder
 	gradient []*ckks.Ciphertext
 	momentum float64
@@ -30,7 +27,7 @@ func NewConv1D(filters []*ckks.Ciphertext, isMomentum float64) *Conv1D {
 	}
 }
 
-//  return the encrypted weights as bytes
+// return the encrypted weights as bytes
 func (conv *Conv1D) Marshall() [][]byte {
 	var err error
 	Nfilters := len(conv.filters)
@@ -84,41 +81,23 @@ func (conv *Conv1D) UpdateMomentum(grad []*ckks.Ciphertext) {
 	conv.vt = grad
 }
 
-// func (conv *Conv1D) SetMomentum() {
-// 	conv.isMomentum = true
-// }
-
 func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Parameters) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
 	ncells := sts.Ncells
-	// nclasses := sts.Nclasses
 
 	// Conv1D Forward
 	// 1. for input weights matrix mult
 	Fmult := params.RotationsForInnerSumLog(1, nmakers*ncells)
 	// 2. for rotation the result to left most slots
-	Fshift := make([]int, 0)
-	for i := 1; i < nfilters; i++ {
-		Fshift = append(Fshift, -i)
-	}
+	Fshift := utils.NegativeSlice(utils.NewSlice(1, nfilters-1, 1))
 	Finds := append(Fmult, Fshift...)
-	// fmt.Printf("Fshift: %v, Finds: %v\n", Fshift, Finds)
 
 	//Conv1D Backward
 	// 3. for replicate the err for each filter
-	// ---------------------------------------
-	// Brep := make([]int, 0)
-	// for i := 0; i < sts.Nfilters; i++ {
-	// 	extInds := utils.GenExtentionInds(i*sts.Nclasses, utils.NewSlice(0, sts.Ncells*sts.Nmakers-1, 1))
-	// 	Brep = append(Brep, extInds...)
-	// }
-	// ---------------------------------------
-	// +++++++++++++++++++++++++++++++++++++++
 	Brep1 := utils.NewSlice(0, (sts.Nfilters-1)*sts.Nclasses, sts.Nclasses)
 	Brep2 := params.RotationsForInnerSumLog(-1, sts.Ncells*sts.Nmakers)
 	Brep := append(Brep1, Brep2...)
-	// +++++++++++++++++++++++++++++++++++++++
 
 	// 4. left collect gradient
 	Bcol := make([]int, sts.Nmakers)
@@ -126,14 +105,10 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Par
 		Bcol[i] = sts.Ncells*i - i
 	}
 	// 5. replicate gradient
-	// ++++++++++++++++++++++++++++
 	Brepg := params.RotationsForInnerSumLog(-sts.Nmakers, sts.Ncells)
 	B0 := params.RotationsForInnerSumLog(1, sts.Ncells)
 	Bcollect := params.RotationsForInnerSumLog(sts.Ncells-1, sts.Nmakers)
-	// eval.InnerSum(mct, step-1, num, mct)
-	// ----------------------------
-	// Brepg := utils.NegativeSlice(utils.NewSlice(0, (sts.Ncells-1)*sts.Nmakers, sts.Nmakers))
-	// ----------------------------
+
 	Binds := append(Brep, Bcol...)
 	Binds = append(Binds, Brepg...)
 	Binds = append(Binds, B0...)
@@ -158,10 +133,12 @@ func (conv *Conv1D) Forward(
 	input *ckks.Plaintext,
 	newFilters []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings,
-	evaluator ckks.Evaluator,
+	eval ckks.Evaluator,
 	params ckks.Parameters,
-	mask *ckks.Plaintext,
 ) *ckks.Ciphertext {
+
+	fmt.Printf("#### Conv1d forward Level Tracing ####\n")
+	fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(conv.filters[0], params))
 
 	if newFilters != nil {
 		conv.filters = newFilters
@@ -169,23 +146,18 @@ func (conv *Conv1D) Forward(
 
 	conv.lastInput = input
 
+	actvs := make([]*ckks.Ciphertext, len(conv.filters)) // activations for each filter
+
+	// mask for the first slot as filer response on batch cells
+	leftMostMask := utils.GenSliceWithAnyAt(params.Slots(), []int{0}, 1.0/float64(sts.Ncells))
+	poolMask := conv.encoder.EncodeNTTAtLvlNew(params.MaxLevel(), leftMostMask, params.LogSlots())
+
 	var output *ckks.Ciphertext
 	batch := 1                    // only the left most
 	n := sts.Nmakers * sts.Ncells // num of slots to add together
 
-	actvs := make([]*ckks.Ciphertext, len(conv.filters)) // activations for each filter\
-
-	leftMostMask := make([]complex128, params.Slots())
-	leftMostMask[0] = complex(1.0/float64(sts.Ncells), 0)
-	poolMask := conv.encoder.EncodeNTTAtLvlNew(params.MaxLevel(), leftMostMask, params.LogSlots())
-
-	// wg := sync.WaitGroup{}
 	// loop over all filters
 	for i, filter := range conv.filters {
-		eval := evaluator.ShallowCopy()
-		// wg.Add(1)
-		// go func(i int, filter *ckks.Ciphertext, eval ckks.Evaluator) {
-		// defer wg.Done()
 
 		// 1. multiply the filters and the input
 		actvs[i] = eval.MulRelinNew(filter, input)
@@ -197,45 +169,33 @@ func (conv *Conv1D) Forward(
 
 		// 3. mask the ouput to keep only the left most element
 		eval.MulRelin(actvs[i], poolMask, actvs[i])
-
 		eval.Rescale(actvs[i], params.Scale(), actvs[i])
 
-		// 	}(id, ft, evaluator.ShallowCopy())
-	}
-
-	// wg.Wait()
-
-	// output = actvs[0]
-
-	for i := 0; i < len(actvs); i++ {
-		// 5. rotate the result to i-th place and add together
+		// 4. rotate the result to i-th place and add together
 		if i == 0 {
 			output = actvs[i]
 		} else {
-			evaluator.Rotate(actvs[i], -i, actvs[i])
-			evaluator.Add(output, actvs[i], output)
+			eval.Rotate(actvs[i], -i, actvs[i])
+			eval.Add(output, actvs[i], output)
 		}
 	}
 
-	// // fmt.Printf("--conv 6.collect to one ciphertext <level : %v, scale: %v>\n", output.Level(), math.Log2(output.Scale()))
+	fmt.Printf("p2 output: %v\n", utils.PrintCipherLevel(output, params))
 
 	return output
 }
 
 // Backward compute the gradient
-// return the unscaled, no-momentum, un-replicated gradient
-// for scaled one, call GetGradient
-// for momentum one, call ComputeGradientWithMomentumAndLr
+// return the scaled, no-momentum, un-replicated gradient
+// for momentum one, call ComputeScaledGradientWithMomentum
 func (conv *Conv1D) Backward(
 	inErr *ckks.Ciphertext, sts *utils.CellCnnSettings, params ckks.Parameters,
 	evaluator ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) []*ckks.Ciphertext {
-	// return dw for each filter, for debug
 
-	// 1. mult the dActv with the income err
-	// currently dActv = 1, skip this part
-
-	// tx0 := time.Now()
+	fmt.Printf("#### Conv1d backward Level Tracing ####\n")
+	fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
+	// 1. mult the dActv with the income err, currently dActv = 1, skip this part
 
 	// 2. extend the input err, pack each slot of err to length ncells*nmakers, with a factor of 1/n
 	maskedErrSlice := make([]*ckks.Ciphertext, sts.Nfilters)
@@ -251,17 +211,7 @@ func (conv *Conv1D) Backward(
 		if err := evaluator.Rescale(maskedErrSlice[i], params.Scale(), maskedErrSlice[i]); err != nil {
 			panic("fail to rescale, conv backward, err extention")
 		}
-		// if i == 0 {
-		// 	// inErr - 1
-		// 	fmt.Printf("inErr - 1 " + utils.PrintCipherLevel(maskedErrSlice[i], params))
-		// }
 	}
-
-	// ty0 := time.Since(tx0)
-
-	// fmt.Printf("> Time comsumed in point0 is: %v\n", ty0.Seconds())
-
-	// tx1 := time.Now()
 
 	//  2.2 rotate to extend one slots to ncells*nmakers, need to generate new rotation keys
 	// e.g.
@@ -276,33 +226,17 @@ func (conv *Conv1D) Backward(
 		evaluator.InnerSumLog(leftMostTmp, -1, sts.Ncells*sts.Nmakers, leftMostTmp)
 		extErrSlice[i] = leftMostTmp
 	}
-
-	// ty1 := time.Since(tx1) // 18 seconds
-
-	// fmt.Printf("> Time comsumed in point1 is: %v\n", ty1.Seconds())
+	fmt.Printf("p2 upsamling the inErr: %v\n", utils.PrintCipherLevel(maskedErrSlice[0], params))
 
 	// 3. mult the extended err with the transposed last input
 	dwSlice := make([]*ckks.Ciphertext, sts.Nfilters)
 
-	// tx2 := time.Now()
-
 	inputT := conv.TransposeInput(sts, conv.lastInput, params)
-
-	// ty2 := time.Since(tx2)
-
-	// fmt.Printf("> Time comsumed in point2 is: %v\n", ty2.Seconds())
 
 	batch := 1
 	n := sts.Ncells
 
-	// tx := time.Now()
 	for i, extErr := range extErrSlice {
-		tpart1 := time.Now()
-
-		// if i == 0 {
-		// 	fmt.Printf("decentralized check level: " + utils.PrintCipherLevel(extErr, params))
-		// }
-
 		dwSlice[i] = evaluator.MulRelinNew(inputT, extErr)
 		if err := evaluator.Rescale(dwSlice[i], params.Scale(), dwSlice[i]); err != nil {
 			panic("fail to rescale, conv backward, inputT mult extErr")
@@ -310,32 +244,13 @@ func (conv *Conv1D) Backward(
 
 		// 4. innerSum to get the result in the correct place, valid at: (0~m-1)*n
 		evaluator.InnerSumLog(dwSlice[i], batch, n, dwSlice[i])
-		tpart2 := time.Now()
-		ts1 := time.Since(tpart1).Seconds()
 
 		// 5. mask & rotate to sum the result in the left most slots
 		// require new rotation ids
-		dwSlice[i] = utils.MaskAndCollectToLeftFast(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers)
-
-		tpart3 := time.Now()
-		ts2 := time.Since(tpart2).Seconds()
-		// 6. replicate ncells times
-		// evaluator.InnerSum(dwSlice[i], -sts.Nmakers, sts.Ncells, dwSlice[i])
-		ts3 := time.Since(tpart3).Seconds()
-		tsum := time.Since(tpart1).Seconds()
-		if i == 0 {
-			fmt.Printf("Sum: %v, part1: %v(%v), part2: %v(%v), part3: %v(%v)\n",
-				tsum, ts1, ts1/tsum, ts2, ts2/tsum, ts3, ts3/tsum,
-			)
-		}
+		dwSlice[i] = utils.MaskAndCollectToLeftFast(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers, false, false)
 	}
 
-	// fmt.Println("check level of dwSlice")
-	// fmt.Println(utils.PrintCipherLevel(dwSlice[0], params))
-
-	// ty := time.Since(tx)
-
-	// fmt.Printf("> Time comsumed in loop is: %v\n", ty.Seconds())
+	fmt.Printf("p3 gradient: %v\n", utils.PrintCipherLevel(dwSlice[0], params))
 
 	// pure and no momentum gradient
 	conv.gradient = utils.CopyCiphertextSlice(dwSlice)
@@ -344,10 +259,6 @@ func (conv *Conv1D) Backward(
 	if lr != 0 {
 		conv.ComputeScaledGradient(conv.gradient, sts, params, evaluator, encoder, lr)
 	}
-	// if lr != 0 {
-	// 	// scaled and momentum gradient
-	// 	conv.ComputeGradientWithMomentumAndLr(conv.gradient, sts, params, evaluator, encoder, lr)
-	// }
 
 	return dwSlice
 }

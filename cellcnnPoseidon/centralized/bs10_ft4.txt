@@ -1,0 +1,18 @@
+> Settings for cellCNN: ncells: 200 | nmakers: 38 | nfilters: 4 | nclasses: 2
+> Settings for training: degree: 3 | interval: 5 | max iter: 10 | batchsize: 10 | lr: 0.1, momentum: 0.9
+>>>>>> Initialization time (offline): 29.8312409
+>>> Current Round fwd: 38.2999076, bwd: 50.52012149999999, root update: 0.5006618, mse_conv: 2.141055998831142e-18, mse_dense: 1.079771505563109e-23
+>>> Current Round fwd: 36.1982599, bwd: 48.6090255, root update: 0.5525226, mse_conv: 5.697821222354045e-07, mse_dense: 6.59086915287778e-07
+>>> Current Round fwd: 36.137390599999996, bwd: 48.7158021, root update: 0.5555164, mse_conv: 3.931684302920192e-06, mse_dense: 2.2107519872395914e-06
+>>> Current Round fwd: 36.5184367, bwd: 48.87530840000001, root update: 0.5814134, mse_conv: 1.1107697868417594e-05, mse_dense: 6.456848619820601e-06
+>>> Current Round fwd: 36.4286155, bwd: 49.14281389999999, root update: 0.55754, mse_conv: 2.074704920197461e-05, mse_dense: 1.2129362798923126e-05
+>>> Current Round fwd: 36.040675300000004, bwd: 48.29088390000001, root update: 0.5485515, mse_conv: 3.2767838369912094e-05, mse_dense: 2.7659085685290562e-05
+>>> Current Round fwd: 35.871201199999994, bwd: 48.3676035, root update: 0.5535648, mse_conv: 4.777055975488978e-05, mse_dense: 3.9672674629575527e-05
+>>> Current Round fwd: 36.48245429999999, bwd: 49.3121619, root update: 0.5993983, mse_conv: 6.289758412905183e-05, mse_dense: 5.03147898537656e-05
+>>> Current Round fwd: 37.6514011, bwd: 50.51892699999999, root update: 0.5495623, mse_conv: 7.815629489500924e-05, mse_dense: 7.951425621037274e-05
+>>> Current Round fwd: 35.4491861, bwd: 47.6556174, root update: 0.5336027, mse_conv: 9.715992361876679e-05, mse_dense: 0.00011089839522707929
+[38.2999076 36.1982599 36.137390599999996 36.5184367 36.4286155 36.040675300000004 35.871201199999994 36.48245429999999 37.6514011 35.4491861]
+>>>>>> Average over 10 iteration | fwd: 36.50775283, bwd: 49.00082650999999, root update: 0.55323338
+>>>>>> MSE over 10 iterations | fwd: 0.8064517305137131, bwd: 0.8772146652643029, root update: 0.02476735556945069
+PASS
+ok  	github.com/ldsec/cellCNN/cellcnnPoseidon/centralized	896.059s
