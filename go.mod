@@ -14,3 +14,11 @@ require (
 	gonum.org/v1/gonum v0.9.1
 	gonum.org/v1/plot v0.9.0
 )
+
+//replace github.com/ldsec/lattigo/v2 => C:\Users\Zybeline\go\src\github.com\ldsec\lattigo
+
+//replace github.com/ldsec/lattigo/v2 => /Users/sav/GolandProjects/lattigo-private
+
+//replace go.dedis.ch/onet/v3 => ../../../go.dedis.ch/onet
+
+//replace github.com/ldsec/unlynx => ../unlynx
