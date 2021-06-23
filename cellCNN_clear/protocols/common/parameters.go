@@ -3,18 +3,18 @@ package common
 // cellCNN parameters
 const NCELLS = 200
 const NFEATURES = 16
-const NSAMPLES = 2250
-const NSAMPLES_DIST = 1000
+const NSAMPLES = 1490
+const NSAMPLES_DIST = 500
 const NCLASSES = 3
 const NFILTERS = 7
 const DATA_FOLDER = "../../data/cellCNN/originalAML/"
 const SPLIT_DATA_FOLDER = "../../data/cellCNN/split/"
-const ApproxInterval = 3.
+const ApproxInterval = 8.
 const testAllCell = 12440
-const BATCH_SIZE = 100
-const LEARN_RATE = 0.002
+const BATCH_SIZE = 50
+const LEARN_RATE = 0.008
 const MOMENTUM = 0.9
-const MICRO = false
+const MICRO = true
 
 type Loader interface {
 	Load() (CnnDataset, error)

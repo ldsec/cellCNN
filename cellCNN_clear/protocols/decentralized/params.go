@@ -1,8 +1,8 @@
 package decentralized
 
-const HOSTS = 2 // if using the split dataset, then HOSTS must = 5
+const HOSTS = 3
 const NBR_LOCAL_ITER = 1
-const NBR_EPOCHS = 20
+const NBR_EPOCHS = 8
 const KFOLDS = 1
 
 // write evaluation data to file

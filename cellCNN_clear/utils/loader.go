@@ -86,6 +86,5 @@ func Convert_X_cellCNN(X []string, ncells int, nfeatures int, deb bool) *mat.Den
 		col = strings.Split(X[j], " ")
 		X_mat.SetCol(j, String_to_float(col))
 	}
-
 	return X_mat
 }

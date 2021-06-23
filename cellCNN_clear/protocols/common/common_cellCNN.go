@@ -116,10 +116,15 @@ func LoadCellCnnValidData() CnnDataset {
 	y_tr := utils.String_to_float(utils.Load_file(DATA_FOLDER+"y_valid.txt", NSAMPLES))
 	X_tr := make([]*mat.Dense, NSAMPLES)
 	var fname string
+	fmt.Println(DATA_FOLDER)
+	fmt.Println(NSAMPLES)
+	fmt.Println(NCELLS)
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_valid/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(DATA_FOLDER+fname, NCELLS), NCELLS, NFEATURES, false)
+		f := utils.Load_file(DATA_FOLDER+fname, NCELLS)
+		X_tr[i] = utils.Convert_X_cellCNN(f, NCELLS, NFEATURES, false)
 	}
+	fmt.Println("loaded")
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
 func LoadCellCnnTestAll() CnnDataset {

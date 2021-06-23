@@ -4,7 +4,7 @@
 This module contains utility functions.
 
 """
-
+# The code is slightly changed depending on original implementation to make it compatible with decentralized settings
 import os
 import errno
 from collections import Counter
@@ -297,7 +297,10 @@ def generate_subsets(X, pheno_map, sample_id, nsubsets, ncell,
         if per_sample:
             S[ylabel] = per_sample_subsets(X_i, nsubsets, ncell, k_init)
         else:
-            n = nsubsets[pheno_map[ylabel]]
+            if nsubsets[0]==float("inf"):
+                n= 1000
+            else:
+                n = nsubsets[pheno_map[ylabel]]
             S[ylabel] = per_sample_subsets(X_i, int(n), int(ncell), k_init)
     # mix them
     data_list, y_list = [], []
@@ -608,7 +611,10 @@ def generate_data(train_samples, train_phenotypes, outdir,
             np.savetxt(outdir + 'X_valid/' + str(i) +'.txt', X_v[i])
         np.savetxt(outdir + 'y_valid.txt', y_v)
     print('Done.')
-    return z_scaler
+    if generate_valid_set:
+        return z_scaler,X_tr,y_tr,X_v,y_v
+    else:
+        return z_scaler,X_tr,y_tr
     
 def generate_normalized_data(train_samples, train_phenotypes, outdir,
                 valid_samples=None, valid_phenotypes=None, generate_valid_set=True,
@@ -740,9 +746,6 @@ def generate_normalized_data(train_samples, train_phenotypes, outdir,
             for pheno in range(len(np.unique(train_phenotypes))):
                 nsubset_list.append(nsubset // np.sum(train_phenotypes == pheno))
 
-            print(nsubset_list)
-            print(nsubset)
-
             X_tr, y_tr = generate_subsets(X_train, train_phenotypes, id_train,
                                           nsubset_list, ncell, per_sample)
 
@@ -750,8 +753,6 @@ def generate_normalized_data(train_samples, train_phenotypes, outdir,
                 nsubset_list = []
                 for pheno in range(len(np.unique(valid_phenotypes))):
                     nsubset_list.append(nsubset // np.sum(valid_phenotypes == pheno))
-                print(nsubset_list)
-                print(nsubset)
                 X_v, y_v = generate_subsets(X_valid, valid_phenotypes, id_valid,
                                             nsubset_list, ncell, per_sample)
                 
