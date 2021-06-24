@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/centralized"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
@@ -166,7 +166,7 @@ func (p *NNEncryptedProtocol) Start() error {
 	// log.Lvl2("[NN_START]", p.ServerIdentity(), " started a Neural Network Protocol")
 
 	//CN_1 sends the initial weights to initiate the process
-	weightsToSend := p.model.Marshall()
+	weightsToSend := p.model.GetWeightsBinary()
 
 	newEncryptedIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend}
 
@@ -227,7 +227,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 			//need to check as new number is part of the message for non root nodes
 			finished = p.IterationNumber >= p.MaxIterations
 
-			p.model.Unmarshall(newEncryptedIterationMessage.GlobalWeights)
+			p.model.LoadWeightsBinary(newEncryptedIterationMessage.GlobalWeights)
 
 			if p.Index() == 1 {
 				valuesTest := p.model.GetEncoder().Decode(ckks.NewDecryptor(p.CryptoParams.Params, p.CryptoParams.AggregateSk).DecryptNew(p.model.GetWeights()[0]), p.CryptoParams.Params.LogSlots())
@@ -257,12 +257,12 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 
 				if p.model.FisrtMomentum() {
 					// if first momentum, btp scaled_g to level 9 and kept as vt
-					gradAgg.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+					gradAgg.DummyBootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
 					p.model.UpdateMomentum(gradAgg)
 				} else {
 					// else, compute scaled_m at level 8 and get momentumed scaled at level 2
 					gradAgg = p.model.ComputeScaledGradientWithMomentum(gradAgg, p.CellCNNSettings, p.CryptoParams.Params, p.model.GetEvaluator(), p.encoder, momentum)
-					gradAgg.Bootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+					gradAgg.DummyBootstrapping(p.encoder, p.CryptoParams.Params, p.CryptoParams.AggregateSk)
 					p.model.UpdateMomentum(gradAgg)
 				}
 
@@ -270,7 +270,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 				p.UpdateRootWeights(gradAgg)
 
 				// send updated weights down the tree
-				weightsToSend := p.model.Marshall()
+				weightsToSend := p.model.GetWeightsBinary()
 
 				newIterationMessage := NewEncryptedIterationMessage{p.IterationNumber, weightsToSend}
 
@@ -287,7 +287,7 @@ func (p *NNEncryptedProtocol) Dispatch() error {
 	// 3. Results reporting
 	if p.IsRoot() {
 		fmt.Printf("+++++++ Time for %v protocol rounds: %v, avg: %v\n ++++++++", p.MaxIterations, t2, t2/float64(p.MaxIterations))
-		p.FeedbackChannel <- p.model.Marshall()
+		p.FeedbackChannel <- p.model.GetWeightsBinary()
 	}
 	/*
 		Some micro benchmarks
@@ -372,7 +372,7 @@ func (p *NNEncryptedProtocol) ascendingUpdateEncryptedGeneralModelPhase() (*cent
 
 	// send the aggregated gradients up
 	if !p.IsRoot() {
-		data := aggChild.Marshall()
+		data := aggChild.GetGradientBinary()
 		log.Lvl3("Gradients to Send (bytes):", len(data)*len(data[0]))
 		if err := p.SendToParent(&ChildUpdatedLocalGradientsMessage{ChildUpdatedLocalGradients: data, CurrentSize: messageSize}); err != nil {
 			return nil, err

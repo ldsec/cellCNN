@@ -59,7 +59,7 @@ func (g *Gradients) Aggregate(data interface{}, eval ckks.Evaluator) {
 }
 
 // Bootstrapping use sk to re-encrypt the ciphertext for dummy bootstrapping
-func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params ckks.Parameters, sk *rlwe.SecretKey) {
+func (g *Gradients) DummyBootstrapping(encoder ckks.Encoder, params ckks.Parameters, sk *rlwe.SecretKey) {
 	ect := ckks.NewEncryptorFromSk(params, sk)
 	dct := ckks.NewDecryptor(params, sk)
 
@@ -76,33 +76,35 @@ func (g *Gradients) Bootstrapping(encoder ckks.Encoder, params ckks.Parameters, 
 	g.dense = ect.EncryptNew(replain)
 }
 
-// Marshall return the byte representation, first n-1 for filters, last one for dense
-func (g *Gradients) Marshall() [][]byte {
+// GetGradientBinary return the byte representation, first n-1 for filters, last one for dense
+func (g *Gradients) GetGradientBinary() [][]byte {
 	res := make([][]byte, len(g.filters)+1)
 	var err error = nil
 	for i, each := range g.filters {
 		res[i], err = each.MarshalBinary()
 		if err != nil {
-			panic("err in marshall Gradients")
+			panic("err in GetGradientBinary filters")
 		}
 	}
 	res[len(res)-1], err = g.dense.MarshalBinary()
 	if err != nil {
-		panic("err in marshall Gradients")
+		panic("err in GetGradientBinary dense")
 	}
 	return res
 }
 
-// Unmarshall first n-1 for filters, last one for dense
-func (g *Gradients) Unmarshall(data [][]byte) []*ckks.Ciphertext {
-	res := make([]*ckks.Ciphertext, len(data))
-	for i, each := range data {
-		res[i] = new(ckks.Ciphertext)
-		if err := res[i].UnmarshalBinary(each); err != nil {
-			panic("fail to unmarshall Gradients")
+// LoadGradientBinary first n-1 for filters, last one for dense
+func (g *Gradients) LoadGradientBinary(data [][]byte) {
+	for i := 0; i < len(data)-1; i++ {
+		g.filters[i] = new(ckks.Ciphertext)
+		if err := g.filters[i].UnmarshalBinary(data[i]); err != nil {
+			panic("fail to LoadGradientBinary Gradients filters")
 		}
 	}
-	return res
+	g.dense = new(ckks.Ciphertext)
+	if err := g.dense.UnmarshalBinary(data[len(data)-1]); err != nil {
+		panic("fail to LoadGradientBinary Gradients filters")
+	}
 }
 
 // GetPlaintext for debug only, decrypt a ciphertext according to idx.

@@ -120,8 +120,8 @@ func (cp *CryptoParams) Kgen() ckks.KeyGenerator {
 	return ckks.NewKeyGenerator(cp.Params)
 }
 
-// MarshalBinary marshall the sk, pk
-func (cp *CryptoParams) MarshalBinary() ([]byte, []byte) {
+// GetSkPkBinary return the binary sk, pk
+func (cp *CryptoParams) GetSkPkBinary() ([]byte, []byte) {
 	var dsk, dpk []byte
 	var err error
 	if dsk, err = cp.Sk.MarshalBinary(); err != nil {

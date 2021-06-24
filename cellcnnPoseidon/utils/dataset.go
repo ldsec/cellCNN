@@ -3,7 +3,7 @@ package utils
 import (
 	"math/rand"
 
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )

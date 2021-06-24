@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
+	cl "github.com/ldsec/cellCNN/cellCNNClear/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/rlwe"
@@ -25,8 +25,8 @@ func TestLocalTime(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 200
-	nmakers := 38
+	ncells := 5
+	nmakers := 3
 	nfilters := 4
 	nclasses := 2
 	var sigDegree uint = 3
@@ -34,8 +34,8 @@ func TestLocalTime(t *testing.T) {
 	maxM1N2Ratio := 8.0
 	momentum := 0.9
 	lr := 0.1
-	batchSize := 10
-	iterrations := 50
+	batchSize := 1
+	iterrations := 3
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
 
@@ -113,12 +113,12 @@ func TestLocalTime(t *testing.T) {
 
 		if model.FisrtMomentum() {
 			// if first momentum, btp scaledG to level 9 and kept as vt
-			grad.Bootstrapping(encoder, params, sk)
+			grad.DummyBootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		} else {
 			// else, compute scaledM at level 8
 			grad = model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
-			grad.Bootstrapping(encoder, params, sk)
+			grad.DummyBootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		}
 

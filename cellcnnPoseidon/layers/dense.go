@@ -29,20 +29,20 @@ func NewDense(weights *ckks.Ciphertext, momentum float64) *Dense {
 	}
 }
 
-// Marshall  weights as byte
-func (dense *Dense) Marshall() []byte {
+// GetWeightsBinary  weights as byte
+func (dense *Dense) GetWeightsBinary() []byte {
 	data, err := dense.weights.MarshalBinary()
 	if err != nil {
-		panic("fail to marshall dense weights")
+		panic("fail to GetWeightsBinary dense weights")
 	}
 	return data
 }
 
-// Unmarshall update the weights by data
-func (dense *Dense) Unmarshall(data []byte) {
+// LoadWeightsBinary update the weights by data
+func (dense *Dense) LoadWeightsBinary(data []byte) {
 	nw := new(ckks.Ciphertext)
 	if err := nw.UnmarshalBinary(data); err != nil {
-		panic("fail to unmarshall conv filter weights")
+		panic("fail to LoadWeightsBinary conv filter weights")
 	}
 	dense.weights = nw
 }
@@ -329,7 +329,7 @@ func (dense *Dense) GetGradient() *ckks.Ciphertext {
 func (dense *Dense) GetGradientBinary() []byte {
 	data, err := dense.gradient.MarshalBinary()
 	if err != nil {
-		panic("fail to marshall dense weights")
+		panic("fail to GetGradientBinary dense weights")
 	}
 	return data
 }

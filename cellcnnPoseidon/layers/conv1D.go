@@ -28,27 +28,27 @@ func NewConv1D(filters []*ckks.Ciphertext, isMomentum float64) *Conv1D {
 	}
 }
 
-// Marshall return the encrypted weights as bytes
-func (conv *Conv1D) Marshall() [][]byte {
+// GetWeightsBinary return the encrypted weights as bytes
+func (conv *Conv1D) GetWeightsBinary() [][]byte {
 	var err error
 	Nfilters := len(conv.filters)
 	data := make([][]byte, Nfilters)
 	for i := 0; i < Nfilters; i++ {
 		data[i], err = conv.filters[i].MarshalBinary()
 		if err != nil {
-			panic("fail to marshall conv filter weights")
+			panic("fail to GetWeightsBinary conv filter weights")
 		}
 	}
 	return data
 }
 
-// Unmarshall retreive the new weights
-func (conv *Conv1D) Unmarshall(data [][]byte) {
+// LoadWeightsBinary retreive the new weights
+func (conv *Conv1D) LoadWeightsBinary(data [][]byte) {
 	conv.filters = make([]*ckks.Ciphertext, len(data))
 	for i, each := range data {
 		conv.filters[i] = new(ckks.Ciphertext)
 		if err := conv.filters[i].UnmarshalBinary(each); err != nil {
-			panic("fail to unmarshall conv filter weights")
+			panic("fail to LoadWeightsBinary conv filter weights")
 		}
 	}
 }
@@ -326,7 +326,7 @@ func (conv *Conv1D) GetGradientBinary() [][]byte {
 	for i := 0; i < Nfilters; i++ {
 		data[i], err = conv.gradient[i].MarshalBinary()
 		if err != nil {
-			panic("fail to marshall conv filter weights")
+			panic("fail to GetGradientBinary conv filter weights")
 		}
 	}
 	return data
