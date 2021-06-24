@@ -18,3 +18,6 @@ The method `GenParams()` will automatically generate a `ckks.Parameters` with se
 
 The file `decentralized/example/main.go` is an example of decentralized training (the centralized training can be emulated by setting the number of hosts to 1).
 
+## API 
+
+A detailed API documentation is available in `decentralized\readme.md`.
