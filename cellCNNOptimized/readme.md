@@ -139,7 +139,7 @@ P.Forward(XBatch)
 
 #### 4) Bootstrapping (dummy)
 ```Go
-P.Refresh(masterSk, P.CtBoot(), nParties)
+P.Refresh(masterSk *ckks.SecretKey, nParties int)
 ```
 
 #### 5) Backward
@@ -223,56 +223,4 @@ for i := 0; i < cellCNN.Classes; i++{
 ```Go
 P.PrintCtWPrecision(masterSk)
 P.PrintCtCPrecision(masterSk)
-```
-
-### Test Prediction Encrypted vs. Plain
-```Go
-r := 0
-for i := 0; i < 2000/cellCNN.BatchSize; i++{
-
-	XPrePool := new(cellCNN.Matrix)
-	XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
-	YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
-
-	for j := 0; j < cellCNN.BatchSize; j++ {
-
-		randi := rand.Intn(2000)
-
-		X := XValid[randi]
-		Y := YValid[randi]
-
-		XPrePool.SumColumns(X)
-		XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
-
-		XBatch.SetRow(j, XPrePool.M)
-		YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
-	}
-
-	v := P.PredictPlain(XBatch)
-
-	if trainEncrypted {
-		v.Print()
-		ctv := P.Predict(XBatch, masterSk)
-		ctv.Print()
-		precisionStats := ckks.GetPrecisionStats(params, P.Encoder(), nil, v.M, ctv.M, params.LogSlots(), 0)
-		fmt.Printf("Batch[%2d]", i)
-		fmt.Println(precisionStats.String())
-	}
-	
-	var y int
-	for i := 0; i < cellCNN.BatchSize; i++{
-
-		if real(v.M[i*2]) > real(v.M[i*2+1]){
-			y = 1
-		}else{
-			y = 0
-		}
-
-		if y != int(real(YBatch.M[i*2])){
-			r++
-		}
-	}
-}
-
-fmt.Printf("error : %v%s", 100.0*float64(r)/float64(2000), "%")
 ```
