@@ -3,11 +3,13 @@ package utils
 import (
 	"math/rand"
 
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"gonum.org/v1/gonum/mat"
 )
 
+// GetRandomBatch generate a random batch of data
+// can uncomment the code for using the dataset
 func GetRandomBatch(
 	dataset *common.CnnDataset, batchSize int, params ckks.Parameters, encoder ckks.Encoder,
 	sts *CellCnnSettings,

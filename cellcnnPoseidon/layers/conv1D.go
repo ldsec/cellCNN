@@ -24,63 +24,74 @@ func NewConv1D(filters []*ckks.Ciphertext, isMomentum float64) *Conv1D {
 		filters:  filters,
 		momentum: isMomentum,
 		vt:       make([]*ckks.Ciphertext, len(filters)),
+		gradient: make([]*ckks.Ciphertext, len(filters)),
 	}
 }
 
-// return the encrypted weights as bytes
-func (conv *Conv1D) Marshall() [][]byte {
+// GetWeightsBinary return the encrypted weights as bytes
+func (conv *Conv1D) GetWeightsBinary() [][]byte {
 	var err error
 	Nfilters := len(conv.filters)
 	data := make([][]byte, Nfilters)
 	for i := 0; i < Nfilters; i++ {
 		data[i], err = conv.filters[i].MarshalBinary()
 		if err != nil {
-			panic("fail to marshall conv filter weights")
+			panic("fail to GetWeightsBinary conv filter weights")
 		}
 	}
 	return data
 }
 
-func (conv *Conv1D) Unmarshall(data [][]byte) {
+// LoadWeightsBinary retreive the new weights
+func (conv *Conv1D) LoadWeightsBinary(data [][]byte) {
 	conv.filters = make([]*ckks.Ciphertext, len(data))
 	for i, each := range data {
 		conv.filters[i] = new(ckks.Ciphertext)
 		if err := conv.filters[i].UnmarshalBinary(each); err != nil {
-			panic("fail to unmarshall conv filter weights")
+			panic("fail to LoadWeightsBinary conv filter weights")
 		}
 	}
 }
 
+// WithWeights for debug use only
 func (conv *Conv1D) WithWeights(filters []*ckks.Ciphertext) {
 	conv.filters = filters
 }
 
+// WithLastInput for debug use only
 func (conv *Conv1D) WithLastInput(input *ckks.Plaintext) {
 	conv.lastInput = input
 }
 
+// WithEncoder set the encoder to use
 func (conv *Conv1D) WithEncoder(encoder ckks.Encoder) {
 	conv.encoder = encoder
 }
 
+// UpdateWithGradients update the weights by:
+// self = self - g
 func (conv *Conv1D) UpdateWithGradients(g []*ckks.Ciphertext, eval ckks.Evaluator) {
 	for i := range conv.filters {
 		eval.Sub(conv.filters[i], g[i], conv.filters[i])
 	}
 }
 
+// GetWeights return the weights as ciphertext slice
 func (conv *Conv1D) GetWeights() []*ckks.Ciphertext {
 	return conv.filters
 }
 
+// FirstMomentum check if has first momentum
 func (conv *Conv1D) FirstMomentum() bool {
 	return conv.vt[0] == nil
 }
 
+// UpdateMomentum save the grad as new momentum for next iteration
 func (conv *Conv1D) UpdateMomentum(grad []*ckks.Ciphertext) {
 	conv.vt = grad
 }
 
+// InitRotationInds init the rotation keys
 func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Parameters) []int {
 	nmakers := sts.Nmakers
 	nfilters := sts.Nfilters
@@ -119,6 +130,7 @@ func (conv *Conv1D) InitRotationInds(sts *utils.CellCnnSettings, params ckks.Par
 	return Inds
 }
 
+// TransposeInput transpose the input for backward.
 func (conv *Conv1D) TransposeInput(sts *utils.CellCnnSettings, input *ckks.Plaintext, params ckks.Parameters) *ckks.Plaintext {
 	slice := conv.encoder.Decode(input, params.LogSlots())
 	rowPacked := true
@@ -129,16 +141,10 @@ func (conv *Conv1D) TransposeInput(sts *utils.CellCnnSettings, input *ckks.Plain
 
 // Forward computes a forward pass of the Conv1D layer, using newFilters if not nil
 // activation function is identity
-func (conv *Conv1D) Forward(
-	input *ckks.Plaintext,
-	newFilters []*ckks.Ciphertext,
-	sts *utils.CellCnnSettings,
-	eval ckks.Evaluator,
-	params ckks.Parameters,
-) *ckks.Ciphertext {
+func (conv *Conv1D) Forward(input *ckks.Plaintext, newFilters []*ckks.Ciphertext, sts *utils.CellCnnSettings, eval ckks.Evaluator, params ckks.Parameters) *ckks.Ciphertext {
 
-	fmt.Printf("#### Conv1d forward Level Tracing ####\n")
-	fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(conv.filters[0], params))
+	//fmt.Printf("#### Conv1d forward Level Tracing ####\n")
+	////fmt.Printf("p1 weights: %v\n", utils.PrintCipherLevel(conv.filters[0], params))
 
 	if newFilters != nil {
 		conv.filters = newFilters
@@ -180,7 +186,7 @@ func (conv *Conv1D) Forward(
 		}
 	}
 
-	fmt.Printf("p2 output: %v\n", utils.PrintCipherLevel(output, params))
+	//fmt.Printf("p2 output: %v\n", utils.PrintCipherLevel(output, params))
 
 	return output
 }
@@ -193,8 +199,8 @@ func (conv *Conv1D) Backward(
 	evaluator ckks.Evaluator, encoder ckks.Encoder, lr float64,
 ) []*ckks.Ciphertext {
 
-	fmt.Printf("#### Conv1d backward Level Tracing ####\n")
-	fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
+	//fmt.Printf("#### Conv1d backward Level Tracing ####\n")
+	//fmt.Printf("p1 InErr: %v\n", utils.PrintCipherLevel(inErr, params))
 	// 1. mult the dActv with the income err, currently dActv = 1, skip this part
 
 	// 2. extend the input err, pack each slot of err to length ncells*nmakers, with a factor of 1/n
@@ -214,11 +220,6 @@ func (conv *Conv1D) Backward(
 	}
 
 	//  2.2 rotate to extend one slots to ncells*nmakers, need to generate new rotation keys
-	// e.g.
-	// from:
-	//     [a, 0, 0, 0, 0,...]
-	// to:
-	//     [a, a, a, a, 0,...]
 	extErrSlice := make([]*ckks.Ciphertext, sts.Nfilters)
 	for i, mErr := range maskedErrSlice {
 		// left rotate once and right replicate
@@ -226,7 +227,7 @@ func (conv *Conv1D) Backward(
 		evaluator.InnerSumLog(leftMostTmp, -1, sts.Ncells*sts.Nmakers, leftMostTmp)
 		extErrSlice[i] = leftMostTmp
 	}
-	fmt.Printf("p2 upsamling the inErr: %v\n", utils.PrintCipherLevel(maskedErrSlice[0], params))
+	//fmt.Printf("p2 upsamling the inErr: %v\n", utils.PrintCipherLevel(maskedErrSlice[0], params))
 
 	// 3. mult the extended err with the transposed last input
 	dwSlice := make([]*ckks.Ciphertext, sts.Nfilters)
@@ -246,11 +247,10 @@ func (conv *Conv1D) Backward(
 		evaluator.InnerSumLog(dwSlice[i], batch, n, dwSlice[i])
 
 		// 5. mask & rotate to sum the result in the left most slots
-		// require new rotation ids
 		dwSlice[i] = utils.MaskAndCollectToLeftFast(dwSlice[i], params, encoder, evaluator, 0, sts.Ncells, sts.Nmakers, false, false)
 	}
 
-	fmt.Printf("p3 gradient: %v\n", utils.PrintCipherLevel(dwSlice[0], params))
+	//fmt.Printf("p3 gradient: %v\n", utils.PrintCipherLevel(dwSlice[0], params))
 
 	// pure and no momentum gradient
 	conv.gradient = utils.CopyCiphertextSlice(dwSlice)
@@ -263,6 +263,8 @@ func (conv *Conv1D) Backward(
 	return dwSlice
 }
 
+// ComputeScaledGradient compute the scaled gradients: scaled_grad = pure_grad * lr
+// results in conv.gradients
 func (conv *Conv1D) ComputeScaledGradient(
 	gradients []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params ckks.Parameters,
@@ -284,6 +286,7 @@ func (conv *Conv1D) ComputeScaledGradient(
 	conv.gradient = gradients
 }
 
+// ComputeScaledGradientWithMomentum add the momentum to the scaled gradients
 func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 	gradients []*ckks.Ciphertext,
 	sts *utils.CellCnnSettings, params ckks.Parameters,
@@ -291,6 +294,7 @@ func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 ) []*ckks.Ciphertext {
 	for i := range gradients {
 		if momentum > 0 {
+			fmt.Printf("len vt: %v, grad: %v, self grad: %v\n", len(conv.vt), len(gradients), len(conv.gradient))
 			if conv.vt[i] == nil {
 				conv.vt[i] = gradients[i].CopyNew()
 			} else {
@@ -309,10 +313,12 @@ func (conv *Conv1D) ComputeScaledGradientWithMomentum(
 	return conv.gradient
 }
 
+// GetGradient return the gradients
 func (conv *Conv1D) GetGradient() []*ckks.Ciphertext {
 	return utils.CopyCiphertextSlice(conv.gradient)
 }
 
+// GetGradientBinary return the gradients represented as byte
 func (conv *Conv1D) GetGradientBinary() [][]byte {
 	var err error
 	Nfilters := len(conv.filters)
@@ -320,77 +326,14 @@ func (conv *Conv1D) GetGradientBinary() [][]byte {
 	for i := 0; i < Nfilters; i++ {
 		data[i], err = conv.gradient[i].MarshalBinary()
 		if err != nil {
-			panic("fail to marshall conv filter weights")
+			panic("fail to GetGradientBinary conv filter weights")
 		}
 	}
 	return data
 }
 
-// func (conv *Conv1D) StepWithRep(
-// 	lr float64, momentum float64, eval ckks.Evaluator,
-// 	encoder ckks.Encoder, sts *utils.CellCnnSettings, params ckks.Parameters,
-// ) bool {
-// 	// create mask with scale
-// 	maskInds := utils.NewSlice(0, sts.Nmakers, 1)
-// 	mask := utils.GenSliceWithAnyAt(params.Slots(), maskInds, lr)
-// 	maskPlain := encoder.EncodeNTTAtLvlNew(params.MaxLevel(), mask, params.LogSlots())
-// 	if conv.gradient != nil {
-// 		for i := range conv.filters {
-// 			// 1. mask and scale
-// 			// 2. replicate ncell times
-// 			update := eval.MulRelinNew(conv.gradient[i], maskPlain)
-// 			if err := eval.Rescale(update, params.Scale(), update); err != nil {
-// 				panic("fail to rescale, conv.gradient[i]")
-// 			}
-// 			eval.InnerSum(update, -sts.Nmakers, sts.Ncells, update)
-// 			// if use momentum
-// 			if conv.isMomentum {
-// 				if conv.vt == nil {
-// 					conv.vt[i] = update.CopyNew()
-// 				} else {
-// 					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
-// 					conv.vt[i] = eval.AddNew(conv.vt[i], update)
-// 				}
-// 				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
-// 			} else {
-// 				// else use only gradient
-// 				conv.filters[i] = eval.SubNew(conv.filters[i], update)
-// 			}
-// 		}
-// 		return true
-// 	}
-// 	return false
-// }
-
-// GetGradient return the gradient according to lr and momentum.
-// gradient is replicated for ncell times as filter weights.
-
-// func (conv *Conv1D) Step(lr float64, momentum float64, eval ckks.Evaluator) bool {
-// 	if conv.gradient != nil {
-// 		for i := range conv.filters {
-// 			update := eval.MultByConstNew(conv.gradient[i], lr)
-// 			// if use momentum
-// 			if conv.isMomentum {
-// 				if conv.vt == nil {
-// 					conv.vt[i] = update.CopyNew()
-// 				} else {
-// 					conv.vt[i] = eval.MultByConstNew(conv.vt[i], momentum)
-// 					conv.vt[i] = eval.AddNew(conv.vt[i], update)
-// 				}
-// 				conv.filters[i] = eval.SubNew(conv.filters[i], conv.vt[i])
-// 			} else {
-// 				// else use only gradient
-// 				conv.filters[i] = eval.SubNew(conv.filters[i], update)
-// 			}
-// 		}
-// 		return true
-// 	}
-// 	return false
-// }
-
-func (conv *Conv1D) PlainForwardCircuit(
-	input []complex128, filters [][]complex128, sts *utils.CellCnnSettings,
-) []complex128 {
+// PlainForwardCircuit debug use only, forward a sample to plaintext circuit
+func (conv *Conv1D) PlainForwardCircuit(input []complex128, filters [][]complex128, sts *utils.CellCnnSettings) []complex128 {
 	slots := len(input)
 	res := make([]complex128, slots)
 
@@ -403,6 +346,7 @@ func (conv *Conv1D) PlainForwardCircuit(
 	return res
 }
 
+// PlainBackwardCircuit debug use only, backward an error to plaintext circuit
 func (conv *Conv1D) PlainBackwardCircuit(
 	input []complex128, err0 []complex128, sts *utils.CellCnnSettings,
 ) [][]complex128 {

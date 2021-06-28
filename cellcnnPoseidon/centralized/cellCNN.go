@@ -1,6 +1,7 @@
 package centralized
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/layers"
@@ -10,44 +11,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-type CellCNN struct {
-	// network settings
-	cnnSettings *utils.CellCnnSettings
-	// crypto settings
-	params    ckks.Parameters
-	relikey   *rlwe.RelinearizationKey
-	encoder   ckks.Encoder
-	encryptor ckks.Encryptor
-	// layers
-	conv1d    *layers.Conv1D
-	dense     *layers.Dense
-	evaluator ckks.Evaluator
-	btp       *ckks.Bootstrapper
-	sk        *rlwe.SecretKey
-	pcir      *PlainCircuit
-	momentum  float64
-	lr        float64
-}
-
-func (c *CellCNN) GetEncoder() ckks.Encoder {
-	return c.encoder
-}
-
-func (c *CellCNN) GetEvaluator() ckks.Evaluator {
-	return c.evaluator
-}
-
-func (c *CellCNN) GetWeights() []*ckks.Ciphertext {
-	econv := c.conv1d.GetWeights()
-	edense := c.dense.GetWeights()
-	return append(econv, edense)
-}
-
-func (c *CellCNN) GetGradients() *Gradients {
-	return &Gradients{c.conv1d.GetGradient(), c.dense.GetGradient()}
-
-}
-
+// PlainCircuit is a plaintext circuit only for debug
 type PlainCircuit struct {
 	// weights
 	filters [][]complex128
@@ -62,6 +26,7 @@ type PlainCircuit struct {
 	u        []complex128
 }
 
+// NewPlainCircuit init a new circuit
 func NewPlainCircuit(filters [][]complex128, weights []complex128, input []complex128) *PlainCircuit {
 	return &PlainCircuit{
 		filters: filters,
@@ -70,6 +35,54 @@ func NewPlainCircuit(filters [][]complex128, weights []complex128, input []compl
 	}
 }
 
+// CellCNN is an encrypted network that conduct forward and backward
+// please set the sk if you want to use dummy bootstrapping in backward
+type CellCNN struct {
+	// network settings
+	cnnSettings *utils.CellCnnSettings
+	// crypto settings
+	params    ckks.Parameters
+	relikey   *rlwe.RelinearizationKey
+	encoder   ckks.Encoder
+	encryptor ckks.Encryptor
+	// layers
+	conv1d    *layers.Conv1D
+	dense     *layers.Dense
+	evaluator ckks.Evaluator
+	sk        *rlwe.SecretKey
+	pcir      *PlainCircuit
+	momentum  float64
+	lr        float64
+}
+
+// GetEncoder for debug use, return the encoder
+func (c *CellCNN) GetEncoder() ckks.Encoder {
+	return c.encoder
+}
+
+// GetEvaluator for debug use, return the evaluator
+func (c *CellCNN) GetEvaluator() ckks.Evaluator {
+	return c.evaluator
+}
+
+// GetWeights return the weights
+// the first n-1 ciphertexts are the filters
+// the last ciphertext is the dense weights
+func (c *CellCNN) GetWeights() []*ckks.Ciphertext {
+	econv := c.conv1d.GetWeights()
+	edense := c.dense.GetWeights()
+	return append(econv, edense)
+}
+
+// GetGradients return the gradients as a new object
+func (c *CellCNN) GetGradients() *Gradients {
+	return &Gradients{c.conv1d.GetGradient(), c.dense.GetGradient()}
+
+}
+
+// NewCellCNN init a new Cell CNN with the settings
+// the weights will not be initialized
+// call InitWeights to init the weights
 func NewCellCNN(sts *utils.CellCnnSettings, cryptoParams *utils.CryptoParams, momentum, lr float64) *CellCNN {
 
 	model := &CellCNN{
@@ -85,65 +98,75 @@ func NewCellCNN(sts *utils.CellCnnSettings, cryptoParams *utils.CryptoParams, mo
 	return model
 }
 
+// UpdateWithGradients will update the weights of Cell CNN by g.
+// w_{new} = w_{old} - g
 func (c *CellCNN) UpdateWithGradients(g *Gradients) {
 	c.conv1d.UpdateWithGradients(g.filters, c.evaluator)
 	c.dense.UpdateWithGradients(g.dense, c.evaluator)
 }
 
-func (c *CellCNN) Marshall() (data [][]byte) {
-	filterData := c.conv1d.Marshall()
-	denseData := c.dense.Marshall()
-	// milestone = len(filterData)
+// GetWeightsBinary return the binary weights of Cell CNN.
+// the first n-1 are filter weights
+// the last one is dense weights
+func (c *CellCNN) GetWeightsBinary() (data [][]byte) {
+	filterData := c.conv1d.GetWeightsBinary()
+	denseData := c.dense.GetWeightsBinary()
 	data = append(filterData, denseData)
 	return
 }
 
-func (c *CellCNN) Unmarshall(data [][]byte) {
+// LoadWeightsBinary will load the weights according to data
+func (c *CellCNN) LoadWeightsBinary(data [][]byte) {
 	nfilters := len(data) - 1
-	c.conv1d.Unmarshall(data[:nfilters])
-	c.dense.Unmarshall(data[nfilters])
+	c.conv1d.LoadWeightsBinary(data[:nfilters])
+	c.dense.LoadWeightsBinary(data[nfilters])
 }
 
-// return the the graident
+// GetGradient return the the graident
 func (c *CellCNN) GetGradient() []*ckks.Ciphertext {
 	filters := c.conv1d.GetGradient()
 	dense := c.dense.GetGradient()
 	return append(filters, dense)
 }
 
-// return the byte representation of the graident
+// GetGradientBinary return the byte representation of the graident.
+// the first n-1 is conv gradients,
+// the last one is dense gradient
 func (c *CellCNN) GetGradientBinary() [][]byte {
 	dConv := c.conv1d.GetGradientBinary()
 	dDense := c.dense.GetGradientBinary()
 	return append(dConv, dDense)
 }
 
+// WithEvaluator for debug use, set the evaluator of CellCNN
 func (c *CellCNN) WithEvaluator(eval ckks.Evaluator) {
 	c.evaluator = eval
 }
 
+// WithSk set the Sk for dummy bootstrapping: re-encrypt
 func (c *CellCNN) WithSk(sk *rlwe.SecretKey) {
 	c.sk = sk
 }
 
+// WithDiagM set dense.diagM for debug use or used in decentralized settings
 func (c *CellCNN) WithDiagM(diagM *ckks.PtDiagMatrix) {
 	c.dense.WithDiagM(diagM)
 }
 
+// FisrtMomentum check if has first momentum
 func (c *CellCNN) FisrtMomentum() bool {
 	return c.conv1d.FirstMomentum() && c.dense.FirstMomentum()
 }
 
+// UpdateMomentum store the ciphertexts in grad as new momentum for next iteration use
 func (c *CellCNN) UpdateMomentum(grad *Gradients) {
-	c.conv1d.UpdateMomentum(grad.filters)
-	c.dense.UpdateMomentum(grad.dense)
+	c.conv1d.UpdateMomentum(utils.CopyCiphertextSlice(grad.filters))
+	c.dense.UpdateMomentum(grad.dense.CopyNew())
 }
 
-// InitWeights init CellCNN and return the init plaintext weights (conv, dense) as mat.Dense
-func (c *CellCNN) InitWeights(
-	wConv1D []*ckks.Ciphertext, wDense *ckks.Ciphertext,
-	pConv, pDense []complex128,
-) (*mat.Dense, *mat.Dense) {
+// InitWeights init CellCNN and return the init plaintext weights (conv, dense) as mat.Dense.
+// this is useful to initialize a cellCNNClear with same weights.
+func (c *CellCNN) InitWeights(wConv1D []*ckks.Ciphertext, wDense *ckks.Ciphertext, pConv, pDense []complex128) (*mat.Dense, *mat.Dense) {
 	nfilters := c.cnnSettings.Nfilters
 	nmakers := c.cnnSettings.Nmakers
 	nclasses := c.cnnSettings.Nclasses
@@ -209,6 +232,7 @@ func (c *CellCNN) InitWeights(
 	return cm, dm
 }
 
+// InitEvaluator init the evaluators of Cell CNN
 func (c *CellCNN) InitEvaluator(cryptoParams *utils.CryptoParams, maxM1N2Ratio float64) ckks.Evaluator {
 	kgen := cryptoParams.Kgen()
 	encoder := c.encoder
@@ -224,30 +248,9 @@ func (c *CellCNN) InitEvaluator(cryptoParams *utils.CryptoParams, maxM1N2Ratio f
 	return c.evaluator
 }
 
-func (c *CellCNN) GenerateMaskMap() map[int]*ckks.Plaintext {
-	nfilters := c.cnnSettings.Nfilters
-	nclasses := c.cnnSettings.Nclasses
-	// dense maskMap to collect all results into one ciphertext
-	maskMap := make(map[int]*ckks.Plaintext)
-	for i := 0; i < nclasses; i++ {
-		maskMap[i*(nfilters-1)] = func() *ckks.Plaintext {
-			tmpMask := make([]complex128, c.params.Slots())
-			// fmt.Println("making maskMap: ", i*(nfilters-1))
-			tmpMask[i] = complex(float64(1), 0)
-			return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), tmpMask, c.params.LogSlots())
-		}()
-	}
-	return maskMap
-}
-
-// ForwardOne return the ciphertext predition and the time consumed on layer1, layer2, sum of two
-func (c *CellCNN) ForwardOne(
-	input *ckks.Plaintext,
-	wConv []*ckks.Ciphertext,
-	wDense *ckks.Ciphertext,
-	poolMask *ckks.Plaintext,
-	// maskMap map[int]*ckks.Plaintext,
-) (*ckks.Ciphertext, []float64) {
+// ForwardOne forward only one sample (not a batch).
+// return the ciphertext predition and the time consumed on (conv, dense, sum)
+func (c *CellCNN) ForwardOne(input *ckks.Plaintext, wConv []*ckks.Ciphertext, wDense *ckks.Ciphertext) (*ckks.Ciphertext, []float64) {
 	t1 := time.Now()
 	out1 := c.conv1d.Forward(input, wConv, c.cnnSettings, c.evaluator, c.params)
 	t2 := time.Now()
@@ -256,6 +259,33 @@ func (c *CellCNN) ForwardOne(
 	return out2, []float64{t2.Sub(t1).Seconds(), t3.Sub(t2).Seconds(), t3.Sub(t1).Seconds()}
 }
 
+// ComputeLossOne compute the mean square error.
+// L = \sum (pred_i - label_i)^2.
+// d-L / d-pred_i = 2 (pred_i - label_i)
+func (c *CellCNN) ComputeLossOne(
+	pred *ckks.Ciphertext, labels float64,
+) *ckks.Ciphertext {
+	// prepare the plaintext labels
+	nfilters := c.cnnSettings.Nfilters
+	onehot := utils.Float64ToOneHotEncode(labels, nfilters, c.params, c.encoder)
+
+	out1 := c.evaluator.SubNew(pred, onehot)
+
+	return out1
+}
+
+// BackwardOne backward only one sample according to input err.
+// returns the time for backward in (conv, dense, sum)
+func (c *CellCNN) BackwardOne(err *ckks.Ciphertext) []float64 {
+	t1 := time.Now()
+	dsErr, _ := c.dense.Backward(err, c.cnnSettings, c.params, c.evaluator, c.encoder, c.sk, c.lr)
+	t2 := time.Since(t1).Seconds()
+	c.conv1d.Backward(dsErr, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
+	t3 := time.Since(t1).Seconds()
+	return []float64{t3 - t2, t2, t3}
+}
+
+// PlaintextCircuitForwardOne for debug use, compute forward on plaintext circuit
 func (c *CellCNN) PlaintextCircuitForwardOne() []complex128 {
 	input := c.pcir.input
 	filters := c.pcir.filters
@@ -268,6 +298,7 @@ func (c *CellCNN) PlaintextCircuitForwardOne() []complex128 {
 	return pred
 }
 
+// PlaintextCircuitBackwardOne for debug use, compute backward on plaintext circuit
 func (c *CellCNN) PlaintextCircuitBackwardOne(err0 []complex128) ([][]complex128, []complex128) {
 	input := c.pcir.input
 	weights := c.pcir.weights
@@ -278,44 +309,19 @@ func (c *CellCNN) PlaintextCircuitBackwardOne(err0 []complex128) ([][]complex128
 	return dfilters, dweights
 }
 
-func (c *CellCNN) ComputeLossOne(
-	pred *ckks.Ciphertext, labels float64,
-) *ckks.Ciphertext {
-	// use naive least square loss: L = \sum (pred_i - label_i)^2
-	// d-L / d-pred_i = 2 (pred_i - label_i)
-
-	// 1. prepare the plaintext labels
-	nfilters := c.cnnSettings.Nfilters
-	onehot := utils.Float64ToOneHotEncode(labels, nfilters, c.params, c.encoder)
-
-	out1 := c.evaluator.SubNew(pred, onehot)
-
-	return out1
-}
-
-func (c *CellCNN) BackwardOne(err *ckks.Ciphertext) []float64 {
-	t1 := time.Now()
-	dsErr, _ := c.dense.Backward(err, c.cnnSettings, c.params, c.evaluator, c.encoder, c.sk, c.lr)
-	t2 := time.Since(t1).Seconds()
-	c.conv1d.Backward(dsErr, c.cnnSettings, c.params, c.evaluator, c.encoder, c.lr)
-	t3 := time.Since(t1).Seconds()
-	return []float64{t3 - t2, t2, t3}
-}
-
-func (c *CellCNN) ForwardAndBackwardOne(
-	input *ckks.Plaintext,
-	wConv []*ckks.Ciphertext,
-	wDense *ckks.Ciphertext,
-	poolMask *ckks.Plaintext,
-	maskMap map[int]*ckks.Plaintext,
-) ([]float64, []float64) {
-	pred, tf := c.ForwardOne(input, wConv, wDense, poolMask)
-	fakeLabel := 0
+// ForwardAndBackwardOne for debug only,
+// it forward and backward only one sample,
+// it use randomly generated fake label to compute loss.
+func (c *CellCNN) ForwardAndBackwardOne(input *ckks.Plaintext, wConv []*ckks.Ciphertext, wDense *ckks.Ciphertext) ([]float64, []float64) {
+	pred, tf := c.ForwardOne(input, wConv, wDense)
+	fakeLabel := rand.Intn(2)
 	loss := c.ComputeLossOne(pred, float64(fakeLabel))
 	tb := c.BackwardOne(loss)
 	return tf, tb
 }
 
+// Matrix2Plaintext row pack a matrix to a ckks plaintext
+// useful for generating dataset
 func (c *CellCNN) Matrix2Plaintext(rawData *mat.Dense) *ckks.Plaintext {
 	// shape of each input: 200 * 37 (ncells = 200, nmakers = 37)
 	row, col := rawData.Dims()
@@ -328,6 +334,7 @@ func (c *CellCNN) Matrix2Plaintext(rawData *mat.Dense) *ckks.Plaintext {
 	return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), value, c.params.LogSlots())
 }
 
+// MatrixTranspose2Plaintext column pack a matrix a ckks plaintext
 func (c *CellCNN) MatrixTranspose2Plaintext(rawData *mat.Dense) *ckks.Plaintext {
 	// shape of each input: 200 * 37 (ncells = 200, nmakers = 37)
 	row, col := rawData.Dims()
@@ -340,6 +347,7 @@ func (c *CellCNN) MatrixTranspose2Plaintext(rawData *mat.Dense) *ckks.Plaintext 
 	return c.encoder.EncodeNTTAtLvlNew(c.params.MaxLevel(), value, c.params.LogSlots())
 }
 
+// Batch2PlainSlice row pack a batch of matrices to a slice of plaintext
 func (c *CellCNN) Batch2PlainSlice(inputs []*mat.Dense) []*ckks.Plaintext {
 	result := make([]*ckks.Plaintext, 0)
 	for _, each := range inputs {
@@ -348,6 +356,7 @@ func (c *CellCNN) Batch2PlainSlice(inputs []*mat.Dense) []*ckks.Plaintext {
 	return result
 }
 
+// ComputeScaledGradientWithMomentum add the momentum to the scaled gradients
 func (c *CellCNN) ComputeScaledGradientWithMomentum(
 	grad *Gradients,
 	sts *utils.CellCnnSettings, params ckks.Parameters,

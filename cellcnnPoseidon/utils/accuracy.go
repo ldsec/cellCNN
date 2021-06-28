@@ -2,6 +2,7 @@ package utils
 
 import "gonum.org/v1/gonum/mat"
 
+// CompareDenseWeights debug use only, return the mean and mse error
 func CompareDenseWeights(ew []complex128, pw *mat.Dense, nfilters, nclasses int) (mean, mse float64) {
 	nslots := len(ew)
 	meanSum := complex(0, 0)
@@ -20,6 +21,7 @@ func CompareDenseWeights(ew []complex128, pw *mat.Dense, nfilters, nclasses int)
 	return mean, mse
 }
 
+// CompareConv1dWeights debug use only, return the mean and mse error
 func CompareConv1dWeights(ew [][]complex128, pw *mat.Dense, nmakers, nfilters int) (mean, mse float64) {
 	nslots := len(ew[0])
 	meanSum := complex(0, 0)

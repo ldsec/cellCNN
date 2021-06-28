@@ -5,6 +5,7 @@ import (
 	"github.com/ldsec/lattigo/v2/rlwe"
 )
 
+// AddHoistedMap add the hoisted ciphertext together
 func AddHoistedMap(hm map[int]*ckks.Ciphertext, eval ckks.Evaluator) *ckks.Ciphertext {
 	var res *ckks.Ciphertext
 	for _, v := range hm {
@@ -91,6 +92,7 @@ func MaskAndCollectToLeftFast(
 	return mct
 }
 
+// DummyBootstrapping re-encrypt a ciphertext
 func DummyBootstrapping(ct *ckks.Ciphertext, params ckks.Parameters, sk *rlwe.SecretKey) *ckks.Ciphertext {
 	ect := ckks.NewEncryptorFromSk(params, sk)
 	dct := ckks.NewDecryptor(params, sk)

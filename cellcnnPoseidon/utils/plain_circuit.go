@@ -9,6 +9,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+// SliceCmplxToFloat64 .
 func SliceCmplxToFloat64(arr []complex128) []float64 {
 	res := make([]float64, len(arr))
 	for i := range arr {
@@ -17,6 +18,7 @@ func SliceCmplxToFloat64(arr []complex128) []float64 {
 	return res
 }
 
+// SliceFloat64ToCmplx .
 func SliceFloat64ToCmplx(arr []float64) []complex128 {
 	res := make([]complex128, len(arr))
 	for i := range arr {
@@ -25,7 +27,7 @@ func SliceFloat64ToCmplx(arr []float64) []complex128 {
 	return res
 }
 
-// left rotate arr k times, negative k indicate a right rotation
+// SliceRotation left rotate arr k times, negative k indicate a right rotation
 func SliceRotation(arr []complex128, k int) []complex128 {
 	// rt := make([]complex128, len(arr))
 	var left, right []complex128
@@ -38,6 +40,7 @@ func SliceRotation(arr []complex128, k int) []complex128 {
 	return append(left, right...)
 }
 
+// SliceSum sum the slots in [0, length)
 func SliceSum(arr []complex128, length int) complex128 {
 	res := complex(0, 0)
 	for i, x := range arr {
@@ -49,6 +52,7 @@ func SliceSum(arr []complex128, length int) complex128 {
 	return res
 }
 
+// SlicePow element wise pow
 func SlicePow(arr []float64, n float64) []float64 {
 	res := make([]float64, len(arr))
 	for i := range arr {
@@ -57,6 +61,7 @@ func SlicePow(arr []float64, n float64) []float64 {
 	return res
 }
 
+// SliceAdd addition for isNegative=false, sutraction for isNegative=true
 func SliceAdd(left []complex128, right []complex128, isNegative bool) []complex128 {
 	if len(left) != len(right) {
 		panic(fmt.Sprintf(
@@ -75,6 +80,7 @@ func SliceAdd(left []complex128, right []complex128, isNegative bool) []complex1
 	return res
 }
 
+// SliceMult element wise mult two slice
 func SliceMult(left []complex128, right []complex128) []complex128 {
 	if len(left) != len(right) {
 		panic(fmt.Sprintf(
@@ -90,6 +96,7 @@ func SliceMult(left []complex128, right []complex128) []complex128 {
 	return res
 }
 
+// SliceMultConst (a, b, c) => (ka, kb, kc)
 func SliceMultConst(arr []complex128, k float64) []complex128 {
 	ck := complex(k, 0)
 	res := make([]complex128, len(arr))
@@ -99,7 +106,7 @@ func SliceMultConst(arr []complex128, k float64) []complex128 {
 	return res
 }
 
-// collect inds slots to left most, others 0
+// SliceCollect collect inds slots to left most, others 0
 func SliceCollect(arr []complex128, inds []int) []complex128 {
 	res := make([]complex128, len(arr))
 	for i, ind := range inds {
@@ -131,7 +138,7 @@ func SliceTranspose(arr []complex128, c, r int, rowPacked bool) []complex128 {
 	return res
 }
 
-// replicate the first n elements k tims as:
+// SliceReplicate replicate the first n elements k tims as:
 // [a,b,c,d, ...] => [a,b,c,d,a,b,c,d, ...] others slots set to 0
 func SliceReplicate(arr []complex128, n, k int) []complex128 {
 	res := make([]complex128, len(arr))
@@ -143,7 +150,7 @@ func SliceReplicate(arr []complex128, n, k int) []complex128 {
 	return res
 }
 
-// e.g. if batch == 3, then every 3 elements will be sumed
+// SliceInnerSum e.g. if batch == 3, then every 3 elements will be sumed
 // the batch * (0~n-1) will be the result, others set to 0
 func SliceInnerSum(arr []complex128, batch, n int) []complex128 {
 	res := make([]complex128, len(arr))
@@ -156,7 +163,7 @@ func SliceInnerSum(arr []complex128, batch, n int) []complex128 {
 	return res
 }
 
-// evaluate poly
+// SliceEvaluatePoly evaluate poly according to coeffs
 func SliceEvaluatePoly(arr []complex128, coeffs []complex128, n int) []complex128 {
 	res := make([]complex128, len(arr))
 	for i := 0; i < len(arr); i++ {
@@ -169,7 +176,7 @@ func SliceEvaluatePoly(arr []complex128, coeffs []complex128, n int) []complex12
 	return res
 }
 
-// e.g.: arr = [2,0,0,1,0,0,3,0,0...], inds=[0,3,6], k=2
+// SliceExtend e.g.: arr = [2,0,0,1,0,0,3,0,0...], inds=[0,3,6], k=2
 // (2,1,3 each twice) => return [2,2,0,1,1,0,3,3,0,...]
 func SliceExtend(arr []complex128, inds []int, k int) []complex128 {
 	res := make([]complex128, len(arr))
@@ -181,6 +188,7 @@ func SliceExtend(arr []complex128, inds []int, k int) []complex128 {
 	return res
 }
 
+// SliceFill init a slice with length, and num at inds, others 0
 func SliceFill(length int, inds []int, num complex128) []complex128 {
 	res := make([]complex128, length)
 	for _, i := range inds {
@@ -189,6 +197,7 @@ func SliceFill(length int, inds []int, num complex128) []complex128 {
 	return res
 }
 
+// PlaintextLoss compute least square loss
 func PlaintextLoss(pred []complex128, labels []float64) []complex128 {
 	// use naive least square loss: L = \sum (pred_i - label_i)^2
 	// d-L / d-pred_i = 2 (pred_i - label_i)
@@ -209,6 +218,7 @@ func PlaintextLoss(pred []complex128, labels []float64) []complex128 {
 	return out2
 }
 
+// DebugWithPlain for debug use only
 func DebugWithPlain(
 	params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant []complex128,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, inds []int,
@@ -235,6 +245,7 @@ func DebugWithPlain(
 	fmt.Printf("=> first 10 Plaintext Circuit: %v\n\n", valuesWant[:10])
 }
 
+// GetRow get a row of a matrix
 func GetRow(arr *mat.Dense, ind int) []float64 {
 	_, c := arr.Dims()
 	res := make([]float64, c)
@@ -244,6 +255,7 @@ func GetRow(arr *mat.Dense, ind int) []float64 {
 	return res
 }
 
+// GetCol get a col of a matrix
 func GetCol(arr *mat.Dense, ind int) []float64 {
 	r, _ := arr.Dims()
 	res := make([]float64, r)
@@ -253,6 +265,7 @@ func GetCol(arr *mat.Dense, ind int) []float64 {
 	return res
 }
 
+// DebugWithDense debug use only
 func DebugWithDense(
 	params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant *mat.Dense,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, firstN int, inds []int, isRow bool,
@@ -276,6 +289,7 @@ func DebugWithDense(
 	fmt.Printf("    First{%v}: %v\n", firstN, valuesTest[:firstN])
 }
 
+// ComputeDimWithIndex compute the dim if we put element i into a matrix
 func ComputeDimWithIndex(i, r, c int, rowPacked bool) (int, int) {
 	var dim0, dim1 int
 	if rowPacked {
@@ -288,7 +302,7 @@ func ComputeDimWithIndex(i, r, c int, rowPacked bool) (int, int) {
 	return dim0, dim1
 }
 
-// return the mean square error between the plaintext dense and the ciphertext
+// DebugCtWithDenseStatistic return the mean square error between the plaintext dense and the ciphertext
 func DebugCtWithDenseStatistic(
 	params ckks.Parameters, ciphertext *ckks.Ciphertext, valuesWant *mat.Dense,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, rowPacked bool, verbose bool,
@@ -318,7 +332,7 @@ func DebugCtWithDenseStatistic(
 	return mse
 }
 
-// return the mean square error between the plaintext dense and the ciphertext
+// DebugCtSliceWithDenseStatistic return the mean square error between the plaintext dense and the ciphertext
 func DebugCtSliceWithDenseStatistic(
 	params ckks.Parameters, ciphertexts []*ckks.Ciphertext, valuesWant *mat.Dense,
 	decryptor ckks.Decryptor, encoder ckks.Encoder, rowPacked bool, verbose bool,

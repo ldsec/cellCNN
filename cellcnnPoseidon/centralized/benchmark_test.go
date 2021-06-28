@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
+	cl "github.com/ldsec/cellCNN/cellCNNClear/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/rlwe"
@@ -15,7 +15,7 @@ import (
 
 func TestLocalTime(t *testing.T) {
 
-	t_init_start := time.Now()
+	tInitStart := time.Now()
 
 	params := CustomizedParams()
 	kgen := ckks.NewKeyGenerator(params)
@@ -25,16 +25,16 @@ func TestLocalTime(t *testing.T) {
 	decryptor := ckks.NewDecryptor(params, sk)
 	encoder := ckks.NewEncoder(params)
 
-	ncells := 17
-	nmakers := 5
-	nfilters := 8
+	ncells := 5
+	nmakers := 3
+	nfilters := 4
 	nclasses := 2
 	var sigDegree uint = 3
 	sigInterval := 5
 	maxM1N2Ratio := 8.0
 	momentum := 0.9
 	lr := 0.1
-	batchSize := 3
+	batchSize := 1
 	iterrations := 3
 
 	cnnSettings := utils.NewCellCnnSettings(ncells, nmakers, nfilters, nclasses, sigDegree, float64(sigInterval))
@@ -54,9 +54,9 @@ func TestLocalTime(t *testing.T) {
 	model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 	model.sk = sk
 
-	t_init_end := time.Since(t_init_start).Seconds()
+	tInitEnd := time.Since(tInitStart).Seconds()
 
-	fmt.Printf(">>>>>> Initialization time (offline): %v\n", t_init_end)
+	fmt.Printf(">>>>>> Initialization time (offline): %v\n", tInitEnd)
 
 	// init plaintext net
 	pconv := &cl.Conv1D{Nfilters: nfilters}
@@ -78,13 +78,15 @@ func TestLocalTime(t *testing.T) {
 	// supress the local momentum
 	isMomentum := false
 	verbose := true
-	t_fwd_whole := 0.0
-	t_bwd_whole := 0.0
-	t_root_update := 0.0
+	tFwdWhole := 0.0
+	tBwdWhole := 0.0
+	tRootUpdate := 0.0
 
-	fwd_slice := make([]float64, iterrations)
-	bwd_slice := make([]float64, iterrations)
-	root_slice := make([]float64, iterrations)
+	fwdSlice := make([]float64, iterrations)
+	bwdSlice := make([]float64, iterrations)
+	rootSlice := make([]float64, iterrations)
+	errConvRecords := make(map[int]float64)
+	errDenseRecords := make(map[int]float64)
 
 	for i := 0; i < iterrations; i++ {
 
@@ -92,11 +94,11 @@ func TestLocalTime(t *testing.T) {
 		yMat := utils.ScalarToOneHot(y, nclasses)
 
 		// forward & backward
-		_, t_fwd_one, t_bwd_one := model.BatchProcessing(X, y, isMomentum)
-		t_fwd_whole += t_fwd_one
-		t_bwd_whole += t_bwd_one
-		fwd_slice[i] = t_fwd_one
-		bwd_slice[i] = t_bwd_one
+		_, tFwdOne, tBwdOne := model.BatchProcessing(X, y, isMomentum)
+		tFwdWhole += tFwdOne
+		tBwdWhole += tBwdOne
+		fwdSlice[i] = tFwdOne
+		bwdSlice[i] = tBwdOne
 
 		if i == 0 {
 			plainOut = pNet.ForwardBatch(matrix, cw, dw)
@@ -104,27 +106,27 @@ func TestLocalTime(t *testing.T) {
 			plainOut = pNet.ForwardBatch(matrix, nil, nil)
 		}
 
-		t_root_start := time.Now()
+		tRootStart := time.Now()
 
 		// get scaled gradients
 		grad := &Gradients{model.conv1d.GetGradient(), model.dense.GetGradient()}
 
 		if model.FisrtMomentum() {
-			// if first momentum, btp scaled_g to level 9 and kept as vt
-			grad.Bootstrapping(encoder, params, sk)
+			// if first momentum, btp scaledG to level 9 and kept as vt
+			grad.DummyBootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		} else {
-			// else, compute scaled_m at level 8
+			// else, compute scaledM at level 8
 			grad = model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
-			grad.Bootstrapping(encoder, params, sk)
+			grad.DummyBootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		}
 
 		model.UpdateWithGradients(grad)
 
-		t_root_current := time.Since(t_root_start).Seconds()
-		t_root_update += t_root_current
-		root_slice[i] = t_root_current
+		tRootCurrent := time.Since(tRootStart).Seconds()
+		tRootUpdate += tRootCurrent
+		rootSlice[i] = tRootCurrent
 
 		errDense := mat.NewDense(batchSize, nclasses, nil)
 		errDense.Sub(plainOut, yMat)
@@ -133,36 +135,44 @@ func TestLocalTime(t *testing.T) {
 		dConv = pNet.conv.GetWeights()
 		dDense = pNet.dense.GetWeights()
 
-		mse_conv := utils.DebugCtSliceWithDenseStatistic(params, model.conv1d.GetWeights(), dConv, decryptor, encoder, false, verbose)
-		mse_dense := utils.DebugCtWithDenseStatistic(params, model.dense.GetWeights(), dDense, decryptor, encoder, false, verbose)
+		mseConv := utils.DebugCtSliceWithDenseStatistic(params, model.conv1d.GetWeights(), dConv, decryptor, encoder, false, verbose)
+		mseDense := utils.DebugCtWithDenseStatistic(params, model.dense.GetWeights(), dDense, decryptor, encoder, false, verbose)
 
-		fmt.Printf(">>> Current Round fwd: %v, bwd: %v, root update: %v, mse_conv: %v, mse_dense: %v\n",
-			t_fwd_one, t_bwd_one, t_root_current, mse_conv, mse_dense,
+		fmt.Printf(">>> Current Round fwd: %v, bwd: %v, root update: %v, mseConv: %v, mseDense: %v\n",
+			tFwdOne, tBwdOne, tRootCurrent, mseConv, mseDense,
 		)
+
+		errConvRecords[i] = mseConv
+		errDenseRecords[i] = mseDense
 
 		runtime.GC()
 
 	}
 
-	_, fwd_mse := utils.AVGandStdev(fwd_slice)
-	_, bwd_mse := utils.AVGandStdev(bwd_slice)
-	_, root_mse := utils.AVGandStdev(root_slice)
-	fmt.Println(fwd_slice)
+	_, fwdMse := utils.AVGandStdev(fwdSlice)
+	_, bwdMse := utils.AVGandStdev(bwdSlice)
+	_, rootMse := utils.AVGandStdev(rootSlice)
 
-	// fmt.Printf(">>> Initialization time (offline): %v", t_init_end)
+	// fmt.Printf(">>> Initialization time (offline): %v", tInitEnd)
 	fmt.Printf(">>>>>> Average over %v iteration | fwd: %v, bwd: %v, root update: %v\n",
-		iterrations, t_fwd_whole/float64(iterrations), t_bwd_whole/float64(iterrations), t_root_update/float64(iterrations),
+		iterrations, tFwdWhole/float64(iterrations), tBwdWhole/float64(iterrations), tRootUpdate/float64(iterrations),
 	)
 	fmt.Printf(">>>>>> MSE over %v iterations | fwd: %v, bwd: %v, root update: %v\n",
-		iterrations, fwd_mse, bwd_mse, root_mse,
+		iterrations, fwdMse, bwdMse, rootMse,
 	)
+
+	fmt.Println("conv err")
+	prettyPrint(errConvRecords, utils.NewSlice(0, iterrations-1, 1))
+	fmt.Println("dense err")
+	prettyPrint(errDenseRecords, utils.NewSlice(0, iterrations-1, 1))
+
 }
 
 func TestInit(t *testing.T) {
 	maxiter := 10
-	init_slice := make([]float64, maxiter)
+	initSlice := make([]float64, maxiter)
 	for i := 0; i < maxiter; i++ {
-		t_init_start := time.Now()
+		tInitStart := time.Now()
 
 		params := CustomizedParams()
 		kgen := ckks.NewKeyGenerator(params)
@@ -201,14 +211,14 @@ func TestInit(t *testing.T) {
 		model.InitEvaluator(cryptoParams, maxM1N2Ratio)
 		model.sk = sk
 
-		t_init_end := time.Since(t_init_start).Seconds()
-		init_slice[i] = t_init_end
+		tInitEnd := time.Since(tInitStart).Seconds()
+		initSlice[i] = tInitEnd
 
-		fmt.Printf(">>Round %v Initialization time (offline): %v\n", i, t_init_end)
+		fmt.Printf(">>Round %v Initialization time (offline): %v\n", i, tInitEnd)
 
 		runtime.GC()
 	}
-	avg, stdev := utils.AVGandStdev(init_slice)
+	avg, stdev := utils.AVGandStdev(initSlice)
 	fmt.Printf(">> Initialization time (offline) | avg: %v, stdev: %v\n", avg, stdev)
 }
 
@@ -233,10 +243,10 @@ func TestOptimizedCollect(t *testing.T) {
 	nclasses := 1
 	niter := 10
 
-	map_naive_m := make(map[int]float64)
-	map_naive_s := make(map[int]float64)
-	map_fast_m := make(map[int]float64)
-	map_fast_s := make(map[int]float64)
+	mapNaiveM := make(map[int]float64)
+	mapNaiveS := make(map[int]float64)
+	mapFastM := make(map[int]float64)
+	mapFastS := make(map[int]float64)
 
 	for k := 1; k <= 5; k++ {
 		nclasses = nclasses * 2
@@ -247,8 +257,8 @@ func TestOptimizedCollect(t *testing.T) {
 		rks := kgen.GenRotationKeysForRotations(rotIndices, false, sk)
 		eval := ckks.NewEvaluator(params, rlwe.EvaluationKey{Rlk: rlk, Rtks: rks})
 
-		slice_naive := make([]float64, niter)
-		slice_fast := make([]float64, niter)
+		sliceNaive := make([]float64, niter)
+		sliceFast := make([]float64, niter)
 		for i := 0; i < niter; i++ {
 			t1 := time.Now()
 			_ = utils.MaskAndCollectToLeft(ct, params, encoder, eval, 0, nfilters, nclasses)
@@ -256,26 +266,26 @@ func TestOptimizedCollect(t *testing.T) {
 
 			_ = utils.MaskAndCollectToLeftFast(ct, params, encoder, eval, 0, nfilters, nclasses, true, true)
 			t3 := time.Since(t1).Seconds()
-			slice_naive[i] = t2
-			slice_fast[i] = t3 - t2
+			sliceNaive[i] = t2
+			sliceFast[i] = t3 - t2
 		}
-		map_naive_m[nclasses], map_naive_s[nclasses] = utils.AVGandStdev(slice_naive)
-		map_fast_m[nclasses], map_fast_s[nclasses] = utils.AVGandStdev(slice_fast)
+		mapNaiveM[nclasses], mapNaiveS[nclasses] = utils.AVGandStdev(sliceNaive)
+		mapFastM[nclasses], mapFastS[nclasses] = utils.AVGandStdev(sliceFast)
 	}
 
 	keys := []int{2, 4, 8, 16, 32}
-	prretyPrint(map_naive_m, keys)
-	prretyPrint(map_naive_s, keys)
-	prretyPrint(map_fast_m, keys)
-	prretyPrint(map_fast_s, keys)
-	// fmt.Printf("Time: naive: avg: %v, std: %v || fast: avg: %v, std: %v (s)\n", naive_m, naive_s, fast_m, fast_s)
+	prettyPrint(mapNaiveM, keys)
+	prettyPrint(mapNaiveS, keys)
+	prettyPrint(mapFastM, keys)
+	prettyPrint(mapFastS, keys)
+	// fmt.Printf("Time: naive: avg: %v, std: %v || fast: avg: %v, std: %v (s)\n", naiveM, naiveS, fastM, fastS)
 
 	// fmt.Printf("naive: %v\n", rNaive[:20])
 	// fmt.Printf("fast: %v\n", rFast[:20])
 	// fmt.Printf("Time: naive: %v, fast: %v (s)\n", t2, t3-t2)
 }
 
-func prretyPrint(s map[int]float64, keys []int) {
+func prettyPrint(s map[int]float64, keys []int) {
 	res := "["
 	for i, key := range keys {
 		if i != len(keys)-1 {
