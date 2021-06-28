@@ -195,12 +195,12 @@ P.Update()
 ```Go
 fmt.Println("DC")
 P.DC.Print()
-cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P.CtDC(), params, masterSk)
+cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P.CtDC, params, masterSk)
 
 fmt.Println("DW")
 P.DW.Transpose().Print()
 for i := 0; i < cellCNN.Classes; i++{
-	cellCNN.DecryptPrint(1, cellCNN.Filters, true, P.Eval().RotateNew(P.CtDW(), i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
+	cellCNN.DecryptPrint(1, cellCNN.Filters, true, P.Eval().RotateNew(P.CtDW, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
 }
 ```
 
@@ -208,13 +208,13 @@ for i := 0; i < cellCNN.Classes; i++{
 
 ```Go
 fmt.Println("DCPool")
-DCPool.Print()
-cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, ctDCPool, params, masterSk)
+P.C.Print()
+cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, P.CtC, params, masterSk)
 
 fmt.Println("DWPool")
-DWPool.Transpose().Print()
+P.W.Transpose().Print()
 for i := 0; i < cellCNN.Classes; i++{
-	cellCNN.DecryptPrint(1, cellCNN.Filters, true, P.Eval().RotateNew(ctDWPool, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
+	cellCNN.DecryptPrint(1, cellCNN.Filters, true, P.Eval().RotateNew(P.CtW, i*cellCNN.BatchSize*cellCNN.Filters), params, masterSk)
 }
 ```
 
