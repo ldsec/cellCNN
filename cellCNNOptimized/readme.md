@@ -18,9 +18,17 @@ The method `GenParams()` will automatically generate a `ckks.Parameters` with se
 
 The file `decentralized/example/main.go` is an example of decentralized training (the centralized training can be emulated by setting the number of hosts to 1).
 
-## API 
+## PREDICTION API
 
-A detailed API documentation is available in `decentralized\readme.md`.
+```Go
+EncryptForPrediction(XBatch []*Matrix, encoder ckks.Encoder, encryptor ckks.Encryptor, params ckks.Parameters) ([]*ckks.Ciphertext)
+```
+
+```Go
+Predict(XBatch []*ckks.Ciphertext, ctC, ctW *ckks.Ciphertext, params ckks.Parameters, eval ckks.Evaluator) (*ckks.Ciphertext)
+```
+
+## TRAINING API 
 
 ### Party Creation
 
