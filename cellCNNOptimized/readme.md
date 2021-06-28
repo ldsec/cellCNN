@@ -159,30 +159,33 @@ P.Backward(XBatch, YBatch *cellCNN.Matrix, nParties int)
 
 ##### Plain
 ```Go
-DWPool.Add(DWPool, P.DW *cellCNN.Matrix)
-DCPool.Add(DCPool, P.DC *cellCNN.Matrix)
+P.DC.Add(P.DC, P'.DC)
+P.DW.Add(P.DW, P'.DW)
 ```
 
 ##### Encrypted
 
+Aggregates the weights of P' on the weights of P.
+
 ```Go
-P.Eval().Add(ctDWPool, P.CtDW(), ctDWPool *ckks.Ciphertext)
-P.Eval().Add(ctDCPool, P.CtDC(), ctDCPool *ckks.Ciphertext)
+P.Eval.Add(P.CtDC, P'.CtDC, P.CtDC)
+P.Eval.Add(P.CtDW, P'.CtDW, P.CtDW)
 ```
 
 #### 7) Update Model
 
+Updates the local model (with momentum) using the internal aggregated weights.
 
 ##### Plain
 
 ```Go
-P.UpdatePlain(DCPool, DWPool *cellCNN.Matrix)
+P.UpdatePlain()
 ```
 
 ##### Encrypted
 
 ```Go
-P.Update(ctDCPool, ctDWPool *ckks.Ciphertext)
+P.Update()
 ```
 
 ### Debug
