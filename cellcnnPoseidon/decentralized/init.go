@@ -95,7 +95,7 @@ func (p *NNEncryptedProtocol) Init(
 // 	p.LearningRate = learningRate
 
 // 	p.BatchSize = nodeBatchSize
-// 	p.Epochs = maxIterations
+// 	p.MaxIterations = maxIterations
 
 // 	p.ApproximationDegree = int(approximationDegree)
 // 	p.Interval = interval

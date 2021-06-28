@@ -69,6 +69,18 @@ func WeightsInit(rows, cols, inputs int)(m *Matrix){
    return 
 }
 
+// GenerateFakeData generate empty/0 X and Y matrices with the correct dimensions
+func GenerateFakeData(samples, cells, features int) (X, Y []*Matrix) {
+	X = make([]*Matrix, samples)
+	Y = make([]*Matrix, samples)
+
+	for i := 0; i < samples; i++{
+		X[i] = NewMatrix(cells, features)
+		Y[i] = NewMatrix(1, 2)
+	}
+	return X, Y
+}
+
 func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*Matrix) {
 	y := String_to_float(Load_file(path+"y_train.txt", samples))
 	X = make([]*Matrix, samples)

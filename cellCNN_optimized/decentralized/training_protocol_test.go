@@ -83,11 +83,10 @@ func genTest(
 				protocol := pi.(*decentralized.TrainingProtocol)
 
 				vars := decentralized.InitCellCNNVars{
-					Path:           path,
 					TrainPlain:     trainPlain,
 					TrainEncrypted: trainEncrypted,
 					Deterministic:  deterministic,
-					Epochs:         epoch,
+					MaxIterations:  epoch,
 					LocalSamples:   localSamples,
 					Debug:          debug,
 				}

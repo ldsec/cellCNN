@@ -14,6 +14,7 @@ import (
 
 func init() {
 	network.RegisterMessages(
+		new(SyncMessage),
 		new(NewIterationMessage),
 		new(ChildUpdatedDataMessage),
 	)
@@ -24,6 +25,11 @@ const TrainingProtocolName = "TrainingProtocol"
 
 // Messages
 //______________________________________________________________________________________________________________________
+
+// SyncMessage plain message struct used only for synchronization
+type SyncMessage struct {
+	Sync struct{}
+}
 
 // NewIterationMessage is the message sent by the root node to start a new global iteration
 type NewIterationMessage struct {
@@ -44,6 +50,13 @@ type ChildUpdatedDataMessage struct {
 
 // Structs
 //______________________________________________________________________________________________________________________
+
+// SyncStruct onet wrapper of SyncMessage
+type SyncStruct struct {
+	*onet.TreeNode
+	SyncMessage SyncMessage
+}
+
 type newIterationAnnouncementStruct struct {
 	*onet.TreeNode
 	NewIterationMessage
@@ -59,6 +72,8 @@ type ChildUpdatedDataStruct struct {
 type TrainingProtocol struct {
 	*onet.TreeNodeInstance
 
+	Sync bool
+
 	CNNProtocol *cellCNN.CellCNNProtocol
 
 	// Feedback Channels
@@ -67,11 +82,11 @@ type TrainingProtocol struct {
 	// Other Channels
 	AnnouncementChannel chan newIterationAnnouncementStruct
 	ChildDataChannel    chan []ChildUpdatedDataStruct
+	SyncChannel         chan SyncStruct
 
 	CryptoParams *cellCNN.CryptoParams
 
 	// protocol params
-	Path          string
 	PartyDataSize int
 	XTrain        []*cellCNN.Matrix
 	YTrain        []*cellCNN.Matrix
@@ -82,10 +97,19 @@ type TrainingProtocol struct {
 	PrngInt        *cellCNN.PRNGInt
 
 	IterationNumber int
-	Epochs          int
+	MaxIterations   int
 
 	// utils
 	Debug bool
+
+	//timers
+	Precompute 			time.Duration
+	LocalIter  			time.Duration
+	FeedForward 		time.Duration
+	Backprop    		time.Duration
+	UpdateWeights 		time.Duration
+	Combine             time.Duration
+	DBootstrap       	time.Duration
 }
 
 // NewTrainingProtocol initializes the protocol instance.
@@ -95,7 +119,7 @@ func NewTrainingProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error
 		FeedbackChannel:  make(chan struct{}, 1),
 	}
 
-	err := pap.RegisterChannels(&pap.AnnouncementChannel, &pap.ChildDataChannel)
+	err := pap.RegisterChannels(&pap.SyncChannel, &pap.AnnouncementChannel, &pap.ChildDataChannel)
 	if err != nil {
 		return nil, errors.New("couldn't register announcement channel: " + err.Error())
 	}
@@ -105,7 +129,11 @@ func NewTrainingProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error
 
 // Start is called at the root to begin the execution of the protocol.
 func (p *TrainingProtocol) Start() error {
+
+	p.Tree()
 	log.Lvl2("[cellCNN_START]", p.ServerIdentity(), " started a cellCNN Protocol")
+
+	startTimer := time.Now()
 
 	// STEP 1: weight init
 	if p.Deterministic {
@@ -142,6 +170,8 @@ func (p *TrainingProtocol) Start() error {
 		return err
 	}
 
+	p.Precompute += time.Since(startTimer)
+
 	// STEP 2: send clear initial weights down the tree
 	if err = p.SendToChildren(&NewIterationMessage{0, bC, bW, nil, nil}); err != nil {
 		return fmt.Errorf("send to children: %v", err)
@@ -153,9 +183,20 @@ func (p *TrainingProtocol) Start() error {
 // Dispatch is called at each node and handle incoming messages.
 func (p *TrainingProtocol) Dispatch() error {
 
+	// to syncronize
+	if p.Sync {
+		err := SyncProtocol(p.TreeNodeInstance, p.SyncChannel)
+		if err != nil {
+			return err
+		}
+		p.Sync = false
+	}
+
+	totalTime := time.Now()
+
 	defer p.Done()
 
-	for p.IterationNumber < p.Epochs { // protocol iterations
+	for p.IterationNumber < p.MaxIterations { // protocol iterations
 
 		// 1. Forward Pass announcement phase
 
@@ -220,7 +261,7 @@ func (p *TrainingProtocol) Dispatch() error {
 			}
 
 			//need to check as new number is part of the message for non root nodes
-			finished = p.IterationNumber >= p.Epochs
+			finished = p.IterationNumber >= p.MaxIterations
 
 		} else if p.IterationNumber == 0 && p.IsRoot() {
 
@@ -237,6 +278,8 @@ func (p *TrainingProtocol) Dispatch() error {
 			}
 
 			if p.IsRoot() {
+
+				updateTimer := time.Now()
 
 				p.IterationNumber = p.IterationNumber + 1
 
@@ -270,6 +313,8 @@ func (p *TrainingProtocol) Dispatch() error {
 					}
 				}
 
+				p.UpdateWeights += time.Since(updateTimer)
+
 				// send new weights
 				if err := p.SendToChildren(&NewIterationMessage{p.IterationNumber, bC, bW, bCtC, bCtW}); err != nil {
 					return fmt.Errorf("send to children: %v", err)
@@ -280,76 +325,86 @@ func (p *TrainingProtocol) Dispatch() error {
 
 	// STEP 4. Report final weights
 	if p.IsRoot() {
+		if p.Debug == true {
+			log.Lvl2("Loading Validation Data...")
+			XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+			log.Lvl2("Done")
 
-		log.Lvl2("Loading Validation Data...")
-		XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
-		log.Lvl2("Done")
+			if p.TrainPlain && p.TrainEncrypted {
+				p.CNNProtocol.PrintCtCPrecision(p.CryptoParams.AggregateSk)
+				p.CNNProtocol.PrintCtWPrecision(p.CryptoParams.AggregateSk)
+			} else if p.TrainPlain {
+				p.CNNProtocol.C.Print()
+				p.CNNProtocol.W.Print()
+			} else if p.TrainEncrypted {
 
-		if p.TrainPlain && p.TrainEncrypted {
-			p.CNNProtocol.PrintCtCPrecision(p.CryptoParams.AggregateSk)
-			p.CNNProtocol.PrintCtWPrecision(p.CryptoParams.AggregateSk)
-		} else if p.TrainPlain {
-			p.CNNProtocol.C.Print()
-			p.CNNProtocol.W.Print()
-		} else if p.TrainEncrypted {
+				cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, p.CNNProtocol.CtDC, *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
 
-			cellCNN.DecryptPrint(cellCNN.Features, cellCNN.Filters, true, p.CNNProtocol.CtDC, *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
-
-			for i := 0; i < cellCNN.Classes; i++ {
-				cellCNN.DecryptPrint(1, cellCNN.Filters, true, p.CNNProtocol.Eval.RotateNew(p.CNNProtocol.CtDW, i*cellCNN.BatchSize*cellCNN.Filters), *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
-			}
-		}
-
-		r := 0
-		for i := 0; i < 2000/cellCNN.BatchSize; i++ {
-
-			XPrePool := new(cellCNN.Matrix)
-			XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
-			YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
-
-			for j := 0; j < cellCNN.BatchSize; j++ {
-
-				X := XValid[cellCNN.BatchSize*i+j]
-				Y := YValid[cellCNN.BatchSize*i+j]
-
-				XPrePool.SumColumns(X)
-				XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
-
-				XBatch.SetRow(j, XPrePool.M)
-				YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
-			}
-
-			v := p.CNNProtocol.PredictPlain(XBatch)
-
-			if p.TrainEncrypted {
-				v.Print()
-				ctv := p.CNNProtocol.Predict(XBatch, p.CryptoParams.AggregateSk)
-				ctv.Print()
-				precisionStats := ckks.GetPrecisionStats(*p.CryptoParams.Params, p.CNNProtocol.Encoder, nil, v.M, ctv.M, p.CryptoParams.Params.LogSlots(), 0)
-				fmt.Printf("Batch[%2d]", i)
-				fmt.Println(precisionStats.String())
-			}
-
-			var y int
-			for i := 0; i < cellCNN.BatchSize; i++ {
-
-				if real(v.M[i*2]) > real(v.M[i*2+1]) {
-					y = 1
-				} else {
-					y = 0
-				}
-
-				if y != int(real(YBatch.M[i*2])) {
-					r++
+				for i := 0; i < cellCNN.Classes; i++ {
+					cellCNN.DecryptPrint(1, cellCNN.Filters, true, p.CNNProtocol.Eval.RotateNew(p.CNNProtocol.CtDW, i*cellCNN.BatchSize*cellCNN.Filters), *p.CryptoParams.Params, p.CryptoParams.AggregateSk)
 				}
 			}
+
+			r := 0
+			for i := 0; i < 2000/cellCNN.BatchSize; i++ {
+
+				XPrePool := new(cellCNN.Matrix)
+				XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
+				YBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
+
+				for j := 0; j < cellCNN.BatchSize; j++ {
+
+					X := XValid[cellCNN.BatchSize*i+j]
+					Y := YValid[cellCNN.BatchSize*i+j]
+
+					XPrePool.SumColumns(X)
+					XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
+
+					XBatch.SetRow(j, XPrePool.M)
+					YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
+				}
+
+				v := p.CNNProtocol.PredictPlain(XBatch)
+
+				if p.TrainEncrypted {
+					v.Print()
+					ctv := p.CNNProtocol.Predict(XBatch, p.CryptoParams.AggregateSk)
+					ctv.Print()
+					precisionStats := ckks.GetPrecisionStats(*p.CryptoParams.Params, p.CNNProtocol.Encoder, nil, v.M, ctv.M, p.CryptoParams.Params.LogSlots(), 0)
+					fmt.Printf("Batch[%2d]", i)
+					fmt.Println(precisionStats.String())
+				}
+
+				var y int
+				for i := 0; i < cellCNN.BatchSize; i++ {
+
+					if real(v.M[i*2]) > real(v.M[i*2+1]) {
+						y = 1
+					} else {
+						y = 0
+					}
+
+					if y != int(real(YBatch.M[i*2])) {
+						r++
+					}
+				}
+			}
+			log.Lvl2("error :", 100.0*float64(r)/float64(2000), "%")
 		}
-
-		log.Lvl2("error :", 100.0*float64(r)/float64(2000), "%")
-
-		time.Sleep(10 * time.Second)
-		p.FeedbackChannel <- struct{}{}
+		p.FeedbackChannel<-struct{}{}
 	}
+
+	// ### TIMERS
+	log.Lvl2("TIMERS:")
+	log.Lvl2("Precompute:", p.Precompute)
+	log.Lvl2("LocalIter:", p.LocalIter)
+	log.Lvl2("FeedForward:", p.FeedForward)
+	log.Lvl2("BackProp:", p.Backprop)
+	log.Lvl2("Update Weights:", p.UpdateWeights)
+	log.Lvl2("D. Bootstrap:", p.DBootstrap)
+	log.Lvl2("Combine", p.Combine)
+	log.Lvl2("Total Time:", time.Since(totalTime))
+	// ------------
 
 	return nil
 }
@@ -372,12 +427,16 @@ func (p *TrainingProtocol) newIterationAnnouncementPhase() (NewIterationMessage,
 // Local updates, Results pushing up the tree containing aggregation results.
 func (p *TrainingProtocol) ascendingUpdateGeneralModelPhase() error {
 
+	localComputationTimer := time.Now()
 	p.localComputation()
+	p.LocalIter += time.Since(localComputationTimer)
 
+	broadcastTimer := time.Now()
 	err := p.broadcast()
 	if err != nil {
 		return err
 	}
+	p.Combine += time.Since(broadcastTimer)
 
 	runtime.GC() // Forces garbage collection
 
@@ -413,9 +472,17 @@ func (p *TrainingProtocol) localComputation() {
 	start := time.Now()
 
 	if p.TrainEncrypted {
+		forwardTimer := time.Now()
 		p.CNNProtocol.Forward(XBatch)
+		p.FeedForward += time.Since(forwardTimer)
+
+		bootTimer := time.Now()
 		p.CNNProtocol.Refresh(p.CryptoParams.AggregateSk, p.Tree().Size())
+		p.DBootstrap += time.Since(bootTimer)
+
+		backwardTimer := time.Now()
 		p.CNNProtocol.Backward(XBatch, YBatch, p.Tree().Size())
+		p.Backprop += time.Since(backwardTimer)
 	}
 
 	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
@@ -507,5 +574,27 @@ func (p *TrainingProtocol) broadcast() error {
 		}
 	}
 
+	return nil
+}
+
+// SyncProtocol defines the messages exchanges to synchronise nodes (especially useful for experiments)
+func SyncProtocol(n *onet.TreeNodeInstance, syncChannel chan SyncStruct) error {
+	if n.IsRoot() {
+		for i := 0; i < len(n.Roster().List)-1; i++ {
+			<-syncChannel
+		}
+		n.Broadcast(&SyncMessage{Sync: struct{}{}})
+	}
+	if !n.IsRoot() {
+		if !n.IsLeaf() {
+			if err := n.SendToChildren(&SyncMessage{Sync: struct{}{}}); err != nil {
+				return err
+			}
+		}
+		if err := n.SendTo(n.Root(), &SyncMessage{Sync: struct{}{}}); err != nil {
+			return err
+		}
+		<-syncChannel
+	}
 	return nil
 }

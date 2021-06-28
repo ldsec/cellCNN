@@ -8,3 +8,7 @@ build/
 deploy/
 test_data/
 server_list
+
+cellCNN_optimized/simul/simul
+cellCNN_optimized/simul/bootstrap/bootstrap
+

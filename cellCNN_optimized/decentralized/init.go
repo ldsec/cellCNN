@@ -6,14 +6,12 @@ import (
 )
 
 type InitCellCNNVars struct {
-	Path string
-
 	TrainPlain     bool
 	TrainEncrypted bool
 	Deterministic  bool
 
-	Epochs       int
-	LocalSamples int
+	MaxIterations   int
+	LocalSamples 	int
 
 	Debug bool
 }
@@ -33,15 +31,13 @@ func (p *TrainingProtocol) InitVars(cryptoParams *cellCNN.CryptoParams, params *
 	}
 
 	// init vars
-	p.Path = vars.Path
-
 	p.TrainPlain = vars.TrainPlain
 	p.TrainEncrypted = vars.TrainEncrypted
 	p.Deterministic = vars.Deterministic
 
 	p.PrngInt = cellCNN.NewPRNTInt(vars.LocalSamples, vars.Deterministic)
 
-	p.Epochs = vars.Epochs
+	p.MaxIterations = vars.MaxIterations
 
 	p.Debug = vars.Debug
 }
