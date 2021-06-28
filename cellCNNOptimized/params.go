@@ -1,12 +1,10 @@
 package cellCNN
 
 import (
-	"github.com/ldsec/lattigo/v2/rlwe"
 	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"math"
 )
-
-
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
@@ -20,7 +18,7 @@ var Samples = 2000
 // MUST BE AN EVEN NUMBER
 var Cells = 200
 
-// number of features 
+// number of features
 // MUST BE AN EVEN NUMBER
 var Features = 38
 
@@ -40,7 +38,7 @@ var Momentum = 0.9
 // ring dimension
 var LogN = 15
 
-var LogSlots = LogN-1
+var LogSlots = LogN - 1
 
 var Scale = float64(1 << 52)
 
@@ -52,16 +50,16 @@ var NbPi = 2
 
 func ConvolutionMatrixSize(cells, features, filters int) int {
 	//     original result   additional rotations padd   complex trick
-	return cells * filters + (features/2 -1)*2*filters + filters
+	return cells*filters + (features/2-1)*2*filters + filters
 }
 
-func DenseMatrixSize(filters, classes int) int{
+func DenseMatrixSize(filters, classes int) int {
 	return filters * classes
 }
 
 // GenParams generates CKKS parameters based on the input scale to
 // ensure a secure bootstrapping and appropriate moduli
-func GenParams() (params ckks.Parameters){
+func GenParams() (params ckks.Parameters) {
 
 	var err error
 
@@ -69,25 +67,25 @@ func GenParams() (params ckks.Parameters){
 
 	log2Scale := math.Log2(Scale)
 
-	bootstrappModuliSize := int(math.Ceil((128.0 + log2Scale)/3.0))
+	bootstrappModuliSize := int(math.Ceil((128.0 + log2Scale) / 3.0))
 
-	if bootstrappModuliSize > 60{
+	if bootstrappModuliSize > 60 {
 		panic("scale too high")
 	}
 
 	logQi := make([]int, Levels)
 
-	for i := 0; i < 3; i++{
+	for i := 0; i < 3; i++ {
 		logQi[i] = bootstrappModuliSize
 	}
 
-	for i := 3; i < Levels; i++{
+	for i := 3; i < Levels; i++ {
 		logQi[i] = int(log2Scale)
 	}
 
 	logPi := make([]int, NbPi)
-	for i := 0; i < NbPi; i++{
-		logPi[i] = bootstrappModuliSize+1
+	for i := 0; i < NbPi; i++ {
+		logPi[i] = bootstrappModuliSize + 1
 	}
 
 	parametersLiteral.LogN = LogN
@@ -97,10 +95,10 @@ func GenParams() (params ckks.Parameters){
 	parametersLiteral.Sigma = rlwe.DefaultSigma
 	parametersLiteral.Scale = Scale
 
-	if params, err = ckks.NewParametersFromLiteral(*parametersLiteral); err != nil{
+	if params, err = ckks.NewParametersFromLiteral(*parametersLiteral); err != nil {
 		panic(err)
 	}
 
-	return 
+	return
 
 }

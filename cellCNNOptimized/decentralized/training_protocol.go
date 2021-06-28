@@ -3,7 +3,7 @@ package decentralized
 import (
 	"errors"
 	"fmt"
-	"github.com/ldsec/cellCNN/cellCNN_optimized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"

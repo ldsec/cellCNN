@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ldsec/cellCNN/cellCNN_optimized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/ring"
 	"github.com/ldsec/lattigo/v2/rlwe"
@@ -236,6 +236,9 @@ func main() {
 
 	// Tests resuls :
 
+	encryptor := ckks.NewEncryptorFromSk(params, masterSk)
+	decryptor := ckks.NewDecryptor(params, masterSk)
+
 	r := 0
 	for i := 0; i < 2000/cellCNN.BatchSize; i++ {
 
@@ -261,9 +264,28 @@ func main() {
 
 		if trainEncrypted {
 			v.Print()
-			ctv := P[0].Predict(XBatch, masterSk)
-			ctv.Print()
-			precisionStats := ckks.GetPrecisionStats(params, P[0].Encoder, nil, v.M, ctv.M, params.LogSlots(), 0)
+
+			ciphertexts := make([]*ckks.Ciphertext, cellCNN.Features>>1)
+			for i := range ciphertexts {
+				ciphertexts[i] = ckks.NewCiphertext(params, 1, 4, params.Scale())
+			}
+
+			cellCNN.EncryptLeftForCtMul(XBatch, cellCNN.Filters, 0.5, ciphertexts, P[0].Encoder, encryptor, params)
+
+			ctPredict := cellCNN.Predict(ciphertexts, P[0].CtC, P[0].CtW, params, P[0].Eval)
+
+			res := P[0].Encoder.Decode(decryptor.DecryptNew(ctPredict), params.LogSlots())
+
+			U := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Classes)
+
+			for i := 0; i < cellCNN.BatchSize; i++ {
+				for j := 0; j < cellCNN.Classes; j++ {
+					U.M[i*cellCNN.Classes+j] = res[i*cellCNN.Filters+cellCNN.BatchSize*cellCNN.Filters*j]
+				}
+			}
+
+			U.Print()
+			precisionStats := ckks.GetPrecisionStats(params, P[0].Encoder, nil, v.M, U.M, params.LogSlots(), 0)
 			fmt.Printf("Batch[%2d]", i)
 			fmt.Println(precisionStats.String())
 		}

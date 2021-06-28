@@ -1,18 +1,17 @@
 package cellCNN
 
-import(
-	"github.com/ldsec/lattigo/v2/rlwe"
-	"github.com/ldsec/lattigo/v2/ckks"
-	"math"
+import (
 	"fmt"
+	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
+	"math"
 )
 
-func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, cells, features, filters, classes int, params ckks.Parameters, eval ckks.Evaluator, sk *rlwe.SecretKey) (ctDW, ctDC *ckks.Ciphertext){
-
+func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Plaintext, cells, features, filters, classes int, params ckks.Parameters, eval ckks.Evaluator, sk *rlwe.SecretKey) (ctDW, ctDC *ckks.Ciphertext) {
 
 	// Extracts previous DC * momentum and previous DW * momentum
-	ctDWPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (cells + features + 1)))
-	ctDCPrev := eval.RotateNew(ctBoot, 2*(classes*filters + classes * filters * (cells + features + 1)) + classes*filters)
+	ctDWPrev := eval.RotateNew(ctBoot, 2*(classes*filters+classes*filters*(cells+features+1)))
+	ctDCPrev := eval.RotateNew(ctBoot, 2*(classes*filters+classes*filters*(cells+features+1))+classes*filters)
 
 	// sigma(U) and sigma'(U)
 	ctU1, ctU1Deriv := ActivationsCt(ctBoot, params, eval)
@@ -22,16 +21,16 @@ func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Pl
 
 	// E1 = sigma'(U) * (Y - sigma(U))
 	eval.MulRelin(ctU1, ctU1Deriv, ctU1)
-	if err := eval.Rescale(ctU1, params.Scale(), ctU1); err != nil{
+	if err := eval.Rescale(ctU1, params.Scale(), ctU1); err != nil {
 		panic(err)
 	}
 
 	// Acess the index of the pooling results and upsampled W
-	tmp := eval.RotateNew(ctBoot, classes*(cells*filters + filters + features*filters) + classes*filters)
+	tmp := eval.RotateNew(ctBoot, classes*(cells*filters+filters+features*filters)+classes*filters)
 
 	// Multiplies at the same time pool^t x E1 and upSampled(E1 x W^t)
 	eval.MulRelin(tmp, ctU1, tmp)
-	if err := eval.Rescale(tmp, params.Scale(), tmp); err != nil{
+	if err := eval.Rescale(tmp, params.Scale(), tmp); err != nil {
 		panic(err)
 	}
 
@@ -44,7 +43,7 @@ func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Pl
 	ctDC = eval.RotateNew(tmp, classes*filters)
 
 	// Finishes the computation of E0 = upSampled(E1 x W^t) by summing all the rows
-	eval.InnerSum(ctDC, cells * filters + filters + features*filters, classes, ctDC)
+	eval.InnerSum(ctDC, cells*filters+filters+features*filters, classes, ctDC)
 
 	//  DC = Ltranspose x E0
 	eval.Mul(ctDC, ptLBackward, ctDC)
@@ -58,7 +57,7 @@ func Backward(ctBoot *ckks.Ciphertext, Y, ptLBackward, maskPtW, maskPtC *ckks.Pl
 	return ctDW, ctDC
 }
 
-func EncodeCellsForBackward(L *Matrix, cells, features, filters, classes int, learningRate float64, params ckks.Parameters) (*ckks.Plaintext){
+func EncodeCellsForBackward(L *Matrix, cells, features, filters, classes int, learningRate float64, params ckks.Parameters) *ckks.Plaintext {
 	encoder := ckks.NewEncoder(params)
 
 	values := make([]complex128, params.Slots())
@@ -66,17 +65,16 @@ func EncodeCellsForBackward(L *Matrix, cells, features, filters, classes int, le
 	LSum := new(Matrix)
 	LSum.SumRows(L.Transpose())
 
-
 	idxLSum := 0
 
-	for j := 0; j < cells*filters + filters + features*filters; j++ {
+	for j := 0; j < cells*filters+filters+features*filters; j++ {
 
-		if j%filters == 0 && j != 0{
+		if j%filters == 0 && j != 0 {
 			idxLSum++
-			idxLSum%=features
+			idxLSum %= features
 		}
 
-		c := real(LSum.M[idxLSum]) * math.Pow(learningRate / float64(cells), 0.5)
+		c := real(LSum.M[idxLSum]) * math.Pow(learningRate/float64(cells), 0.5)
 
 		values[j] = complex(c, 0)
 	}
@@ -87,9 +85,7 @@ func EncodeCellsForBackward(L *Matrix, cells, features, filters, classes int, le
 	return pt
 }
 
-
-
-func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, params ckks.Parameters) (*ckks.Plaintext){
+func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, params ckks.Parameters) *ckks.Plaintext {
 
 	encoder := ckks.NewEncoder(params)
 
@@ -98,7 +94,7 @@ func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, p
 	for i := 0; i < classes; i++ {
 		c := Y.M[i]
 		for j := 0; j < filters; j++ {
-			values[i*filters + j] = c
+			values[i*filters+j] = c
 		}
 	}
 
@@ -106,8 +102,8 @@ func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, p
 
 	for i := 0; i < classes; i++ {
 		c := Y.M[i]
-		for j := 0; j <  (cells * filters + filters + features*filters); j++ {
-			values[idx + i*(cells * filters + filters + features*filters) + j] = c
+		for j := 0; j < (cells*filters + filters + features*filters); j++ {
+			values[idx+i*(cells*filters+filters+features*filters)+j] = c
 		}
 	}
 
@@ -117,10 +113,7 @@ func EncodeLabelsForBackward(Y *Matrix, cells, features, filters, classes int, p
 	return pt
 }
 
-
-
-
-func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes int, params ckks.Parameters) (*ckks.Plaintext){
+func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes int, params ckks.Parameters) *ckks.Plaintext {
 
 	convolutionMatrixSize := ConvolutionMatrixSize(Y.Rows, features, filters)
 
@@ -128,14 +121,12 @@ func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes
 
 	values := make([]complex128, params.Slots())
 
-	
 	for i := 0; i < len(Y.M); i++ {
 		c := Y.M[i]
 		for j := 0; j < filters; j++ {
-			values[i*filters + j] = c
+			values[i*filters+j] = c
 		}
 	}
-	
 
 	idx := Y.Rows * classes * filters
 
@@ -156,13 +147,13 @@ func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes
 
 	for i := 0; i < classes; i++ {
 		pos := 0
-		for j := 0; j <  convolutionMatrixSize; j++ {
+		for j := 0; j < convolutionMatrixSize; j++ {
 			c := Y.M[((pos*classes)%len(Y.M))+i]
 
-			if (j+1)%filters == 0{
+			if (j+1)%filters == 0 {
 				pos++
 			}
-			values[idx + i*convolutionMatrixSize + j] = c
+			values[idx+i*convolutionMatrixSize+j] = c
 		}
 	}
 
@@ -174,7 +165,7 @@ func EncodeLabelsForBackwardWithPrepooling(Y *Matrix, features, filters, classes
 	return pt
 }
 
-func EncodeCellsForBackwardWithPrepooling(level int, L *Matrix, batchSize, features, filters, classes int, learningRate float64, params ckks.Parameters) (*ckks.Plaintext){
+func EncodeCellsForBackwardWithPrepooling(level int, L *Matrix, batchSize, features, filters, classes int, learningRate float64, params ckks.Parameters) *ckks.Plaintext {
 
 	convolutionMatrixSize := ConvolutionMatrixSize(batchSize, features, filters)
 
@@ -186,9 +177,9 @@ func EncodeCellsForBackwardWithPrepooling(level int, L *Matrix, batchSize, featu
 
 	for j := 0; j < convolutionMatrixSize; j++ {
 
-		if j%filters == 0 && j != 0{
+		if j%filters == 0 && j != 0 {
 			idxLSum++
-			idxLSum%=features
+			idxLSum %= features
 		}
 
 		c := real(L.M[idxLSum]) * learningRate
@@ -201,5 +192,3 @@ func EncodeCellsForBackwardWithPrepooling(level int, L *Matrix, batchSize, featu
 
 	return pt
 }
-
-

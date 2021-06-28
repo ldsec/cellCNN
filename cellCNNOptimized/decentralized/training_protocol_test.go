@@ -2,8 +2,8 @@ package decentralized_test
 
 import (
 	"fmt"
-	"github.com/ldsec/cellCNN/cellCNN_optimized"
-	"github.com/ldsec/cellCNN/cellCNN_optimized/decentralized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized/decentralized"
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"

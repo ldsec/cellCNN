@@ -12,8 +12,8 @@ import (
 type Matrix struct {
 	Rows int
 	Cols int
-	Real       bool
-	M          []complex128
+	Real bool
+	M    []complex128
 }
 
 // NewMatrix creates a new matrix.
@@ -26,7 +26,7 @@ func NewMatrix(rows, cols int) (m *Matrix) {
 	return
 }
 
-func (m *Matrix) Copy() (mCopy *Matrix){
+func (m *Matrix) Copy() (mCopy *Matrix) {
 	mCopy = new(Matrix)
 	mCopy.M = make([]complex128, len(m.M))
 	copy(mCopy.M, m.M)
@@ -36,15 +36,15 @@ func (m *Matrix) Copy() (mCopy *Matrix){
 	return
 }
 
-func (m *Matrix) Set(rows, cols int, v []complex128){
+func (m *Matrix) Set(rows, cols int, v []complex128) {
 	m.M = make([]complex128, len(v))
 	copy(m.M, v)
 	m.Rows = rows
 	m.Cols = cols
 }
 
-func (m * Matrix) SetRow(idx int, row []complex128){
-	for i := range row{
+func (m *Matrix) SetRow(idx int, row []complex128) {
+	for i := range row {
 		m.M[i+idx*m.Cols] = row[i]
 	}
 }
@@ -68,19 +68,19 @@ func (m *Matrix) Add(A, B *Matrix) {
 		m.M[i] = A.M[i] + B.M[i]
 	}
 
-	if m != A && m != B{
+	if m != A && m != B {
 		m.Real = A.Real && B.Real
 		m.Rows = A.Rows
 		m.Cols = A.Cols
-	}else if m != B{
+	} else if m != B {
 		m.Real = A.Real && B.Real
 		m.Rows = B.Rows
 		m.Cols = B.Cols
 	}
 }
 
-func (m *Matrix) Abs(){
-	for i := range m.M{
+func (m *Matrix) Abs() {
+	for i := range m.M {
 		m.M[i] = complex(math.Abs(real(m.M[i])), math.Abs(imag(m.M[i])))
 	}
 }
@@ -103,18 +103,18 @@ func (m *Matrix) Sub(A, B *Matrix) {
 		m.M[i] = A.M[i] - B.M[i]
 	}
 
-	if m != A && m != B{
+	if m != A && m != B {
 		m.Real = A.Real && B.Real
 		m.Rows = A.Rows
 		m.Cols = A.Cols
-	}else if m != B{
+	} else if m != B {
 		m.Real = A.Real && B.Real
 		m.Rows = B.Rows
 		m.Cols = B.Cols
 	}
 }
 
-func (m *Matrix) SumColumns(A *Matrix){
+func (m *Matrix) SumColumns(A *Matrix) {
 
 	rowsA := A.Rows
 	colsA := A.Cols
@@ -123,7 +123,7 @@ func (m *Matrix) SumColumns(A *Matrix){
 
 	for i := 0; i < colsA; i++ {
 		for j := 0; j < rowsA; j++ {
-			acc[i] += A.M[i + j*colsA]
+			acc[i] += A.M[i+j*colsA]
 		}
 	}
 
@@ -133,7 +133,7 @@ func (m *Matrix) SumColumns(A *Matrix){
 	m.Real = A.Real
 }
 
-func (m *Matrix) SumRows(A *Matrix){
+func (m *Matrix) SumRows(A *Matrix) {
 
 	rowsA := A.Rows
 	colsA := A.Cols
@@ -142,7 +142,7 @@ func (m *Matrix) SumRows(A *Matrix){
 
 	for i := 0; i < rowsA; i++ {
 		for j := 0; j < colsA; j++ {
-			acc[i] += A.M[i*rowsA + j]
+			acc[i] += A.M[i*rowsA+j]
 		}
 	}
 
@@ -152,7 +152,7 @@ func (m *Matrix) SumRows(A *Matrix){
 	m.Real = A.Real
 }
 
-func (m *Matrix) Dot(A, B *Matrix){
+func (m *Matrix) Dot(A, B *Matrix) {
 	if A.Rows != B.Rows || A.Cols != B.Cols {
 		panic("matrices are incompatible for dot product")
 	}
@@ -162,7 +162,7 @@ func (m *Matrix) Dot(A, B *Matrix){
 
 	acc := make([]complex128, rowsA*colsA)
 
-	for i := range A.M{
+	for i := range A.M {
 		acc[i] = A.M[i] * B.M[i]
 	}
 
@@ -172,9 +172,9 @@ func (m *Matrix) Dot(A, B *Matrix){
 	m.Real = A.Real && B.Real
 }
 
-func (m *Matrix) Func(A *Matrix, f func(x complex128)complex128){
+func (m *Matrix) Func(A *Matrix, f func(x complex128) complex128) {
 	acc := make([]complex128, len(A.M))
-	for i := range A.M{
+	for i := range A.M {
 		acc[i] = f(A.M[i])
 	}
 	m.M = acc
@@ -183,10 +183,10 @@ func (m *Matrix) Func(A *Matrix, f func(x complex128)complex128){
 	m.Real = A.Real
 }
 
-func (m *Matrix) MultConst(A *Matrix,c complex128){
+func (m *Matrix) MultConst(A *Matrix, c complex128) {
 	acc := make([]complex128, len(A.M))
-	for i := range A.M{
-		acc[i] = c*A.M[i]
+	for i := range A.M {
+		acc[i] = c * A.M[i]
 	}
 	m.M = acc
 	m.Rows = A.Rows
@@ -375,7 +375,6 @@ func (m *Matrix) Print() {
 	}
 }
 
-
 type matrixByte struct {
 	Rows int
 	Cols int
@@ -395,10 +394,9 @@ func (m *Matrix) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-
 // UnmarshalBinary generates a matrix struct from an array of bytes
 func (m *Matrix) UnmarshalBinary(data []byte) error {
-	
+
 	mByte := matrixByte{}
 
 	b := bytes.NewReader(data)

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
-	 "github.com/ldsec/cellCNN/cellCNN_optimized"
+	"github.com/ldsec/cellCNN/cellCNN_optimized"
 	"github.com/ldsec/cellCNN/cellCNN_optimized/decentralized"
 	"math/rand"
 	"time"
@@ -27,20 +27,20 @@ type CellCNNSimulation struct {
 	TrainEncrypted bool
 	Deterministic  bool
 
-	Path            string
-	PartyDataSize   int
-	LocalSamples    int
+	Path          string
+	PartyDataSize int
+	LocalSamples  int
 
-	Epoch 		int
-	Samples 	int
-	Cells 		int
-	Features 	int
-	Filters 	int
-	Classes 	int
+	Epoch    int
+	Samples  int
+	Cells    int
+	Features int
+	Filters  int
+	Classes  int
 
 	PathCryptoFiles string
-	CkksParams   	*ckks.Parameters
-	CryptoParams 	*cellCNN.CryptoParams
+	CkksParams      *ckks.Parameters
+	CryptoParams    *cellCNN.CryptoParams
 }
 
 // NewCellCNNSimulation is the simulation instance constructor
@@ -50,7 +50,7 @@ func NewCellCNNSimulation(config string) (onet.Simulation, error) {
 		return nil, err
 	}
 
-	if !sim.Deterministic{
+	if !sim.Deterministic {
 		rand.Seed(time.Now().Unix())
 	}
 	aux := cellCNN.GenParams()

@@ -1,7 +1,7 @@
 package decentralized
 
 import (
-	"github.com/ldsec/cellCNN/cellCNN_optimized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized"
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 

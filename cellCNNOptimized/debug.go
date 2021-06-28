@@ -1,9 +1,9 @@
 package cellCNN
 
-import(
-	"github.com/ldsec/lattigo/v2/rlwe"
-	"github.com/ldsec/lattigo/v2/ckks"
+import (
 	"fmt"
+	"github.com/ldsec/lattigo/v2/ckks"
+	"github.com/ldsec/lattigo/v2/rlwe"
 	"math"
 )
 
@@ -11,7 +11,7 @@ func DecryptPrint(rows, cols int, Real bool, element interface{}, params ckks.Pa
 
 	var v []complex128
 
-	switch element := element.(type){
+	switch element := element.(type) {
 	case *ckks.Ciphertext:
 		decryptor := ckks.NewDecryptor(params, sk)
 		encoder := ckks.NewEncoder(params)
@@ -30,7 +30,7 @@ func DecryptPrint(rows, cols int, Real bool, element interface{}, params ckks.Pa
 		for j := 0; j < cols; j++ {
 			if Real {
 				fmt.Printf("%11.8f, ", real(v[i*cols+j]))
-			}else{
+			} else {
 				fmt.Printf("%11.8f, ", v[i*cols+j])
 			}
 		}
@@ -62,7 +62,7 @@ func DecryptPrintMatrix(M *Matrix, Real bool, ciphertext *ckks.Ciphertext, param
 			if Real {
 				fmt.Printf("%11.8f, ", real(v[i*cols+j]))
 				sum += math.Abs(real(M.M[i*cols+j]) - real(v[i*cols+j]))
-			}else{
+			} else {
 				fmt.Printf("%11.8f, ", v[i*cols+j])
 			}
 		}
@@ -70,6 +70,6 @@ func DecryptPrintMatrix(M *Matrix, Real bool, ciphertext *ckks.Ciphertext, param
 	}
 	fmt.Printf("]\n")
 
-	fmt.Printf("Precision : %f\n", math.Log2(1/(sum / float64(rows*cols))))
+	fmt.Printf("Precision : %f\n", math.Log2(1/(sum/float64(rows*cols))))
 	fmt.Println()
 }
