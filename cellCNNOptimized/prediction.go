@@ -4,8 +4,9 @@ import (
 	"github.com/ldsec/lattigo/v2/ckks"
 )
 
+// EncryptForPrediction takes as input a batch of samples (one sample per matrix) and returns the encryption of those samples
+// formated for the forward pass into #Filters ciphertext.
 // Maximum batch size (samples) per ciphertext : Slots / (Filters * Labels)
-
 func EncryptForPrediction(XBatch []*Matrix, encoder ckks.Encoder, encryptor ckks.Encryptor, params ckks.Parameters) []*ckks.Ciphertext {
 
 	XPrePool := new(Matrix)
@@ -27,6 +28,7 @@ func EncryptForPrediction(XBatch []*Matrix, encoder ckks.Encoder, encryptor ckks
 	return ciphertexts
 }
 
+// Predict applies the forward pass on a batch of encypted samples.
 func Predict(XBatch []*ckks.Ciphertext, ctC, ctW *ckks.Ciphertext, params ckks.Parameters, eval ckks.Evaluator) (ctPredict *ckks.Ciphertext) {
 
 	// Convolution
