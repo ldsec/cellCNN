@@ -105,21 +105,21 @@ func (c *CellCNN) UpdateWithGradients(g *Gradients) {
 	c.dense.UpdateWithGradients(g.dense, c.evaluator)
 }
 
-// Marshall marshall the weights of Cell CNN.
+// GetWeightsBinary return the binary weights of Cell CNN.
 // the first n-1 are filter weights
 // the last one is dense weights
-func (c *CellCNN) Marshall() (data [][]byte) {
-	filterData := c.conv1d.Marshall()
-	denseData := c.dense.Marshall()
+func (c *CellCNN) GetWeightsBinary() (data [][]byte) {
+	filterData := c.conv1d.GetWeightsBinary()
+	denseData := c.dense.GetWeightsBinary()
 	data = append(filterData, denseData)
 	return
 }
 
-// Unmarshall will load the weights according to data
-func (c *CellCNN) Unmarshall(data [][]byte) {
+// LoadWeightsBinary will load the weights according to data
+func (c *CellCNN) LoadWeightsBinary(data [][]byte) {
 	nfilters := len(data) - 1
-	c.conv1d.Unmarshall(data[:nfilters])
-	c.dense.Unmarshall(data[nfilters])
+	c.conv1d.LoadWeightsBinary(data[:nfilters])
+	c.dense.LoadWeightsBinary(data[nfilters])
 }
 
 // GetGradient return the the graident
@@ -165,7 +165,7 @@ func (c *CellCNN) UpdateMomentum(grad *Gradients) {
 }
 
 // InitWeights init CellCNN and return the init plaintext weights (conv, dense) as mat.Dense.
-// this is useful to initialize a cellCNN_clear with same weights.
+// this is useful to initialize a cellCNNClear with same weights.
 func (c *CellCNN) InitWeights(wConv1D []*ckks.Ciphertext, wDense *ckks.Ciphertext, pConv, pDense []complex128) (*mat.Dense, *mat.Dense) {
 	nfilters := c.cnnSettings.Nfilters
 	nmakers := c.cnnSettings.Nmakers

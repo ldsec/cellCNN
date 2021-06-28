@@ -1,0 +1,15 @@
+Simulation = "CellCNN"
+Servers = 4
+Bf = 2
+Suite = "Ed25519"
+Rounds = 1
+RunWait = "24h"
+Bandwidth = 1000
+Debug = false
+TrainEncrypted = true
+Deterministic = false
+Path = "../../normalized/"
+PathCryptoFiles = "secrets/"
+
+Hosts, Epochs, PartyDataSize, Samples, Cells, Features, Filters, Classes
+3, 15, 2000, 2000, 200, 38, 6, 2

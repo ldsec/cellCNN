@@ -103,7 +103,7 @@ func CiphertextsToBytes(ct []*ckks.Ciphertext) [][]byte {
 	for i := 0; i < len(ct); i++ {
 		data[i], err = ct[i].MarshalBinary()
 		if err != nil {
-			panic("fail to marshall ciphertext")
+			panic("fail to transform a ciphertext")
 		}
 	}
 	return data

@@ -7,8 +7,9 @@ import (
 )
 
 // BatchProcessing conduct batch forward and backward.
-// you can set isMomentum=false to compute only the scaled gradients in decentralized version
-// return the predictions as a slice of ciphertext
+// you can set isMomentum=false to compute only the scaled gradients in decentralized version.
+// the momentum will only be remembered and computed in the aggregate server.
+// return the predictions as a slice of ciphertext.
 func (c *CellCNN) BatchProcessing(inputBatch []*ckks.Plaintext, labels []float64, isMomentum bool) ([]*ckks.Ciphertext, float64, float64) {
 
 	preds := make([]*ckks.Ciphertext, len(inputBatch))

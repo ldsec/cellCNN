@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	cl "github.com/ldsec/cellCNN/cellCNN_clear/layers"
+	cl "github.com/ldsec/cellCNN/cellCNNClear/layers"
 	"github.com/ldsec/cellCNN/cellcnnPoseidon/utils"
 	"github.com/ldsec/lattigo/v2/ckks"
 	"github.com/ldsec/lattigo/v2/rlwe"
@@ -117,12 +117,12 @@ func TestWithPlainNetBwBatch(t *testing.T) {
 
 		if model.FisrtMomentum() {
 			// if first momentum, btp scaled_g to level 9 and kept as vt
-			grad.Bootstrapping(encoder, params, sk)
+			grad.DummyBootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		} else {
 			// else, compute scaled_m at level 8
 			grad := model.ComputeScaledGradientWithMomentum(grad, model.cnnSettings, params, model.evaluator, encoder, momentum)
-			grad.Bootstrapping(encoder, params, sk)
+			grad.DummyBootstrapping(encoder, params, sk)
 			model.UpdateMomentum(grad)
 		}
 

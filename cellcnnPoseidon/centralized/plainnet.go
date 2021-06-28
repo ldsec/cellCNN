@@ -1,11 +1,11 @@
 package centralized
 
 import (
-	"github.com/ldsec/cellCNN/cellCNN_clear/layers"
+	"github.com/ldsec/cellCNN/cellCNNClear/layers"
 	"gonum.org/v1/gonum/mat"
 )
 
-// PlainNet is a holder of cellCNN_clear
+// PlainNet is a holder of cellCNNClear
 type PlainNet struct {
 	ncells   int
 	nmakers  int
