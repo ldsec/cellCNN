@@ -6,7 +6,6 @@ import (
 
 // Maximum batch size (samples) per ciphertext : Slots / (Filters * Labels)
 
-
 func EncryptForPrediction(XBatch []*Matrix, encoder ckks.Encoder, encryptor ckks.Encryptor, params ckks.Parameters) []*ckks.Ciphertext {
 
 	XPrePool := new(Matrix)
