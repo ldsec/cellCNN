@@ -1,11 +1,10 @@
 Simulation = "CellCNN"
-Servers = 12
+Servers = 10
 Bf = 2
 Suite = "Ed25519"
 Rounds = 1
 RunWait = "24h"
 Bandwidth = 1000
-Debug = false
 TrainEncrypted = true
 Deterministic = false
 Fake = true
@@ -13,4 +12,6 @@ Path = "../../normalized/"
 PathCryptoFiles = "secrets/"
 
 Hosts, Epochs, PartyDataSize, Samples, Cells, Features, Filters, Classes, MaxIterations, NodeBatchSize
-3, 1, 500, 1500, 200, 38, 8, 2, 5, 100
+#10, 1, 100, 1000, 200, 38, 8, 2, 1, 1
+10, 1, 100, 1000, 200, 38, 16, 2, 1, 1
+#10, 1, 100, 1000, 200, 38, 1, 2, 1, 1

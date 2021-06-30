@@ -22,11 +22,11 @@ func TestRegEncryptedTraining(t *testing.T) {
 
 	t.Run("CellCNN", genTest(
 		"cellCNN",           //protoID
-		"../../normalized/", // datapath
-		3,                   // hosts
-		true,                // trainPlain
-		true,                // trainEncrypted
-		true,                // deterministic
+		"../../normalized/",   // datapath
+		3,                    // hosts
+		true,              // trainPlain
+		true,          // trainEncrypted
+		true,        	// deterministic
 		150,                 // Number of epochs
 		true,                // debug
 	))
@@ -83,11 +83,10 @@ func genTest(
 				protocol := pi.(*decentralized.TrainingProtocol)
 
 				vars := decentralized.InitCellCNNVars{
-					Path:           path,
 					TrainPlain:     trainPlain,
 					TrainEncrypted: trainEncrypted,
 					Deterministic:  deterministic,
-					Epochs:         epoch,
+					MaxIterations:  epoch,
 					LocalSamples:   localSamples,
 					Debug:          debug,
 				}

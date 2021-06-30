@@ -1,4 +1,5 @@
 .idea
+.DS_Store
 
 normalized/
 cellCNN_optimized/decentralized/secrets
@@ -8,3 +9,7 @@ build/
 deploy/
 test_data/
 server_list
+
+cellCNNOptimized/simul/simul
+cellCNNOptimized/simul/bootstrap/bootstrap
+

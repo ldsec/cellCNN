@@ -1,0 +1,11 @@
+Simulation = "CellCNNBootstrap"
+Servers = 10
+Bf = 2
+Suite = "Ed25519"
+Rounds = 1
+RunWait = "24h"
+Bandwidth = 1000
+PathCryptoFiles = "secretsN16/"
+
+Hosts
+10

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/ldsec/cellCNN/cellCNN_optimized"
-	"github.com/ldsec/cellCNN/cellCNN_optimized/decentralized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized/decentralized"
 	"math/rand"
 	"time"
 
@@ -22,25 +22,25 @@ func init() {
 type CellCNNSimulation struct {
 	onet.SimulationBFTree
 
-	Debug bool
-
 	TrainEncrypted bool
 	Deterministic  bool
 
-	Path          string
-	PartyDataSize int
-	LocalSamples  int
+	Fake 			bool
+	Path            string
+	PartyDataSize   int
+	NodeBatchSize   int
 
-	Epoch    int
-	Samples  int
-	Cells    int
-	Features int
-	Filters  int
-	Classes  int
+	Epochs 			int
+	MaxIterations 	int
+	Samples 		int
+	Cells 			int
+	Features 		int
+	Filters 		int
+	Classes 		int
 
 	PathCryptoFiles string
-	CkksParams      *ckks.Parameters
-	CryptoParams    *cellCNN.CryptoParams
+	CkksParams   	*ckks.Parameters
+	CryptoParams 	*cellCNN.CryptoParams
 }
 
 // NewCellCNNSimulation is the simulation instance constructor
@@ -50,9 +50,12 @@ func NewCellCNNSimulation(config string) (onet.Simulation, error) {
 		return nil, err
 	}
 
-	if !sim.Deterministic {
+	if !sim.Deterministic{
 		rand.Seed(time.Now().Unix())
 	}
+
+	//cellCNN.LogN = 17
+	//cellCNN.LogSlots = cellCNN.LogN-1
 	aux := cellCNN.GenParams()
 	sim.CkksParams = &aux
 
@@ -111,21 +114,39 @@ func NewCellCNNSimul(tni *onet.TreeNodeInstance, sim *CellCNNSimulation) (onet.P
 	}
 	protocol := pi.(*decentralized.TrainingProtocol)
 
+	precomputeTime := time.Now()
+
 	vars := decentralized.InitCellCNNVars{
-		Path:           sim.Path,
 		TrainPlain:     !sim.TrainEncrypted,
 		TrainEncrypted: sim.TrainEncrypted,
 		Deterministic:  sim.Deterministic,
-		Epochs:         sim.Epoch,
-		LocalSamples:   sim.LocalSamples,
-		Debug:          sim.Debug,
+		MaxIterations:  sim.MaxIterations,
+		LocalSamples:   sim.PartyDataSize,
+		Debug:          false,
 	}
 
-	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(1, sim.CkksParams, sim.PathCryptoFiles)
+	cellCNN.Classes = sim.Classes
+	cellCNN.Features = sim.Features
+	cellCNN.Filters = sim.Filters
+	cellCNN.BatchSize = sim.NodeBatchSize
+	cellCNN.Samples = sim.Samples
+	cellCNN.Cells = sim.Cells
+
+	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(1, sim.CkksParams, sim.PathCryptoFiles + tni.ServerIdentity().Address.String() + "/paramsCKKS")
 	protocol.InitVars(cryptoParamsList[0], sim.CkksParams, vars)
 
-	// 1) Load Data
-	//protocol.XTrain, protocol.YTrain, _, _ = protocol.LoadData()
+	if sim.Fake {
+		log.Lvl2("Generating fake data...")
+		protocol.XTrain, protocol.YTrain = cellCNN.GenerateFakeData(sim.Samples, sim.Cells, sim.Features)
+		log.Lvl2("Done")
+	} else {
+		log.Lvl2("Loading data...")
+		protocol.XTrain, protocol.YTrain = cellCNN.LoadTrainDataFrom(sim.Path, sim.Samples, sim.Cells, sim.Features)
+		log.Lvl2("Done")
+	}
 
+	protocol.Sync = true
+
+	protocol.Precompute += time.Since(precomputeTime)
 	return protocol, nil
 }
