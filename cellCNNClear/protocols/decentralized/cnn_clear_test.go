@@ -2,7 +2,7 @@ package decentralized
 
 import (
 	"fmt"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"

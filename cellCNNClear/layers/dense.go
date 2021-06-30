@@ -1,7 +1,7 @@
 package layers
 
 import (
-	"github.com/ldsec/cellCNN/cellCNN_clear/utils"
+	"github.com/ldsec/cellCNN/cellCNNClear/utils"
 	"gonum.org/v1/gonum/mat"
 )
 

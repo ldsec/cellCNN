@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"github.com/BurntSushi/toml"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/decentralized"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/decentralized"
 	"github.com/ldsec/unlynx/lib"
 	"github.com/pelletier/go-toml"
 	"go.dedis.ch/onet/v3"

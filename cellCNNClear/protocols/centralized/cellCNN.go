@@ -2,9 +2,9 @@ package centralized
 
 import (
 	"fmt"
-	"github.com/ldsec/cellCNN/cellCNN_clear/layers"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
-	"github.com/ldsec/cellCNN/cellCNN_clear/utils"
+	"github.com/ldsec/cellCNN/cellCNNClear/layers"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/utils"
 	"gonum.org/v1/gonum/mat"
 	"math/rand"
 	"os"

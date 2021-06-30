@@ -2,10 +2,10 @@ package decentralized
 
 import (
 	"errors"
-	"github.com/ldsec/cellCNN/cellCNN_clear/layers"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/centralized"
-	"github.com/ldsec/cellCNN/cellCNN_clear/protocols/common"
-	"github.com/ldsec/cellCNN/cellCNN_clear/utils"
+	"github.com/ldsec/cellCNN/cellCNNClear/layers"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/centralized"
+	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
+	"github.com/ldsec/cellCNN/cellCNNClear/utils"
 	libunlynx "github.com/ldsec/unlynx/lib"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
