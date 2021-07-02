@@ -17,9 +17,9 @@ func TestEvalCNN(t *testing.T) {
 		return
 	}
 
-	hosts_eval := [3]int{5, 10, 25}
-	local_iter_eval := [3]int{1, 5, 10}
-	epochs_eval := [5]int{100, 150, 200, 250, 300}
+	hosts_eval := [3]int{3}
+	local_iter_eval := [3]int{1}
+	epochs_eval := [5]int{10}
 	var f *os.File
 	var err error
 	f, err = os.Create("accuracy_eval.csv")
