@@ -475,7 +475,7 @@ func (p *TrainingProtocol) localComputation() {
 		XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
 
 		XBatch.SetRow(k, XPrePool.M)
-		YBatch.SetRow(k, []complex128{Y.M[1], Y.M[0]})
+		YBatch.SetRow(k, Y.M)
 	}
 
 	if p.TrainPlain {
