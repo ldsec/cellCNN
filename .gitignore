@@ -13,3 +13,9 @@ server_list
 cellCNNOptimized/simul/simul
 cellCNNOptimized/simul/bootstrap/bootstrap
 
+
+normalized3/X_test_all/
+
+normalized3/X_valid/
+
+normalized3/X_train/

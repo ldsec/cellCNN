@@ -80,7 +80,7 @@ func GenerateFakeData(samples, cells, features int) (X, Y []*Matrix) {
 	return X, Y
 }
 
-func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*Matrix) {
+func LoadTrainDataFrom(path string, samples, cells, features, labels int) (X, Y []*Matrix) {
 	y := String_to_float(Load_file(path+"y_train.txt", samples))
 	X = make([]*Matrix, samples)
 	Y = make([]*Matrix, samples)
@@ -89,18 +89,14 @@ func LoadTrainDataFrom(path string, samples, cells, features int) (X, Y []*Matri
 		fname = fmt.Sprintf("X_train/%d.txt", i)
 		X[i] = Convert_X_cellCNN(Load_file(path+fname, cells), cells, features)
 
-		Y[i] = NewMatrix(1, 2)
+		Y[i] = NewMatrix(1, labels)
 
-		if y[i] == 1 {
-			Y[i].M[0] = 1
-		} else {
-			Y[i].M[1] = 1
-		}
+		Y[i].M[int(real(y[i]))] = 1
 	}
 	return X, Y
 }
 
-func LoadValidDataFrom(path string, samples, cells, features int) (X, Y []*Matrix) {
+func LoadValidDataFrom(path string, samples, cells, features, labels int) (X, Y []*Matrix) {
 	y := String_to_float(Load_file(path+"y_valid.txt", samples))
 	X = make([]*Matrix, samples)
 	Y = make([]*Matrix, samples)
@@ -109,13 +105,9 @@ func LoadValidDataFrom(path string, samples, cells, features int) (X, Y []*Matri
 		fname = fmt.Sprintf("X_valid/%d.txt", i)
 		X[i] = Convert_X_cellCNN(Load_file(path+fname, cells), cells, features)
 
-		Y[i] = NewMatrix(1, 2)
+		Y[i] = NewMatrix(1, labels)
 
-		if y[i] == 1 {
-			Y[i].M[0] = 1
-		} else {
-			Y[i].M[1] = 1
-		}
+		Y[i].M[int(real(y[i]))] = 1
 	}
 	return X, Y
 }

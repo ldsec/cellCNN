@@ -27,14 +27,14 @@ func NewParty(params ckks.Parameters) (p *Party) {
 
 func main() {
 
-	hosts := 3
+	hosts := 1
 
-	trainEncrypted := true
-	deterministic := true
+	trainEncrypted := false
+	deterministic := false
 
 	fmt.Printf("Loading Data... ")
-	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
-	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 	fmt.Printf("Done\n")
 
 	var C, W *cellCNN.Matrix
@@ -119,7 +119,7 @@ func main() {
 
 	fmt.Printf("Slots Usage : %d/%d \n", slotUsage, params.Slots())
 
-	epoch := 15
+	epoch := 20
 	niter := epoch * cellCNN.Samples / cellCNN.BatchSize
 
 	fmt.Printf("#Iters : %d\n", niter)
@@ -145,7 +145,9 @@ func main() {
 				XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
 
 				XBatch.SetRow(k, XPrePool.M)
-				YBatch.SetRow(k, []complex128{Y.M[1], Y.M[0]})
+
+
+				YBatch.SetRow(k, Y.M)
 			}
 
 			P[j].ForwardPlain(XBatch)
@@ -236,11 +238,15 @@ func main() {
 
 	// Tests resuls :
 
-	encryptor := ckks.NewEncryptorFromSk(params, masterSk)
-	decryptor := ckks.NewDecryptor(params, masterSk)
+	var encryptor ckks.Encryptor
+	var decryptor ckks.Decryptor
+	if trainEncrypted{
+		encryptor = ckks.NewEncryptorFromSk(params, masterSk)
+		decryptor = ckks.NewDecryptor(params, masterSk)
+	}
 
 	r := 0
-	for i := 0; i < 2000/cellCNN.BatchSize; i++ {
+	for i := 0; i < cellCNN.Samples/cellCNN.BatchSize; i++ {
 
 		XPrePool := new(cellCNN.Matrix)
 		XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)
@@ -248,7 +254,7 @@ func main() {
 
 		for j := 0; j < cellCNN.BatchSize; j++ {
 
-			randi := rand.Intn(2000)
+			randi := rand.Intn(cellCNN.Samples)
 
 			X := XValid[randi]
 			Y := YValid[randi]
@@ -257,7 +263,7 @@ func main() {
 			XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
 
 			XBatch.SetRow(j, XPrePool.M)
-			YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
+			YBatch.SetRow(j, Y.M)
 		}
 
 		v := P[0].PredictPlain(XBatch)
@@ -290,20 +296,25 @@ func main() {
 			fmt.Println(precisionStats.String())
 		}
 
-		var y int
 		for i := 0; i < cellCNN.BatchSize; i++ {
 
-			if real(v.M[i*2]) > real(v.M[i*2+1]) {
-				y = 1
-			} else {
-				y = 0
+			idx := 0
+			max := 0.0
+			for j := 0; j < cellCNN.Classes; j++{
+				c := real(v.M[i*cellCNN.Classes+j])
+				if c > max{
+					idx = j
+					max = c
+				}
 			}
 
-			if y != int(real(YBatch.M[i*2])) {
+			fmt.Println(i, v.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes], YBatch.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes])
+
+			if int(real(YBatch.M[i*cellCNN.Classes+idx])) != 1{
 				r++
 			}
 		}
 	}
 
-	fmt.Printf("error : %v%s", 100.0*float64(r)/float64(2000), "%")
+	fmt.Printf("error : %v%s", 100.0*float64(r)/float64(cellCNN.Samples), "%")
 }

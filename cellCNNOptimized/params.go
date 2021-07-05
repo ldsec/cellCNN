@@ -6,13 +6,16 @@ import (
 	"math"
 )
 
+
+var ThreadsCount = 4
+
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 200
+var BatchSize = 25
 
 // number of samples
 // MUST BE AN EVEN NUMBER
-var Samples = 2000
+var Samples = 1000
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER
@@ -20,14 +23,14 @@ var Cells = 200
 
 // number of features
 // MUST BE AN EVEN NUMBER
-var Features = 38
+var Features = 16
 
 // number of filters
 // MUST BE AN EVEN NUMBER
-var Filters = 6
+var Filters = 8
 
 // number of classes
-var Classes = 2
+var Classes = 3
 
 // learning rate
 var LearningRate = 0.1
