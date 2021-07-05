@@ -30,7 +30,7 @@ func main() {
 	hosts := 1
 
 	trainEncrypted := false
-	deterministic := false
+	deterministic := true
 
 	fmt.Printf("Loading Data... ")
 	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)

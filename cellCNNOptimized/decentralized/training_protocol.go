@@ -361,7 +361,7 @@ func (p *TrainingProtocol) Dispatch() error {
 					XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
 
 					XBatch.SetRow(j, XPrePool.M)
-					YBatch.SetRow(j, []complex128{Y.M[1], Y.M[0]})
+					YBatch.SetRow(j, Y.M)
 				}
 
 				v := p.CNNProtocol.PredictPlain(XBatch)
@@ -375,16 +375,21 @@ func (p *TrainingProtocol) Dispatch() error {
 					fmt.Println(precisionStats.String())
 				}
 
-				var y int
 				for i := 0; i < cellCNN.BatchSize; i++ {
 
-					if real(v.M[i*2]) > real(v.M[i*2+1]) {
-						y = 1
-					} else {
-						y = 0
+					idx := 0
+					max := 0.0
+					for j := 0; j < cellCNN.Classes; j++{
+						c := real(v.M[i*cellCNN.Classes+j])
+						if c > max{
+							idx = j
+							max = c
+						}
 					}
 
-					if y != int(real(YBatch.M[i*2])) {
+					fmt.Println(i, v.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes], YBatch.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes])
+
+					if int(real(YBatch.M[i*cellCNN.Classes+idx])) != 1{
 						r++
 					}
 				}
