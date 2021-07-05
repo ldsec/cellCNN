@@ -14,36 +14,41 @@ import (
 	"testing"
 )
 
-const HOSTS = 3
-const NBR_LOCAL_ITER = 1
-const NBR_EPOCHS = 10
-const DEBUG = false
-const TIME = false
-var dataFolder = "../../cellCNNClear/data/cellCNN/splitNK/"
-
 
 func TestCnnSplit(t *testing.T) {
 	log.SetDebugVisible(2)
 
-	rand.Seed(0)
-
-	local := onet.NewLocalTest(Suite)
-	servers, _, tree := local.GenTree(HOSTS, true)
-	defer local.CloseAll()
-
-	params := cellCNN.GenParams()
-	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(HOSTS, &params, PathCryptoFiles)
-	require.NotNil(t, cryptoParamsList)
+	// training parameters
+	hosts := 3
+	nbr_local_iter := 1
+	epochs := 10
+	debug := false
+	time := false
+	dataFolder := "../../cellCNNClear/data/cellCNN/splitNK/"
 
 	// cellCNN parameters
 	cellCNN.Cells = 200
 	cellCNN.Features = 37
 	cellCNN.Samples = 1000
+	nSamplesDist := cellCNN.Samples / hosts
 	cellCNN.Classes = 2
 	cellCNN.Filters = 8
 	cellCNN.BatchSize = 100
 	cellCNN.LearningRate = 0.001
 	cellCNN.Momentum = 0.9
+
+
+	rand.Seed(0)
+
+	local := onet.NewLocalTest(Suite)
+	servers, _, tree := local.GenTree(hosts, true)
+	defer local.CloseAll()
+
+	params := cellCNN.GenParams()
+	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PathCryptoFiles)
+	require.NotNil(t, cryptoParamsList)
+
+
 
 	for _, s := range servers {
 		_, err := s.ProtocolRegister("CnnEncryptedTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -55,7 +60,7 @@ func TestCnnSplit(t *testing.T) {
 
 			// ##STEP 1: Split data
 			var maxIterations int
-			protocol.XTrain, protocol.YTrain, maxIterations = LoadSplitData(tni.Index(), NBR_EPOCHS, NBR_LOCAL_ITER, common.BATCH_SIZE, protocol.IsRoot())
+			protocol.XTrain, protocol.YTrain, maxIterations = LoadSplitData(dataFolder, tni.Index(), nSamplesDist, epochs, nbr_local_iter, cellCNN.BatchSize, protocol.IsRoot())
 
 			// ##STEP 2: InitRoot protocol training variables
 			vars := decentralized.InitCellCNNVars{
@@ -63,24 +68,22 @@ func TestCnnSplit(t *testing.T) {
 				TrainEncrypted: false,
 				Deterministic:  true,
 				MaxIterations:  maxIterations,
-				LocalSamples:   cellCNN.Samples / HOSTS,
-				Debug:          DEBUG,
+				LocalSamples:   nSamplesDist,
+				Debug:          debug,
 			}
 			protocol.InitVars(cryptoParamsList[tni.Index()], &params, vars)
-
-			protocol.Debug = DEBUG
 			return protocol, nil
 		})
 		require.NoError(t, err)
 	}
 
 	loader, err := common.GetValidLoader()
-	err, _ = RunCnnEncTest(local, tree, TIME, "CnnEncryptedTest", 1, loader)
+	err, _ = RunCnnEncTest(local, tree, time, "CnnEncryptedTest", 1, loader)
 	require.NoError(t, err)
 }
 
-func LoadSplitData(index, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoot bool) ([]*cellCNN.Matrix, []*cellCNN.Matrix, int) {
-	dataRecordsAtEachNode := common.NSAMPLES_DIST
+func LoadSplitData(dataFolder string, index, nSamplesDist, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoot bool) ([]*cellCNN.Matrix, []*cellCNN.Matrix, int) {
+	dataRecordsAtEachNode := nSamplesDist
 
 	maxIterations := 0
 	maxIterations = int(math.Ceil(float64(nbrDatasetUsed*dataRecordsAtEachNode) / float64(nbrLocalIter*nodeBatchSize)))
@@ -94,7 +97,7 @@ func LoadSplitData(index, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoo
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
 
-	X, Y := cellCNN.LoadTrainDataFrom(dataFolder + fmt.Sprintf("host%d/", index), common.NSAMPLES_DIST, cellCNN.Cells, cellCNN.Features)
+	X, Y := cellCNN.LoadTrainDataFrom(dataFolder + fmt.Sprintf("host%d/", index), nSamplesDist, cellCNN.Cells, cellCNN.Features)
 
 	return X, Y, maxIterations
 }

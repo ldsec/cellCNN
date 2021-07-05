@@ -4,7 +4,6 @@ import (
 	"github.com/ldsec/cellCNN/cellCNNOptimized"
 	"github.com/ldsec/cellCNN/cellCNNOptimized/decentralized"
 	"go.dedis.ch/onet/v3/log"
-	"math/rand"
 	"testing"
 
 	"go.dedis.ch/kyber/v3/suites"
@@ -18,23 +17,18 @@ import (
 func TestBootstrapProtocol(t *testing.T) {
 	log.SetDebugVisible(2)
 
-	HOSTS := 3
+	hosts := 3
 
 	params := cellCNN.GenParams()
 
-	cryptoParamsList := cellCNN.NewCryptoParamsForNetwork(&params, HOSTS)
+	cryptoParamsList := cellCNN.NewCryptoParamsForNetwork(&params, hosts)
 
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
 
-	// All servers are using a PRNG keyed with the same seed
-	seed := make([]byte, 64)
-	_, err := rand.Read(seed)
-	require.NoError(t, err)
-
-	servers, _, tree := local.GenTree(HOSTS, true)
+	servers, _, tree := local.GenTree(hosts, true)
 	for sIdx, s := range servers {
-		_, err := s.ProtocolRegister("BootstrapTest", decentralized.NewBootstrapProtocolFunction(cryptoParamsList[sIdx], seed))
+		_, err := s.ProtocolRegister("BootstrapTest", decentralized.NewBootstrapProtocolFunction(cryptoParamsList[sIdx]))
 		require.NoError(t, err)
 	}
 

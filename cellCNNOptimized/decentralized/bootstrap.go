@@ -82,7 +82,7 @@ type BootstrapProtocol struct {
 }
 
 // NewBootstrapProtocol instantiates and initializes a new bootstrap protocol instance.
-func NewBootstrapProtocol(n *onet.TreeNodeInstance, cryptoParams *cellCNN.CryptoParams, seed []byte) (*BootstrapProtocol, error) {
+func NewBootstrapProtocol(n *onet.TreeNodeInstance, cryptoParams *cellCNN.CryptoParams) (*BootstrapProtocol, error) {
 	p := &BootstrapProtocol{
 		TreeNodeInstance: n,
 		FeedbackChannel:  make(chan *ckks.Ciphertext, 1),
@@ -93,7 +93,7 @@ func NewBootstrapProtocol(n *onet.TreeNodeInstance, cryptoParams *cellCNN.Crypto
 		return nil, fmt.Errorf("couldn't register channel: %v", err)
 	}
 
-	if err := p.init(cryptoParams, seed); err != nil {
+	if err := p.init(cryptoParams); err != nil {
 		return nil, fmt.Errorf("init protocol: %v", err)
 	}
 
@@ -102,14 +102,14 @@ func NewBootstrapProtocol(n *onet.TreeNodeInstance, cryptoParams *cellCNN.Crypto
 
 // NewBootstrapProtocolFunction returns a function generating a new bootstrap protocol instance properly initialized.
 // It is intended for use with onet.
-func NewBootstrapProtocolFunction(cryptoParams *cellCNN.CryptoParams, seed []byte) func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+func NewBootstrapProtocolFunction(cryptoParams *cellCNN.CryptoParams) func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	return func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		return NewBootstrapProtocol(tni, cryptoParams, seed)
+		return NewBootstrapProtocol(tni, cryptoParams)
 	}
 }
 
 // init setups the protocol, think of it as a constructor but working with Onet.
-func (p *BootstrapProtocol) init(cp *cellCNN.CryptoParams, randomBytes []byte) error {
+func (p *BootstrapProtocol) init(cp *cellCNN.CryptoParams) error {
 	if cp == nil {
 		return errors.New("CryptoParams are nil")
 	}
@@ -124,18 +124,6 @@ func (p *BootstrapProtocol) init(cp *cellCNN.CryptoParams, randomBytes []byte) e
 	if p.IsRoot() {
 		p.dataToBootstrap = ckks.NewCiphertext(*p.cryptoParams.Params, 1, p.cryptoParams.Params.MaxLevel(), p.cryptoParams.Params.Scale())
 	}
-
-	/*var err error
-	prng, err := utils.NewKeyedPRNG(randomBytes)
-	if err != nil {
-		return fmt.Errorf("creating a new PRNG: %v", err)
-	}
-
-	ringQP, err := ring.NewRing(p.cryptoParams.Params.N(), append(p.cryptoParams.Params.Qi(), p.cryptoParams.Params.Pi()...))
-	if err != nil {
-		return fmt.Errorf("creating new ring: %v", err)
-	}
-	p.sampler = ring.NewUniformSampler(prng, ringQP)*/
 
 	return nil
 }
@@ -155,10 +143,6 @@ func (p *BootstrapProtocol) InitRoot(ct *ckks.Ciphertext) error {
 	}
 
 	p.dataToBootstrap = ct
-
-	/*if err := p.createShares(); err != nil {
-		return fmt.Errorf("create shares: %v", err)
-	}*/
 
 	close(p.rootInited)
 
@@ -216,39 +200,17 @@ func (p *BootstrapProtocol) Dispatch() error {
 			defer wg.Done()
 			log.Lvl2("Getting a child PCKSShares")
 			<-p.BootSharesChannel
-			/*shares := <-p.BootSharesChannel
-
-			rSharesDecryptNew, rSharesRecryptNew, _ := p.convertBootSharesReceive(shares.RSharesDecryptBytes, shares.RSharesRecryptBytes)
-
-			mutex.Lock()
-			for i := range shares.RSharesDecryptBytes {
-				p.refreshProto.Aggregate(p.rSharesDecrypt[i], rSharesDecryptNew[i], p.rSharesDecrypt[i])
-				p.refreshProto.Aggregate(p.rSharesRecrypt[i], rSharesRecryptNew[i], p.rSharesRecrypt[i])
-			}
-			mutex.Unlock()*/
 		}(childIdx)
 	}
 	wg.Wait()
 
 	//check if its the root then aggregate else wait on the parent.
 	if p.IsRoot() {
-		/*for i, ct := range p.dataToBootstrap {
-			p.refreshProto.Decrypt(ct, p.rSharesDecrypt[i])
-			p.refreshProto.Recode(ct)
-			p.refreshProto.Recrypt(ct, p.listCRS[i], p.rSharesRecrypt[i])
-			p.dataToBootstrap = ct
-		}*/
 		log.Lvl2("time: ", time.Since(protocolTime))
 		p.FeedbackChannel <- p.dataToBootstrap
 	} else {
 		//send the shares to the parent...
 		log.Lvl2("Sending my PCKSShare")
-		// marshal to binary
-		/*rSharesDecryptBytes, rSharesRecryptBytes, err := p.convertBootSharesToSend()
-		if err != nil {
-			return err
-		}*/
-
 		ct := ckks.NewCiphertext(*p.cryptoParams.Params, 1, p.cryptoParams.Params.MaxLevel(), p.cryptoParams.Params.Scale())
 		ctb, err := ct.MarshalBinary()
 		if err != nil {
@@ -279,76 +241,5 @@ func (p *BootstrapProtocol) announcementPhase() error {
 		}
 	}
 
-	// unmarshal and create shares
-	/*dtb := ckks.NewCiphertext(p.cryptoParams.Params, )
-	err := dtb.UnmarshalBinary(p.cryptoParams, msg.DataToBootstrapBytes)
-	if err != nil {
-		return err
-	}
-	p.dataToBootstrap = dtb
-
-	err = p.createShares()
-	if err != nil {
-		return err
-	}*/
-
 	return nil
 }
-
-/*func (p *BootstrapProtocol) createShares() error {
-	if err := p.ensureIsInit(); err != nil {
-		return fmt.Errorf("check init'ed: %v", err)
-	}
-
-	//Parameters for refresh
-	p.refreshProto = dckks.NewRefreshProtocol(*p.cryptoParams.Params)
-
-	shareDec, shareRec := p.refreshProto.AllocateShares(p.dataToBootstrap.Level())
-	p.rSharesDecrypt = shareDec
-	p.rSharesRecrypt = shareRec
-	p.listCRS = p.sampler.ReadNew()
-	p.refreshProto.GenShares(p.cryptoParams.Sk.Value, p.dataToBootstrap.Level(), len(p.Roster().List), p.dataToBootstrap, p.cryptoParams.Params.Scale(), p.listCRS, shareDec, shareRec)
-
-	return nil
-}
-
-func (p *BootstrapProtocol) convertBootSharesToSend() ([]byte, []byte, error) {
-
-	rshareDecPoly := ring.Poly{Coeffs: (*p.rSharesDecrypt).Coeffs}
-	rSharesDecryptBytes, err := (&rshareDecPoly).MarshalBinary()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rshareRecPoly := ring.Poly{Coeffs: (*p.rSharesRecrypt).Coeffs}
-	rSharesRecryptBytes, err := (&rshareRecPoly).MarshalBinary()
-	if err != nil {
-		return nil, nil, err
-	}
-
-
-	return rSharesDecryptBytes, rSharesRecryptBytes, nil
-}
-
-func (p *BootstrapProtocol) convertBootSharesReceive(rSharesDecryptBytes []byte, rSharesRecryptBytes []byte) (dckks.RefreshShareDecrypt, dckks.RefreshShareRecrypt, error) {
-
-	tmpShareDec, tmpShareRec := p.refreshProto.AllocateShares(p.dataToBootstrap.Level())
-
-	rshareDecPoly := ring.Poly{Coeffs: (tmpShareDec).Coeffs}
-	err := (&rshareDecPoly).UnmarshalBinary(rSharesDecryptBytes)
-	if err != nil {
-		return nil, nil, err
-	}
-	tmpShareDec.Coeffs = rshareDecPoly.Coeffs
-	rSharesDecrypt := tmpShareDec
-
-	rshareRecPoly := ring.Poly{Coeffs: (tmpShareRec).Coeffs}
-	err = (&rshareRecPoly).UnmarshalBinary(rSharesRecryptBytes)
-	if err != nil {
-		return nil, nil, err
-	}
-	tmpShareRec.Coeffs = rshareRecPoly.Coeffs
-	rSharesRecrypt := tmpShareRec
-
-	return rSharesDecrypt, rSharesRecrypt, nil
-}*/
