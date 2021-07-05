@@ -28,6 +28,7 @@ func NewCNNClearTest(tni *onet.TreeNodeInstance, trainData common.CnnDataset, nb
 }
 
 func NewCnnSplitTest(tni *onet.TreeNodeInstance, nbrLocalIter, nbrEpochs int, debug Debug) (onet.ProtocolInstance, error) {
+
 	pi, err := NewCnnClearProtocol(tni)
 	if err != nil {
 		return nil, err
@@ -92,14 +93,14 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 
 	for i := uint(0); i < nbrRuns; i++ {
 		// if ran locally in one machine we only need to load the data once (the struct is shared among nodes)
-		if local && loader != nil {
-			dataset, err := loader.Load()
-			dataset.Shuffle(1)
-			common.TrainData, common.TestData, err = dataset.Partition(kFold, i)
-			if err != nil {
-				return fmt.Errorf("when partitioning data: %w", err), ""
-			}
-		}
+		//if local && loader != nil {
+		//	dataset, err := loader.Load()
+		//	dataset.Shuffle(1)
+		//	common.TrainData, common.TestData, err = dataset.Partition(kFold, i)
+		//	if err != nil {
+		//		return fmt.Errorf("when partitioning data: %w", err), ""
+		//	}
+		//}
 		var w common.WeightsVector
 		var err error
 		var rootInstance onet.ProtocolInstance

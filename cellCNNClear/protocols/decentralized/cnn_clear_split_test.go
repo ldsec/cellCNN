@@ -14,6 +14,7 @@ import (
 var Suite = edwards25519.NewBlakeSHA256Ed25519()
 
 func TestCnnSplit(t *testing.T) {
+
 	log.SetDebugVisible(2)
 
 	//common.TrainData = common.LoadCellCnnTrainData()
@@ -32,7 +33,6 @@ func TestCnnSplit(t *testing.T) {
 		_, err := s.ProtocolRegister("CnnClearTest", CnnClearTestRegister)
 		require.NoError(t, err)
 	}
-
 	loader, err := common.GetValidLoader()
 	err, _ = RunCnnClearTest(local, nil, tree, TIME, false, "CnnClearTest", 1, loader)
 	require.NoError(t, err)
