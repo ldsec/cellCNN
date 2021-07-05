@@ -19,6 +19,7 @@ const NBR_LOCAL_ITER = 1
 const NBR_EPOCHS = 10
 const DEBUG = false
 const TIME = false
+var dataFolder = "../../cellCNNClear/data/cellCNN/splitNK/"
 
 
 func TestCnnSplit(t *testing.T) {
@@ -93,8 +94,7 @@ func LoadSplitData(index, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoo
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
 
-	dataFolder := "../../cellCNNClear/data/cellCNN/splitNK/" + fmt.Sprintf("host%d/", index)
-	X, Y := cellCNN.LoadTrainDataFrom(dataFolder, common.NSAMPLES_DIST, cellCNN.Cells, cellCNN.Features)
+	X, Y := cellCNN.LoadTrainDataFrom(dataFolder + fmt.Sprintf("host%d/", index), common.NSAMPLES_DIST, cellCNN.Cells, cellCNN.Features)
 
 	return X, Y, maxIterations
 }
