@@ -7,6 +7,7 @@ import (
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"math/rand"
 	//	"os"
 	"testing"
 )
@@ -16,6 +17,8 @@ var Suite = edwards25519.NewBlakeSHA256Ed25519()
 func TestCnnSplit(t *testing.T) {
 
 	log.SetDebugVisible(2)
+
+	rand.Seed(0)
 
 	//common.TrainData = common.LoadCellCnnTrainData()
 
@@ -34,6 +37,7 @@ func TestCnnSplit(t *testing.T) {
 		require.NoError(t, err)
 	}
 	loader, err := common.GetValidLoader()
+
 	err, _ = RunCnnClearTest(local, nil, tree, TIME, false, "CnnClearTest", 1, loader)
 	require.NoError(t, err)
 }

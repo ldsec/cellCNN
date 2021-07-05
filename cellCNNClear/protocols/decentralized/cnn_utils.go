@@ -120,6 +120,7 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 		}
 
 		w = runCnnClear(rootInstance, w)
+
 		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
 
 		testAllData := common.LoadCellCnnTestAll()

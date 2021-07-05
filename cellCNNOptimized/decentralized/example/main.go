@@ -62,7 +62,7 @@ func main() {
 
 	P := make([]*Party, hosts)
 
-	samplesPerHost := (cellCNN.Samples / hosts)
+	samplesPerHost := cellCNN.Samples / hosts
 
 	for i := range P {
 

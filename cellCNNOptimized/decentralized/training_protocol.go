@@ -77,7 +77,7 @@ type TrainingProtocol struct {
 	CNNProtocol *cellCNN.CellCNNProtocol
 
 	// Feedback Channels
-	FeedbackChannel chan struct{}
+	FeedbackChannel chan []*cellCNN.Matrix
 
 	// Other Channels
 	AnnouncementChannel chan newIterationAnnouncementStruct
@@ -116,7 +116,7 @@ type TrainingProtocol struct {
 func NewTrainingProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	pap := &TrainingProtocol{
 		TreeNodeInstance: n,
-		FeedbackChannel:  make(chan struct{}, 1),
+		FeedbackChannel:  make(chan []*cellCNN.Matrix, 1),
 	}
 
 	err := pap.RegisterChannels(&pap.SyncChannel, &pap.AnnouncementChannel, &pap.ChildDataChannel)
@@ -192,7 +192,7 @@ func (p *TrainingProtocol) Dispatch() error {
 		p.Sync = false
 	}
 
-	totalTime := time.Now()
+	//totalTime := time.Now()
 
 	defer p.Done()
 
@@ -391,11 +391,26 @@ func (p *TrainingProtocol) Dispatch() error {
 			}
 			log.Lvl2("error :", 100.0*float64(r)/float64(2000), "%")
 		}
-		p.FeedbackChannel<-struct{}{}
+
+		if p.TrainEncrypted {
+			decryptor := ckks.NewDecryptor(*p.CryptoParams.Params, p.CryptoParams.AggregateSk)
+			y := p.CNNProtocol.Encoder.Decode(decryptor.DecryptNew(p.CNNProtocol.CtC), p.CryptoParams.Params.LogSlots())
+			C := cellCNN.NewMatrix(cellCNN.Features, cellCNN.Filters)
+			C.M = y[:cellCNN.Filters*cellCNN.Features]
+
+			y = p.CNNProtocol.Encoder.Decode(decryptor.DecryptNew(p.CNNProtocol.CtW), p.CryptoParams.Params.LogSlots())
+			W := cellCNN.NewMatrix(cellCNN.Features, cellCNN.Filters)
+			W.M = y[:cellCNN.Filters*cellCNN.Features]
+
+			p.FeedbackChannel <- []*cellCNN.Matrix{C, W}
+		} else {
+			p.FeedbackChannel <- []*cellCNN.Matrix{p.CNNProtocol.C, p.CNNProtocol.W}
+		}
+
 	}
 
 	// ### TIMERS
-	log.Lvl2("TIMERS:")
+	/*log.Lvl2("TIMERS:")
 	log.Lvl2("Precompute:", p.Precompute)
 	log.Lvl2("LocalIter:", p.LocalIter)
 	log.Lvl2("FeedForward:", p.FeedForward)
@@ -403,7 +418,7 @@ func (p *TrainingProtocol) Dispatch() error {
 	log.Lvl2("Update Weights:", p.UpdateWeights)
 	log.Lvl2("D. Bootstrap:", p.DBootstrap)
 	log.Lvl2("Combine", p.Combine)
-	log.Lvl2("Total Time:", time.Since(totalTime))
+	log.Lvl2("Total Time:", time.Since(totalTime))*/
 	// ------------
 
 	return nil
@@ -452,10 +467,10 @@ func (p *TrainingProtocol) localComputation() {
 	// Pre-pools the cells
 	for k := 0; k < cellCNN.BatchSize; k++ {
 
-		randi := p.PrngInt.RandInt()
+		//randi := rand.Intn(len(p.XTrain))
 
-		X := p.XTrain[randi]
-		Y := p.YTrain[randi]
+		X := p.XTrain[k]
+		Y := p.YTrain[k]
 
 		XPrePool.SumColumns(X)
 		XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
@@ -463,6 +478,8 @@ func (p *TrainingProtocol) localComputation() {
 		XBatch.SetRow(k, XPrePool.M)
 		YBatch.SetRow(k, []complex128{Y.M[1], Y.M[0]})
 	}
+
+	log.Lvl2("HEERRE", p.ServerIdentity(), XBatch.M[0], YBatch.M[0])
 
 	if p.TrainPlain {
 		p.CNNProtocol.ForwardPlain(XBatch)
@@ -486,6 +503,8 @@ func (p *TrainingProtocol) localComputation() {
 	}
 
 	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
+
+	log.LLvl1(p.ServerIdentity(), p.CNNProtocol.C.M[0], p.CNNProtocol.W.M[0])
 }
 
 func (p *TrainingProtocol) broadcast() error {
