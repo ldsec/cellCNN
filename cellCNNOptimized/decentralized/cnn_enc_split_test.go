@@ -37,6 +37,9 @@ func TestCnnSplit(t *testing.T) {
 	cellCNN.LearningRate = 0.001
 	cellCNN.Momentum = 0.9
 
+	// for the clear prediction function
+	common.NCLASSES = cellCNN.Classes
+	common.MICRO = false
 
 	rand.Seed(0)
 
@@ -47,8 +50,6 @@ func TestCnnSplit(t *testing.T) {
 	params := cellCNN.GenParams()
 	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PathCryptoFiles)
 	require.NotNil(t, cryptoParamsList)
-
-
 
 	for _, s := range servers {
 		_, err := s.ProtocolRegister("CnnEncryptedTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {

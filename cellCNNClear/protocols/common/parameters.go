@@ -5,7 +5,7 @@ const NCELLS = 200
 const NFEATURES = 37
 const NSAMPLES = 1000
 const NSAMPLES_DIST = 500
-const NCLASSES = 2
+var NCLASSES = 2
 const NFILTERS = 8
 const DATA_FOLDER = "/Users/jagomes/Go/src/github.com/ldsec/cellCNN/cellCNNClear/data/cellCNN/originalNK/"
 const SPLIT_DATA_FOLDER = "/Users/jagomes/Go/src/github.com/ldsec/cellCNN/cellCNNClear/data/cellCNN/splitNK/"
@@ -14,7 +14,7 @@ const testAllCell = 5652
 const BATCH_SIZE = 100
 const LEARN_RATE = 0.001
 const MOMENTUM = 0.9
-const MICRO = false
+var MICRO = false
 
 type Loader interface {
 	Load() (CnnDataset, error)

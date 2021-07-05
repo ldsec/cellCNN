@@ -179,6 +179,7 @@ func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset) (float64,
 
 	return accuracy, precision, recall, fscore
 }
+
 func InitCellCnn() (layers.Conv1D, layers.Pool, layers.Dense_n) {
 	conv := layers.Conv1D{Nfilters: NFILTERS}
 	pool := layers.Pool{}
