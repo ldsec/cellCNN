@@ -41,7 +41,7 @@ func TestCnnSplit(t *testing.T) {
 	cellCNN.Classes = 2
 	cellCNN.Filters = 8
 	cellCNN.BatchSize = 100
-	cellCNN.LearningRate = 0.0001
+	cellCNN.LearningRate = 0.001
 	cellCNN.Momentum = 0.9
 
 	for _, s := range servers {

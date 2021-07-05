@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"gonum.org/v1/gonum/mat"
+	"math/rand"
 	"strconv"
 )
 
@@ -253,12 +254,10 @@ func (p *CnnClearProtocol) ascendingUpdateGeneralModelPhase() common.WeightsVect
 	newBatch := make([]*mat.Dense, p.BatchSize)
 	newBatchLabels := make([]float64, p.BatchSize)
 	for j := 0; j < len(newBatch); j++ {
-		//randi := rand.Intn(len(p.X))
-		newBatch[j] = p.X[j]
-		newBatchLabels[j] = p.Y[j]
+		randi := rand.Intn(len(p.X))
+		newBatch[j] = p.X[randi]
+		newBatchLabels[j] = p.Y[randi]
 	}
-
-	log.Lvl2("HEERRE", p.ServerIdentity(), p.X[0].At(0,0), p.Y[0])
 
 	totalChange := p.localIteration(newBatch, newBatchLabels)
 
@@ -314,8 +313,6 @@ func (p *CnnClearProtocol) localIteration(batch []*mat.Dense, labels []float64) 
 	p.Weights = []*mat.Dense{p.Conv.GetWeights(), p.Dense.GetWeights()}
 
 	libunlynx.EndTimer(localIterationTimer)
-
-	log.LLvl1(p.ServerIdentity(), p.Weights[0].At(0,0), p.Weights[1].At(1,1))
 
 	return totalChange
 }

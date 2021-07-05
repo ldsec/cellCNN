@@ -12,7 +12,7 @@ const SPLIT_DATA_FOLDER = "/Users/jagomes/Go/src/github.com/ldsec/cellCNN/cellCN
 const ApproxInterval = 3.
 const testAllCell = 5652
 const BATCH_SIZE = 100
-const LEARN_RATE = 0.0001
+const LEARN_RATE = 0.001
 const MOMENTUM = 0.9
 const MICRO = false
 

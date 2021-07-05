@@ -466,11 +466,10 @@ func (p *TrainingProtocol) localComputation() {
 
 	// Pre-pools the cells
 	for k := 0; k < cellCNN.BatchSize; k++ {
+		randi := p.PrngInt.RandInt()
 
-		//randi := rand.Intn(len(p.XTrain))
-
-		X := p.XTrain[k]
-		Y := p.YTrain[k]
+		X := p.XTrain[randi]
+		Y := p.YTrain[randi]
 
 		XPrePool.SumColumns(X)
 		XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
@@ -478,8 +477,6 @@ func (p *TrainingProtocol) localComputation() {
 		XBatch.SetRow(k, XPrePool.M)
 		YBatch.SetRow(k, []complex128{Y.M[1], Y.M[0]})
 	}
-
-	log.Lvl2("HEERRE", p.ServerIdentity(), XBatch.M[0], YBatch.M[0])
 
 	if p.TrainPlain {
 		p.CNNProtocol.ForwardPlain(XBatch)
@@ -503,8 +500,6 @@ func (p *TrainingProtocol) localComputation() {
 	}
 
 	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
-
-	log.LLvl1(p.ServerIdentity(), p.CNNProtocol.C.M[0], p.CNNProtocol.W.M[0])
 }
 
 func (p *TrainingProtocol) broadcast() error {
