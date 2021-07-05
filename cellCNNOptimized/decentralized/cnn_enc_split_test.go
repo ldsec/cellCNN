@@ -10,7 +10,6 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"gonum.org/v1/gonum/mat"
 	"math"
-	"math/rand"
 	"testing"
 )
 
@@ -40,8 +39,6 @@ func TestCnnSplit(t *testing.T) {
 	// for the clear prediction function
 	common.NCLASSES = cellCNN.Classes
 	common.MICRO = false
-
-	rand.Seed(0)
 
 	local := onet.NewLocalTest(Suite)
 	servers, _, tree := local.GenTree(hosts, true)
@@ -98,7 +95,7 @@ func LoadSplitData(dataFolder string, index, nSamplesDist, nbrDatasetUsed, nbrLo
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
 
-	X, Y := cellCNN.LoadTrainDataFrom(dataFolder + fmt.Sprintf("host%d/", index), nSamplesDist, cellCNN.Cells, cellCNN.Features)
+	X, Y := cellCNN.LoadTrainDataFrom(dataFolder + fmt.Sprintf("host%d/", index), nSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 
 	return X, Y, maxIterations
 }

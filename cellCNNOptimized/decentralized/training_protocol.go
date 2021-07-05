@@ -327,7 +327,7 @@ func (p *TrainingProtocol) Dispatch() error {
 	if p.IsRoot() {
 		if p.Debug == true {
 			log.Lvl2("Loading Validation Data...")
-			XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features)
+			XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 			log.Lvl2("Done")
 
 			if p.TrainPlain && p.TrainEncrypted {

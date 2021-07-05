@@ -55,7 +55,7 @@ func genTest(
 
 		// 1) Load Data
 		log.Lvl2("Loading data...")
-		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, cellCNN.Samples, cellCNN.Cells, cellCNN.Features)
+		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 		log.Lvl2("Done")
 
 		localSamples := cellCNN.Samples / hosts // splits the data set
