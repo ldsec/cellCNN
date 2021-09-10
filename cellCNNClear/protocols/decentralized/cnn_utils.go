@@ -123,8 +123,8 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 
 		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
 
-		testAllData := common.LoadCellCnnTestAll()
-		testMultiData := common.LoadCellCnnValidData()
+		testAllData := common.LoadCellCnnTestAll(common.DATA_FOLDER, common.TESTALLCELL, common.NFEATURES)
+		testMultiData := common.LoadCellCnnValidData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
 		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData)
 		log.Lvlf2("Multi-cell test data results:")
 		log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)

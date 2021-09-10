@@ -78,13 +78,13 @@ func (dataset *CnnDataset) Shuffle(seed int64) {
 	})
 }
 
-func LoadCellCnnTrainData() CnnDataset {
-	y_tr := utils.String_to_float(utils.Load_file(DATA_FOLDER+"y_train.txt", NSAMPLES))
-	X_tr := make([]*mat.Dense, NSAMPLES)
+func LoadCellCnnTrainData(dataFolder string, NSamples, NCells, Nfeatures int) CnnDataset {
+	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_train.txt", NSamples))
+	X_tr := make([]*mat.Dense, NSamples)
 	var fname string
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_train/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(DATA_FOLDER+fname, NCELLS), NCELLS, NFEATURES, false)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file(dataFolder+fname, NCells), NCells, Nfeatures, false)
 	}
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
@@ -112,30 +112,30 @@ func LoadSplitCellCnnTrainData(hostNumber int) ([]*mat.Dense, []float64) {
 	return X_tr, y_tr
 }
 
-func LoadCellCnnValidData() CnnDataset {
-	y_tr := utils.String_to_float(utils.Load_file(DATA_FOLDER+"y_valid.txt", NSAMPLES))
-	X_tr := make([]*mat.Dense, NSAMPLES)
+func LoadCellCnnValidData(dataFolder string, NSamples, NCells, Nfeatures int) CnnDataset {
+	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_valid.txt", NSamples))
+	X_tr := make([]*mat.Dense, NSamples)
 	var fname string
-	fmt.Println(DATA_FOLDER)
-	fmt.Println(NSAMPLES)
-	fmt.Println(NCELLS)
+	//fmt.Println(DATA_FOLDER)
+	//fmt.Println(NSAMPLES)
+	//fmt.Println(NCELLS)
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_valid/%d.txt", i)
-		f := utils.Load_file(DATA_FOLDER+fname, NCELLS)
-		X_tr[i] = utils.Convert_X_cellCNN(f, NCELLS, NFEATURES, false)
+		f := utils.Load_file(dataFolder+fname, NCells)
+		X_tr[i] = utils.Convert_X_cellCNN(f, NCells, Nfeatures, false)
 	}
 	fmt.Println("loaded")
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
-func LoadCellCnnTestAll() CnnDataset {
+func LoadCellCnnTestAll(dataFolder string, testAllCell, Nfeatures int) CnnDataset {
 	samples_test := 6
 	ncell := testAllCell
-	y_tr := utils.String_to_float(utils.Load_file(DATA_FOLDER+"y_test_all.txt", samples_test))
+	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_test_all.txt", samples_test))
 	X_tr := make([]*mat.Dense, samples_test)
 	var fname string
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_test_all/%d.txt", i)
-		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file_Big(DATA_FOLDER+fname, ncell), ncell, NFEATURES, true)
+		X_tr[i] = utils.Convert_X_cellCNN(utils.Load_file_Big(dataFolder+fname, ncell), ncell, Nfeatures, true)
 	}
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
@@ -161,7 +161,7 @@ func RunCnnClearPredictionTest(w WeightsVector, x []*mat.Dense, y []float64) (fl
 func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset) (float64, float64, float64, float64) {
 	x := dataset.X
 	y := dataset.Y
-
+	fmt.Println(len(x))
 	conv, pool, dense := InitCellCnn()
 	out1 := conv.Forward(x, w[0])
 	//fmt.Println(out1)

@@ -6,16 +6,24 @@ import (
 	"math"
 )
 
-
+//to be used in the future
 var ThreadsCount = 4
+
+//folder of the data, datafolder is for test/valid sets and split data is for splitted dataset
+var DataFolder = "../../cellCNNClear/data/cellCNN/originalNK/"
+var SplitDataFolder = "../../cellCNNClear/data/cellCNN/splitNK/"
+
+//Max number of max cells for
+//all cell prediction (output of preprocessing)
+var TestAllCells = 5652
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 25
+var BatchSize = 1000
 
 // number of samples
 // MUST BE AN EVEN NUMBER
-var Samples = 1000
+var Samples = 800
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER

@@ -166,9 +166,9 @@ func cellCNN(nepochs int, timing bool) {
 	niter := nepochs * common.NSAMPLES / batchSize
 	fmt.Printf("%d epochs -> %d iterations (with batch size %d)\n", nepochs, niter, batchSize)
 	startLoad := time.Now()
-	trainData := common.LoadCellCnnTrainData()
-	validData := common.LoadCellCnnValidData()
-	testAllData := common.LoadCellCnnTestAll()
+	trainData := common.LoadCellCnnTrainData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
+	validData := common.LoadCellCnnValidData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
+	testAllData := common.LoadCellCnnTestAll(common.DATA_FOLDER, common.TESTALLCELL, common.NFEATURES)
 
 	fmt.Println("loaded")
 	//fmt.Println(reflect.TypeOf(A))

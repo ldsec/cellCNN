@@ -5,6 +5,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
 	"github.com/ldsec/cellCNN/cellCNNClear/protocols/decentralized"
+	"github.com/ldsec/cellCNN/cellCNNOptimized"
 	"github.com/ldsec/unlynx/lib"
 	"github.com/pelletier/go-toml"
 	"go.dedis.ch/onet/v3"
@@ -114,7 +115,7 @@ func NewCnnProtocolSimul(tni *onet.TreeNodeInstance, sim *CnnSimulation) (onet.P
 	protocol := pi.(*decentralized.CnnClearProtocol)
 
 	// ##STEP 1: Load data
-	trainData := common.LoadCellCnnTrainData()
+	trainData := common.LoadCellCnnTrainData(cellCNN.SplitDataFolder, cellCNN.Samples, cellCNN.Cells, cellCNN.Features)
 
 	// ##STEP 2: Split data
 	protocol.X, protocol.Y, protocol.MaxIterations = common.SplitData(trainData.X, trainData.Y, len(tni.Roster().List),

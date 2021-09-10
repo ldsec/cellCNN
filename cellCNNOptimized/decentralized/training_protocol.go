@@ -103,13 +103,13 @@ type TrainingProtocol struct {
 	Debug bool
 
 	//timers
-	Precompute 			time.Duration
-	LocalIter  			time.Duration
-	FeedForward 		time.Duration
-	Backprop    		time.Duration
-	UpdateWeights 		time.Duration
-	Combine             time.Duration
-	DBootstrap       	time.Duration
+	Precompute    time.Duration
+	LocalIter     time.Duration
+	FeedForward   time.Duration
+	Backprop      time.Duration
+	UpdateWeights time.Duration
+	Combine       time.Duration
+	DBootstrap    time.Duration
 }
 
 // NewTrainingProtocol initializes the protocol instance.
@@ -379,9 +379,9 @@ func (p *TrainingProtocol) Dispatch() error {
 
 					idx := 0
 					max := 0.0
-					for j := 0; j < cellCNN.Classes; j++{
+					for j := 0; j < cellCNN.Classes; j++ {
 						c := real(v.M[i*cellCNN.Classes+j])
-						if c > max{
+						if c > max {
 							idx = j
 							max = c
 						}
@@ -389,7 +389,7 @@ func (p *TrainingProtocol) Dispatch() error {
 
 					fmt.Println(i, v.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes], YBatch.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes])
 
-					if int(real(YBatch.M[i*cellCNN.Classes+idx])) != 1{
+					if int(real(YBatch.M[i*cellCNN.Classes+idx])) != 1 {
 						r++
 					}
 				}
@@ -488,7 +488,7 @@ func (p *TrainingProtocol) localComputation() {
 		p.CNNProtocol.BackWardPlain(XBatch, YBatch, p.Tree().Size()) // takes care of pre-applying 1/#Parties
 	}
 
-	start := time.Now()
+	//start := time.Now()
 
 	if p.TrainEncrypted {
 		forwardTimer := time.Now()
@@ -503,8 +503,9 @@ func (p *TrainingProtocol) localComputation() {
 		p.CNNProtocol.Backward(XBatch, YBatch, p.Tree().Size())
 		p.Backprop += time.Since(backwardTimer)
 	}
-
-	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
+	//if p.IterationNumber%50==0{
+	//	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
+	//}
 }
 
 func (p *TrainingProtocol) broadcast() error {

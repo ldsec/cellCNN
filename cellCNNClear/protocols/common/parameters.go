@@ -4,16 +4,19 @@ package common
 const NCELLS = 200
 const NFEATURES = 37
 const NSAMPLES = 1000
-const NSAMPLES_DIST = 500
+const NSAMPLES_DIST = 400
+
 var NCLASSES = 2
+
 const NFILTERS = 8
-const DATA_FOLDER = "/Users/jagomes/Go/src/github.com/ldsec/cellCNN/cellCNNClear/data/cellCNN/originalNK/"
-const SPLIT_DATA_FOLDER = "/Users/jagomes/Go/src/github.com/ldsec/cellCNN/cellCNNClear/data/cellCNN/splitNK/"
+const DATA_FOLDER = "../../data/cellCNN/originalNK/"
+const SPLIT_DATA_FOLDER = "../../data/cellCNN/splitNK/"
 const ApproxInterval = 3.
-const testAllCell = 5652
-const BATCH_SIZE = 100
-const LEARN_RATE = 0.001
+const TESTALLCELL = 5652
+const BATCH_SIZE = 20
+const LEARN_RATE = 0.01
 const MOMENTUM = 0.9
+
 var MICRO = false
 
 type Loader interface {
@@ -28,9 +31,9 @@ var CellCnnValidLoader Loader = CellCNN{true}
 
 func (c CellCNN) Load() (CnnDataset, error) {
 	if c.valid {
-		return LoadCellCnnValidData(), nil
+		return LoadCellCnnValidData(DATA_FOLDER, NSAMPLES, NCELLS, NFEATURES), nil
 	} else {
-		return LoadCellCnnTrainData(), nil
+		return LoadCellCnnTrainData(DATA_FOLDER, NSAMPLES, NCELLS, NFEATURES), nil
 	}
 }
 

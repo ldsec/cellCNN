@@ -13,28 +13,26 @@ import (
 	"testing"
 )
 
-
 func TestCnnSplit(t *testing.T) {
 	log.SetDebugVisible(2)
 
 	// training parameters
-	hosts := 3
+	hosts := 2
 	nbr_local_iter := 1
-	epochs := 10
+	epochs := 15
 	debug := false
 	time := false
-	dataFolder := "../../cellCNNClear/data/cellCNN/splitNK/"
 
 	// cellCNN parameters
-	cellCNN.Cells = 200
-	cellCNN.Features = 37
-	cellCNN.Samples = 1000
+	//cellCNN.Cells = 200
+	//cellCNN.Features = 37
+	//cellCNN.Samples = 800
 	nSamplesDist := cellCNN.Samples / hosts
 	cellCNN.Classes = 2
 	cellCNN.Filters = 8
 	cellCNN.BatchSize = 100
-	cellCNN.LearningRate = 0.001
-	cellCNN.Momentum = 0.9
+	cellCNN.LearningRate = 0.04
+	cellCNN.Momentum = 0.5
 
 	// for the clear prediction function
 	common.NCLASSES = cellCNN.Classes
@@ -58,7 +56,7 @@ func TestCnnSplit(t *testing.T) {
 
 			// ##STEP 1: Split data
 			var maxIterations int
-			protocol.XTrain, protocol.YTrain, maxIterations = LoadSplitData(dataFolder, tni.Index(), nSamplesDist, epochs, nbr_local_iter, cellCNN.BatchSize, protocol.IsRoot())
+			protocol.XTrain, protocol.YTrain, maxIterations = LoadSplitData(cellCNN.SplitDataFolder, tni.Index(), nSamplesDist, epochs, nbr_local_iter, cellCNN.BatchSize, protocol.IsRoot())
 
 			// ##STEP 2: InitRoot protocol training variables
 			vars := decentralized.InitCellCNNVars{
@@ -95,12 +93,12 @@ func LoadSplitData(dataFolder string, index, nSamplesDist, nbrDatasetUsed, nbrLo
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
 
-	X, Y := cellCNN.LoadTrainDataFrom(dataFolder + fmt.Sprintf("host%d/", index), nSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	X, Y := cellCNN.LoadTrainDataFrom(dataFolder+fmt.Sprintf("host%d/", index), nSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 
 	return X, Y, maxIterations
 }
 
-func convertMatrixToDense(matrix *cellCNN.Matrix) *mat.Dense{
+func convertMatrixToDense(matrix *cellCNN.Matrix) *mat.Dense {
 	data := make([]float64, len(matrix.M))
 	for i := range matrix.M {
 		data[i] = real(matrix.M[i])
@@ -146,8 +144,8 @@ func RunCnnEncTest(localTest *onet.LocalTest, tree *onet.Tree, timing bool, name
 		w = runCnnEnc(rootInstance, w)
 		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
 
-		testAllData := common.LoadCellCnnTestAll()
-		testMultiData := common.LoadCellCnnValidData()
+		testAllData := common.LoadCellCnnTestAll(cellCNN.DataFolder, cellCNN.TestAllCells, cellCNN.Features)
+		testMultiData := common.LoadCellCnnValidData(cellCNN.DataFolder, cellCNN.Samples, cellCNN.Cells, cellCNN.Features)
 		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData)
 		log.Lvlf2("Multi-cell test data results:")
 		log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)

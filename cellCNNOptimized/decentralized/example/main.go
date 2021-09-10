@@ -33,8 +33,8 @@ func main() {
 	deterministic := true
 
 	fmt.Printf("Loading Data... ")
-	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
-	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized2/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized2/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 	fmt.Printf("Done\n")
 
 	var C, W *cellCNN.Matrix
@@ -146,7 +146,6 @@ func main() {
 
 				XBatch.SetRow(k, XPrePool.M)
 
-
 				YBatch.SetRow(k, Y.M)
 			}
 
@@ -240,7 +239,7 @@ func main() {
 
 	var encryptor ckks.Encryptor
 	var decryptor ckks.Decryptor
-	if trainEncrypted{
+	if trainEncrypted {
 		encryptor = ckks.NewEncryptorFromSk(params, masterSk)
 		decryptor = ckks.NewDecryptor(params, masterSk)
 	}
@@ -300,9 +299,9 @@ func main() {
 
 			idx := 0
 			max := 0.0
-			for j := 0; j < cellCNN.Classes; j++{
+			for j := 0; j < cellCNN.Classes; j++ {
 				c := real(v.M[i*cellCNN.Classes+j])
-				if c > max{
+				if c > max {
 					idx = j
 					max = c
 				}
@@ -310,7 +309,7 @@ func main() {
 
 			fmt.Println(i, v.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes], YBatch.M[i*cellCNN.Classes:(i+1)*cellCNN.Classes])
 
-			if int(real(YBatch.M[i*cellCNN.Classes+idx])) != 1{
+			if int(real(YBatch.M[i*cellCNN.Classes+idx])) != 1 {
 				r++
 			}
 		}

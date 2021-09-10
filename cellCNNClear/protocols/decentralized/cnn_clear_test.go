@@ -29,7 +29,7 @@ func TestEvalCNN(t *testing.T) {
 	defer f.Close()
 	f.WriteString("hosts,n_local_iter,batch_size,epochs,kfolds,accuracy,precision,recall,fscore\n")
 
-	common.TrainData = common.LoadCellCnnTrainData()
+	common.TrainData = common.LoadCellCnnTrainData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
 
 	for _, nHosts := range hosts_eval {
 		for _, nLocalIter := range local_iter_eval {
@@ -63,7 +63,7 @@ func TestEvalCNN(t *testing.T) {
 func TestCNNClear(t *testing.T) {
 	log.SetDebugVisible(2)
 
-	common.TrainData = common.LoadCellCnnTrainData()
+	common.TrainData = common.LoadCellCnnTrainData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
 
 	local := onet.NewLocalTest(Suite)
 	servers, _, tree := local.GenTree(HOSTS, true)
