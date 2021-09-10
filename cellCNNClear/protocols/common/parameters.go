@@ -13,7 +13,7 @@ const DATA_FOLDER = "../../data/cellCNN/originalNK/"
 const SPLIT_DATA_FOLDER = "../../data/cellCNN/splitNK/"
 const ApproxInterval = 3.
 const TESTALLCELL = 5652
-const BATCH_SIZE = 20
+const BATCH_SIZE = 10
 const LEARN_RATE = 0.01
 const MOMENTUM = 0.9
 

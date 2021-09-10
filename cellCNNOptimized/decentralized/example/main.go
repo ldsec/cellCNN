@@ -27,7 +27,7 @@ func NewParty(params ckks.Parameters) (p *Party) {
 
 func main() {
 
-	hosts := 1
+	hosts := cellCNN.Hosts
 
 	trainEncrypted := false
 	deterministic := true

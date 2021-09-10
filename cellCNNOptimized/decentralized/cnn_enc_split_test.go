@@ -17,33 +17,22 @@ func TestCnnSplit(t *testing.T) {
 	log.SetDebugVisible(2)
 
 	// training parameters
-	hosts := 2
 	nbr_local_iter := 1
-	epochs := 15
 	debug := false
 	time := false
 
 	// cellCNN parameters
-	//cellCNN.Cells = 200
-	//cellCNN.Features = 37
-	//cellCNN.Samples = 800
-	nSamplesDist := cellCNN.Samples / hosts
-	cellCNN.Classes = 2
-	cellCNN.Filters = 8
-	cellCNN.BatchSize = 100
-	cellCNN.LearningRate = 0.04
-	cellCNN.Momentum = 0.5
 
 	// for the clear prediction function
 	common.NCLASSES = cellCNN.Classes
 	common.MICRO = false
 
 	local := onet.NewLocalTest(Suite)
-	servers, _, tree := local.GenTree(hosts, true)
+	servers, _, tree := local.GenTree(cellCNN.Hosts, true)
 	defer local.CloseAll()
 
 	params := cellCNN.GenParams()
-	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(hosts, &params, PathCryptoFiles)
+	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(cellCNN.Hosts, &params, PathCryptoFiles)
 	require.NotNil(t, cryptoParamsList)
 
 	for _, s := range servers {
@@ -56,7 +45,7 @@ func TestCnnSplit(t *testing.T) {
 
 			// ##STEP 1: Split data
 			var maxIterations int
-			protocol.XTrain, protocol.YTrain, maxIterations = LoadSplitData(cellCNN.SplitDataFolder, tni.Index(), nSamplesDist, epochs, nbr_local_iter, cellCNN.BatchSize, protocol.IsRoot())
+			protocol.XTrain, protocol.YTrain, maxIterations = LoadSplitData(cellCNN.SplitDataFolder, tni.Index(), cellCNN.NSamplesDist, cellCNN.Epochs, nbr_local_iter, cellCNN.BatchSize, protocol.IsRoot())
 
 			// ##STEP 2: InitRoot protocol training variables
 			vars := decentralized.InitCellCNNVars{
@@ -64,7 +53,7 @@ func TestCnnSplit(t *testing.T) {
 				TrainEncrypted: false,
 				Deterministic:  true,
 				MaxIterations:  maxIterations,
-				LocalSamples:   nSamplesDist,
+				LocalSamples:   cellCNN.NSamplesDist,
 				Debug:          debug,
 			}
 			protocol.InitVars(cryptoParamsList[tni.Index()], &params, vars)
@@ -93,7 +82,7 @@ func LoadSplitData(dataFolder string, index, nSamplesDist, nbrDatasetUsed, nbrLo
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
 
-	X, Y := cellCNN.LoadTrainDataFrom(dataFolder+fmt.Sprintf("host%d/", index), nSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	X, Y := cellCNN.LoadTrainDataFrom(dataFolder+fmt.Sprintf("host%d/", index), cellCNN.NSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 
 	return X, Y, maxIterations
 }

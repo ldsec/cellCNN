@@ -327,7 +327,7 @@ func (p *TrainingProtocol) Dispatch() error {
 	if p.IsRoot() {
 		if p.Debug == true {
 			log.Lvl2("Loading Validation Data...")
-			XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized/", 2000, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+			XValid, YValid := cellCNN.LoadValidDataFrom(cellCNN.DataFolder, cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 			log.Lvl2("Done")
 
 			if p.TrainPlain && p.TrainEncrypted {
@@ -346,7 +346,7 @@ func (p *TrainingProtocol) Dispatch() error {
 			}
 
 			r := 0
-			for i := 0; i < 2000/cellCNN.BatchSize; i++ {
+			for i := 0; i < cellCNN.Samples/cellCNN.BatchSize; i++ {
 
 				XPrePool := new(cellCNN.Matrix)
 				XBatch := cellCNN.NewMatrix(cellCNN.BatchSize, cellCNN.Features)

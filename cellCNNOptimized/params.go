@@ -9,6 +9,9 @@ import (
 //to be used in the future
 var ThreadsCount = 4
 
+//number of hosts
+var Hosts = 5
+
 //folder of the data, datafolder is for test/valid sets and split data is for splitted dataset
 var DataFolder = "../../cellCNNClear/data/cellCNN/originalNK/"
 var SplitDataFolder = "../../cellCNNClear/data/cellCNN/splitNK/"
@@ -19,11 +22,14 @@ var TestAllCells = 5652
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 1000
+var BatchSize = 10
 
 // number of samples
 // MUST BE AN EVEN NUMBER
-var Samples = 800
+var Samples = 1000
+
+//number of distributed samples (per-host)
+var NSamplesDist = 400
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER
@@ -31,20 +37,23 @@ var Cells = 200
 
 // number of features
 // MUST BE AN EVEN NUMBER
-var Features = 16
+var Features = 37
 
 // number of filters
 // MUST BE AN EVEN NUMBER
 var Filters = 8
 
 // number of classes
-var Classes = 3
+var Classes = 2
 
 // learning rate
-var LearningRate = 0.1
+var LearningRate = 0.01
 
 // momentum
 var Momentum = 0.9
+
+//epochs
+var Epochs = 10
 
 // ring dimension
 var LogN = 15
