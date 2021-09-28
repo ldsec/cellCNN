@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-const learn_rate = common.LEARN_RATE
-const batchSize = common.BATCH_SIZE
 const write = false // write accuracy values to file
 
 func ComputeGradient(i int, j int, v float64, y []float64) float64 {
@@ -72,8 +70,8 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 	for i := 1; i <= niter; i++ {
 
 		// make a new batch
-		newBatch := make([]*mat.Dense, batchSize)
-		newBatchLabels := make([]float64, batchSize)
+		newBatch := make([]*mat.Dense, common.BATCH_SIZE)
+		newBatchLabels := make([]float64, common.BATCH_SIZE)
 		for j := 0; j < len(newBatch); j++ {
 			randi := rand.Intn(len(X))
 			newBatch[j] = X[randi]
@@ -126,7 +124,7 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 		//	}
 		//	println("")
 		//}
-		if i == 1 || i%batchSize == 0 {
+		if i == 1 || i%common.BATCH_SIZE == 0 {
 			if !timing {
 				fmt.Printf("Iteration: %d \n", i)
 				utils.Print_train_stats_cellCNN(out2, newBatchLabels, common.NCLASSES, common.MICRO)
@@ -135,8 +133,8 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 
 		// write training and validation accuracy to file
 		if write {
-			newValidBatch := make([]*mat.Dense, batchSize)
-			newValidBatchLabels := make([]float64, batchSize)
+			newValidBatch := make([]*mat.Dense, common.BATCH_SIZE)
+			newValidBatchLabels := make([]float64, common.BATCH_SIZE)
 			for j := 0; j < len(newBatch); j++ {
 				randi := rand.Intn(len(validData.X))
 				newValidBatch[j] = validData.X[randi]
@@ -163,12 +161,12 @@ func Train(dataset common.CnnDataset, validData common.CnnDataset, nclasses int,
 // input: nsamples x ncells x nmarkers
 // conv1D + dense
 func cellCNN(nepochs int, timing bool) {
-	niter := nepochs * common.NSAMPLES / batchSize
-	fmt.Printf("%d epochs -> %d iterations (with batch size %d)\n", nepochs, niter, batchSize)
+	niter := nepochs * common.NSAMPLES / common.BATCH_SIZE
+	fmt.Printf("%d epochs -> %d iterations (with batch size %d)\n", nepochs, niter, common.BATCH_SIZE)
 	startLoad := time.Now()
 	trainData := common.LoadCellCnnTrainData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
-	validData := common.LoadCellCnnValidData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
-	testAllData := common.LoadCellCnnTestAll(common.DATA_FOLDER, common.TESTALLCELL, common.NFEATURES)
+	validData := common.LoadCellCnnValidData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES, common.TYPEDATA)
+	testAllData := common.LoadCellCnnTestAll(common.DATA_FOLDER, common.TESTALLCELL, common.NFEATURES, common.TESTSAMPLES)
 
 	fmt.Println("loaded")
 	//fmt.Println(reflect.TypeOf(A))
@@ -178,7 +176,7 @@ func cellCNN(nepochs int, timing bool) {
 
 	startTrain := time.Now()
 	weights := make(common.WeightsVector, 2)
-	weights[0], weights[1] = Train(trainData, validData, common.NCLASSES, niter, learn_rate, timing)
+	weights[0], weights[1] = Train(trainData, validData, common.NCLASSES, niter, common.LEARN_RATE, timing)
 	timeTrain := time.Since(startTrain)
 
 	if timing {
@@ -195,11 +193,11 @@ func cellCNN(nepochs int, timing bool) {
 			newBatch[j] = validData.X[randi]
 			newBatchLabels[j] = validData.Y[randi]
 		}
-		fmt.Println("Test acc. on multi-cell inputs with 200 cells each")
+		fmt.Println("Test acc. on multi-cell inputs")
 		accuracy, precision, recall, fscore := common.RunCnnClearPredictionTest(weights, newBatch, newBatchLabels)
 		fmt.Printf("\nTest\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
-		fmt.Println("Test acc. on 6 patients with >5000 cells each")
-		accuracy, precision, recall, fscore = common.RunCnnClearPredictionTestAll(weights, testAllData)
+		fmt.Println("Test acc. on all patients")
+		accuracy, precision, recall, fscore = common.RunCnnClearPredictionTestAll(weights, testAllData, common.NCLASSES)
 		fmt.Printf("\nTest All\naccuracy: %.2f, precision: %.2f, recall: %.2f, fscore: %.2f\n", accuracy, precision, recall, fscore)
 	}
 }

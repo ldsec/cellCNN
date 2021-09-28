@@ -36,6 +36,7 @@ func ComputePrecisionRecall(c []float64, y []float64, numClass int, micro bool) 
 				}
 			}
 		}
+
 		precision = 100 * tp / (fp + tp)
 		recall = 100 * tp / (fn + tp)
 	} else {

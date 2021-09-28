@@ -16,6 +16,9 @@ from sklearn.metrics.pairwise import pairwise_kernels, pairwise_distances
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler, normalize
 from sklearn.utils import shuffle
+from sklearn.utils import check_random_state
+from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.utils.extmath import row_norms
 from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import fcluster
 from scipy import stats
@@ -25,7 +28,47 @@ try:
     import igraph
 except ImportError:
     pass
+def weighted_choice(weights, nsample):
+    rnd = np.random.random_sample(nsample) * sum(weights)
+    selected_indices = np.empty(nsample, dtype=int)
+    for i_sample, val in enumerate(rnd):
+        accum = val
+        iw = -1
+        while accum >= 0:
+            iw += 1
+            accum -= weights[iw]
+        selected_indices[i_sample] = iw
+    return selected_indices
+def knn_dist(x, x_ctrl, s=100, p=1):
+    x_tmp = random_subsample(x_ctrl, 200000, replace=False)
+    xs = kmeans_subsample(x_tmp, s)
+    if p == 1:
+        min_dist = np.min(pairwise_distances(X=x, Y=xs, metric='l1'), axis=1)
+    elif p == 2:
+        min_dist = np.min(pairwise_distances(X=x, Y=xs, metric='l2'), axis=1)
+    assert len(min_dist) == x.shape[0]
+    return min_dist
 
+def knn_dist_memory_optimized(test_data, train_data, s):
+    train_data = random_subsample(train_data, s, replace=False)
+    nobs_test = test_data.shape[0]
+    bs = 500
+    test_kNN_dist = np.zeros(nobs_test)
+
+    # print('going up to: %d' % (nobs_test/bs + 1))
+    for ii in range(int((nobs_test/bs + 1))):
+        # print(ii)
+        # is this a full batch or is it the last one?
+        if (ii+1)*bs < nobs_test:
+            end = (ii+1)*bs
+        else:
+            end = -1
+
+        S = test_data[ii*bs:end]
+        if(len(S)!=0):
+	        dist = pairwise_distances(X=S, Y=train_data, metric='l1')
+	        test_kNN_dist[ii*bs:end] = np.min(dist, axis=1)
+    return test_kNN_dist
 
 def random_subsample(X, target_nobs, replace=True):
 
@@ -101,8 +144,10 @@ def kmeans_subsample(X, n_clusters, random_state=None, n_local_trials=10):
 def outlier_subsample(X, x_ctrl, to_keep, return_idx=False):
 
     """ Performs outlier selection. """
-
-    outlier_scores = knn_dist(X, x_ctrl, s=100, p=1)
+    # print( "knn_dist calculating")
+    # outlier_scores = knn_dist(X, x_ctrl, s=100, p=1)
+    outlier_scores = knn_dist_memory_optimized(X, x_ctrl, s=200)
+    # print( "knn_dist done")
     indices = np.argsort(outlier_scores)[-to_keep:]
     if return_idx:
         return X[indices], outlier_scores[indices], indices
@@ -274,15 +319,16 @@ def filter_per_class(X, y, ylabel):
 
 def per_sample_subsets(X, nsubsets, ncell_per_subset, k_init=False):
     nmark = X.shape[1]
-    shape = (nsubsets, nmark, ncell_per_subset)
+    shape = (int(nsubsets), nmark, ncell_per_subset)
     Xres = np.zeros(shape)
 
     if not k_init:
-        for i in range(nsubsets):
+        for i in range(int(nsubsets)):
             X_i = random_subsample(X, ncell_per_subset)
             Xres[i] = X_i.T
     else:
-        for i in range(nsubsets):
+        for i in range(int(nsubsets)):
+            
             X_i = random_subsample(X, 2000)
             X_i = kmeans_subsample(X_i, ncell_per_subset, random_state=i)
             Xres[i] = X_i.T
@@ -315,11 +361,11 @@ def generate_subsets(X, pheno_map, sample_id, nsubsets, ncell,
 
 def per_sample_biased_subsets(X, x_ctrl, nsubsets, ncell_final, to_keep, ratio_biased):
     nmark = X.shape[1]
-    Xres = np.empty((nsubsets, nmark, ncell_final))
+    Xres = np.empty((int(nsubsets), nmark, ncell_final))
     nc_biased = int(ratio_biased * ncell_final)
     nc_unbiased = ncell_final - nc_biased
 
-    for i in range(nsubsets):
+    for i in range(int(nsubsets)):
         x_unbiased = random_subsample(X, nc_unbiased)
         if (i % 100) == 0:
             x_outlier, outlierness = outlier_subsample(X, x_ctrl, to_keep)
@@ -459,7 +505,7 @@ def generate_data(train_samples, train_phenotypes, outdir,
                 maxpool_percentages=[0.01, 1., 5., 20., 100.], nfilter_choice=range(3, 10),
                 learning_rate=None, coeff_l1=0, coeff_l2=1e-4, dropout='auto', dropout_p=.5,
                 max_epochs=20, patience=5,
-                dendrogram_cutoff=0.4, accur_thres=.95, verbose=1):
+                dendrogram_cutoff=0.4, accur_thres=.95, verbose=1, saveFile=True,scaler=None,oneFile=None, generateAsTest=False):
 
     #mkdir_p(outdir)
 
@@ -474,7 +520,8 @@ def generate_data(train_samples, train_phenotypes, outdir,
     if subset_selection == 'outlier':
         ctrl_list = [train_samples[i] for i in np.where(np.array(train_phenotypes) == 0)[0]]
         test_list = [train_samples[i] for i in np.where(np.array(train_phenotypes) != 0)[0]]
-        train_samples = normalize_outliers_to_control(ctrl_list, test_list)
+        if len(ctrl_list)!=0:
+            train_samples = normalize_outliers_to_control(ctrl_list, test_list)
 
         if valid_samples is not None:
             ctrl_list = [valid_samples[i] for i in np.where(np.array(valid_phenotypes) == 0)[0]]
@@ -501,7 +548,7 @@ def generate_data(train_samples, train_phenotypes, outdir,
         X_train, id_train = X[train_indices], sample_id[train_indices]
         X_valid, id_valid = X[valid_indices], sample_id[valid_indices]
 
-    else:
+    else:  #goes here when valid is passed to generate test samples
         sample_ids = range(len(train_phenotypes))
         X_train, id_train = combine_samples(train_samples, sample_ids)
         sample_ids = range(len(valid_phenotypes))
@@ -513,10 +560,15 @@ def generate_data(train_samples, train_phenotypes, outdir,
         z_scaler.fit(0.5 * np.ones((1, X_train.shape[1])))
         X_train = z_scaler.transform(X_train)
     elif scale:
-        print("scale")
-        z_scaler = StandardScaler(with_mean=True, with_std=True)
-        z_scaler.fit(X_train)
-        X_train = z_scaler.transform(X_train)
+        if scaler!=None:
+            print("old scale")
+            z_scaler = scaler
+            X_train = z_scaler.transform(X_train)
+        else:
+            print("new scale")
+            z_scaler = StandardScaler(with_mean=True, with_std=True)
+            z_scaler.fit(X_train)
+            X_train = z_scaler.transform(X_train)
     else:
         print("no scaling")
         z_scaler = None
@@ -551,11 +603,11 @@ def generate_data(train_samples, train_phenotypes, outdir,
         nsubset_biased = [0]
         for pheno in range(1, len(np.unique(train_phenotypes))):
             nsubset_biased.append(nsubset / np.sum(train_phenotypes == pheno))
-
         X_tr, y_tr = generate_biased_subsets(X_train, train_phenotypes, id_train, x_ctrl_train,
                                              nsubset_ctrl, nsubset_biased, ncell, to_keep,
-                                             id_ctrl=np.where(train_phenotypes == 0)[0],
-                                             id_biased=np.where(train_phenotypes != 0)[0])
+                                             id_ctrl=np.where(train_phenotypes == 0)[0], id_biased=np.where(train_phenotypes != 0)[0])
+
+
 
         if (valid_samples is not None) or generate_valid_set:
             x_ctrl_valid = X_valid[y_valid == 0]
@@ -571,13 +623,12 @@ def generate_data(train_samples, train_phenotypes, outdir,
                                                nsubset_ctrl, nsubset_biased, ncell, to_keep,
                                                id_ctrl=np.where(valid_phenotypes == 0)[0],
                                                id_biased=np.where(valid_phenotypes != 0)[0])
-
         else:
             cut = X_tr.shape[0] / 5
-            X_v = X_tr[:cut]
-            y_v = y_tr[:cut]
-            X_tr = X_tr[cut:]
-            y_tr = y_tr[cut:]
+            # X_v = X_tr[:cut]
+            # y_v = y_tr[:cut]
+            # X_tr = X_tr[cut:]
+            # y_tr = y_tr[cut:]
     else:
         # generate 'nsubset' multi-cell inputs per input sample
         if per_sample:
@@ -600,21 +651,50 @@ def generate_data(train_samples, train_phenotypes, outdir,
                     nsubset_list.append(nsubset / np.sum(valid_phenotypes == pheno))
                 X_v, y_v = generate_subsets(X_valid, valid_phenotypes, id_valid,
                                             nsubset_list, ncell, per_sample)
+    if saveFile:
+        mkdir_p(outdir + 'X_train/')
+        mkdir_p(outdir + 'X_valid/')
+        if generateAsTest==False:
+            if oneFile == None:
+                for i in range(len(X_tr)):
+                    np.savetxt(outdir + 'X_train/' + str(i) +'.txt', X_tr[i])
+                np.savetxt(outdir + 'y_train.txt', y_tr)
+                if generate_valid_set:
+                    for i in range(len(X_v)):
+                        np.savetxt(outdir + 'X_valid/' + str(i) +'.txt', X_v[i])
+                    np.savetxt(outdir + 'y_valid.txt', y_v)
+                print('Done.')
+            else:
+                f= open(outdir + 'X_train/' +'all.txt',"w+")
+                with open(outdir + 'X_train/' +'all.txt', 'w') as outfile:
+                    for slice_2d in X_tr:
+                        np.savetxt(outfile, slice_2d)
+                np.savetxt(outdir + 'y_train.txt', y_tr)
+                if generate_valid_set:
+                    with open(outdir + 'X_valid/'+'all.txt', 'w') as outfile:
+                        for slice_2d in X_v:
+                        	np.savetxt(outfile, slice_2d)
+                    np.savetxt(outdir + 'y_valid.txt', y_v)
+                print('Done.')
+        else: #write generated data as test data (to generate multi-cell test set)
+            if oneFile == None:
+                for i in range(len(X_tr)):
+                    np.savetxt(outdir + 'X_valid/' + str(i) +'.txt', X_tr[i])
+                np.savetxt(outdir + 'y_valid.txt', y_tr)
+                print('Done.')
+            else:
+                f= open(outdir + 'X_valid/' +'all.txt',"w+")
+                with open(outdir + 'X_valid/' +'all.txt', 'w') as outfile:
+                    for slice_2d in X_tr:
+                        np.savetxt(outfile, slice_2d)
+                np.savetxt(outdir + 'y_valid.txt', y_tr)
+                print('Done.')
 
-    mkdir_p(outdir + 'X_train/')
-    mkdir_p(outdir + 'X_valid/')
-    for i in range(len(X_tr)):
-        np.savetxt(outdir + 'X_train/' + str(i) +'.txt', X_tr[i])
-    np.savetxt(outdir + 'y_train.txt', y_tr)
     if generate_valid_set:
-        for i in range(len(X_v)):
-            np.savetxt(outdir + 'X_valid/' + str(i) +'.txt', X_v[i])
-        np.savetxt(outdir + 'y_valid.txt', y_v)
-    print('Done.')
-    if generate_valid_set:
-        return z_scaler,X_tr,y_tr,X_v,y_v
+            return z_scaler,X_tr,y_tr,X_v,y_v
     else:
-        return z_scaler,X_tr,y_tr
+            return z_scaler,X_tr,y_tr
+
     
 def generate_normalized_data(train_samples, train_phenotypes, outdir,
                 valid_samples=None, valid_phenotypes=None, generate_valid_set=True,

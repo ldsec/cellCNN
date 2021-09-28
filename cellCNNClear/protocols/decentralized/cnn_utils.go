@@ -68,7 +68,7 @@ func InitCnnClearProtocolVars(p *CnnClearProtocol, learnRate, momentum float64, 
 
 	p.LearningRate = learnRate
 
-	p.Conv, p.Pool, p.Dense = common.InitCellCnn()
+	p.Conv, p.Pool, p.Dense = common.InitCellCnn(common.NCLASSES)
 	p.InitWeights()
 
 	p.LocalIterationNumber = nbrLocalIter
@@ -123,14 +123,14 @@ func RunCnnClearTest(localTest *onet.LocalTest, overlay *onet.Overlay, tree *one
 
 		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
 
-		testAllData := common.LoadCellCnnTestAll(common.DATA_FOLDER, common.TESTALLCELL, common.NFEATURES)
-		testMultiData := common.LoadCellCnnValidData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES)
-		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData)
+		testAllData := common.LoadCellCnnTestAll(common.DATA_FOLDER, common.TESTALLCELL, common.NFEATURES, common.TESTSAMPLES)
+		testMultiData := common.LoadCellCnnValidData(common.DATA_FOLDER, common.NSAMPLES, common.NCELLS, common.NFEATURES, common.TYPEDATA)
+		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData, common.NCLASSES)
 		log.Lvlf2("Multi-cell test data results:")
 		log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)
 
 		log.Lvlf2("All test data results:")
-		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData)
+		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData, common.NCLASSES)
 		log.LLvl1(accuracyTmp, precisionTmp, recallTmp, fscoreTmp)
 		accuracy += accuracyTmp
 		precision += precisionTmp

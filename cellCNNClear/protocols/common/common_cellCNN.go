@@ -3,13 +3,12 @@ package common
 import (
 	"errors"
 	"fmt"
-	"math"
-	"math/rand"
-
 	"github.com/ldsec/cellCNN/cellCNNClear/layers"
 	"github.com/ldsec/cellCNN/cellCNNClear/utils"
 	"go.dedis.ch/onet/v3/log"
 	"gonum.org/v1/gonum/mat"
+	"math"
+	"math/rand"
 )
 
 type WeightsVector []*mat.Dense
@@ -102,7 +101,7 @@ func LoadTrainDataFrom(path string) CnnDataset {
 
 func LoadSplitCellCnnTrainData(hostNumber int) ([]*mat.Dense, []float64) {
 	dataFolder := SPLIT_DATA_FOLDER + fmt.Sprintf("host%d/", hostNumber)
-	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_train.txt", NSAMPLES_DIST))
+	y_tr := utils.String_to_float(utils.Load_file(DATA_FOLDER+"y_train.txt", NSAMPLES_DIST))
 	X_tr := make([]*mat.Dense, NSAMPLES_DIST)
 	var fname string
 	for i := range X_tr {
@@ -112,23 +111,33 @@ func LoadSplitCellCnnTrainData(hostNumber int) ([]*mat.Dense, []float64) {
 	return X_tr, y_tr
 }
 
-func LoadCellCnnValidData(dataFolder string, NSamples, NCells, Nfeatures int) CnnDataset {
+func LoadCellCnnValidData(dataFolder string, NSamples, NCells, Nfeatures, dataType int) CnnDataset {
 	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_valid.txt", NSamples))
 	X_tr := make([]*mat.Dense, NSamples)
 	var fname string
-	//fmt.Println(DATA_FOLDER)
-	//fmt.Println(NSAMPLES)
-	//fmt.Println(NCELLS)
 	for i := range X_tr {
 		fname = fmt.Sprintf("X_valid/%d.txt", i)
 		f := utils.Load_file(dataFolder+fname, NCells)
 		X_tr[i] = utils.Convert_X_cellCNN(f, NCells, Nfeatures, false)
 	}
 	fmt.Println("loaded")
+	//if dataType == 1{
+	//	fname = fmt.Sprintf("X_train/all.txt")
+	//	Xtemp := utils.Load_file(dataFolder+fname, NCells)
+	//	ind := 0
+	//	Xtemp2 := utils.Convert_X_cellCNN(Xtemp, (NCells*NSamples), Nfeatures,false)
+	//	fmt.Println(Xtemp2)
+	//	fmt.Println(Xtemp2.Dims())
+	//	os.Exit(0)
+	//	for i := 0; i < NSamples; i++ {
+	//		//row := Xtemp2.At(ind:(ind+(NCells*Nfeatures)))
+	//		//X_tr[i] = row
+	//		ind = ind + (NCells*Nfeatures)
+	//	}
+	//}
 	return CnnDataset{X: X_tr, Y: y_tr}
 }
-func LoadCellCnnTestAll(dataFolder string, testAllCell, Nfeatures int) CnnDataset {
-	samples_test := 6
+func LoadCellCnnTestAll(dataFolder string, testAllCell, Nfeatures, samples_test int) CnnDataset {
 	ncell := testAllCell
 	y_tr := utils.String_to_float(utils.Load_file(dataFolder+"y_test_all.txt", samples_test))
 	X_tr := make([]*mat.Dense, samples_test)
@@ -142,7 +151,7 @@ func LoadCellCnnTestAll(dataFolder string, testAllCell, Nfeatures int) CnnDatase
 
 // RunCnnClearPredictionTest returns the accuracy, precision, recall given the weights
 func RunCnnClearPredictionTest(w WeightsVector, x []*mat.Dense, y []float64) (float64, float64, float64, float64) {
-	conv, pool, dense := InitCellCnn()
+	conv, pool, dense := InitCellCnn(NCLASSES)
 	println(x[0])
 
 	out1 := conv.Forward(x, w[0])
@@ -158,32 +167,32 @@ func RunCnnClearPredictionTest(w WeightsVector, x []*mat.Dense, y []float64) (fl
 }
 
 // RunCnnClearPredictionTest returns the accuracy, precision, recall given the weights for all test donors (phenotype prediction)
-func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset) (float64, float64, float64, float64) {
+func RunCnnClearPredictionTestAll(w WeightsVector, dataset CnnDataset, nclass int) (float64, float64, float64, float64) {
 	x := dataset.X
 	y := dataset.Y
-	fmt.Println(len(x))
-	conv, pool, dense := InitCellCnn()
+	conv, pool, dense := InitCellCnn(nclass)
 	out1 := conv.Forward(x, w[0])
 	//fmt.Println(out1)
 
 	out2 := pool.Forward(out1)
-	fmt.Printf(" %v\n", mat.Formatted(out2, mat.Prefix(" "), mat.Excerpt(3)))
+	//fmt.Printf(" %v\n", mat.Formatted(out2, mat.Prefix(" "), mat.Excerpt(3)))
 
 	output := dense.Forward(out2, w[1])
-	fmt.Printf(" %v\n", mat.Formatted(output, mat.Prefix(" "), mat.Excerpt(3)))
+	//fmt.Printf(" %v\n", mat.Formatted(output, mat.Prefix(" "), mat.Excerpt(3)))
 
-	classified := utils.ClassifyCellCNN(output, NCLASSES)
+	classified := utils.ClassifyCellCNN(output, nclass)
 	accuracy := utils.ComputeAccuracy(classified, y)
-	precision, recall := utils.ComputePrecisionRecall(classified, y, NCLASSES, MICRO)
+	//fmt.Println("classified is",classified)
+	precision, recall := utils.ComputePrecisionRecall(classified, y, nclass, MICRO)
 	fscore := 2 * precision * recall / (precision + recall)
 
 	return accuracy, precision, recall, fscore
 }
 
-func InitCellCnn() (layers.Conv1D, layers.Pool, layers.Dense_n) {
+func InitCellCnn(nclass int) (layers.Conv1D, layers.Pool, layers.Dense_n) {
 	conv := layers.Conv1D{Nfilters: NFILTERS}
 	pool := layers.Pool{}
-	dense := layers.Dense_n{Nclasses: NCLASSES, ApproxInterval: ApproxInterval}
+	dense := layers.Dense_n{Nclasses: nclass, ApproxInterval: ApproxInterval}
 	return conv, pool, dense
 }
 

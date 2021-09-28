@@ -10,34 +10,41 @@ import (
 var ThreadsCount = 4
 
 //number of hosts
-var Hosts = 5
+var Hosts = 6
 
 //folder of the data, datafolder is for test/valid sets and split data is for splitted dataset
-var DataFolder = "../../cellCNNClear/data/cellCNN/originalNK/"
-var SplitDataFolder = "../../cellCNNClear/data/cellCNN/splitNK/"
+var DataFolder = "../../cellCNNClear/data/cellCNN/Flow/"
+var SplitDataFolder = "../../cellCNNClear/data/cellCNN/splitFlow6/"
+
+var TypeData = 0
+
+// TODO: keep TypeData always 0, oneFile reading has a bug to fix!
 
 //Max number of max cells for
 //all cell prediction (output of preprocessing)
-var TestAllCells = 5652
+var TestAllCells = 17523
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 10
+var BatchSize = 12
 
-// number of samples
+// number of test samples
 // MUST BE AN EVEN NUMBER
-var Samples = 1000
+var Samples = 9998
 
-//number of distributed samples (per-host)
-var NSamplesDist = 400
+//number of distributed training samples (per-host)
+var NSamplesDist = 2500
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER
-var Cells = 200
+var Cells = 100
 
 // number of features
 // MUST BE AN EVEN NUMBER
-var Features = 37
+var Features = 35
+
+//Number of donors in the test cohort
+var TestSamples = 12
 
 // number of filters
 // MUST BE AN EVEN NUMBER
@@ -47,13 +54,13 @@ var Filters = 8
 var Classes = 2
 
 // learning rate
-var LearningRate = 0.01
+var LearningRate = 0.04
 
 // momentum
 var Momentum = 0.9
 
 //epochs
-var Epochs = 10
+var Epochs = 30
 
 // ring dimension
 var LogN = 15

@@ -1,21 +1,24 @@
 package common
 
+import cellCNN "github.com/ldsec/cellCNN/cellCNNOptimized"
+
 // cellCNN parameters
-const NCELLS = 200
-const NFEATURES = 37
-const NSAMPLES = 1000
-const NSAMPLES_DIST = 400
+var NCELLS = cellCNN.Cells
+var NFEATURES = cellCNN.Features
+var NSAMPLES = cellCNN.Samples
+var NSAMPLES_DIST = cellCNN.NSamplesDist
+var TESTSAMPLES = cellCNN.TestSamples
+var NCLASSES = cellCNN.Classes
+var TYPEDATA = cellCNN.TypeData
+var NFILTERS = cellCNN.Filters
+var DATA_FOLDER = cellCNN.DataFolder
+var SPLIT_DATA_FOLDER = cellCNN.SplitDataFolder
 
-var NCLASSES = 2
-
-const NFILTERS = 8
-const DATA_FOLDER = "../../data/cellCNN/originalNK/"
-const SPLIT_DATA_FOLDER = "../../data/cellCNN/splitNK/"
-const ApproxInterval = 3.
-const TESTALLCELL = 5652
-const BATCH_SIZE = 10
-const LEARN_RATE = 0.01
-const MOMENTUM = 0.9
+const ApproxInterval = 1. //do not change this without changing coefficients!
+var TESTALLCELL = cellCNN.TestAllCells
+var BATCH_SIZE = cellCNN.BatchSize
+var LEARN_RATE = cellCNN.LearningRate
+var MOMENTUM = cellCNN.Momentum
 
 var MICRO = false
 
@@ -31,7 +34,7 @@ var CellCnnValidLoader Loader = CellCNN{true}
 
 func (c CellCNN) Load() (CnnDataset, error) {
 	if c.valid {
-		return LoadCellCnnValidData(DATA_FOLDER, NSAMPLES, NCELLS, NFEATURES), nil
+		return LoadCellCnnValidData(DATA_FOLDER, NSAMPLES, NCELLS, NFEATURES, cellCNN.TypeData), nil
 	} else {
 		return LoadCellCnnTrainData(DATA_FOLDER, NSAMPLES, NCELLS, NFEATURES), nil
 	}

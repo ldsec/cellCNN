@@ -22,11 +22,11 @@ func TestRegEncryptedTraining(t *testing.T) {
 
 	t.Run("CellCNN", genTest(
 		"cellCNN",           //protoID
-		"../../normalized/",   // datapath
-		3,                    // hosts
-		true,              // trainPlain
-		true,          // trainEncrypted
-		true,        	// deterministic
+		"../../normalized/", // datapath
+		3,                   // hosts
+		true,                // trainPlain
+		true,                // trainEncrypted
+		true,                // deterministic
 		150,                 // Number of epochs
 		true,                // debug
 	))
@@ -55,7 +55,7 @@ func genTest(
 
 		// 1) Load Data
 		log.Lvl2("Loading data...")
-		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+		XTrain, YTrain := cellCNN.LoadTrainDataFrom(path, cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes, cellCNN.TypeData)
 		log.Lvl2("Done")
 
 		localSamples := cellCNN.Samples / hosts // splits the data set

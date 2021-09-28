@@ -3,6 +3,7 @@ package decentralized
 import (
 	//	"fmt"
 	"github.com/ldsec/cellCNN/cellCNNClear/protocols/common"
+	cellCNN "github.com/ldsec/cellCNN/cellCNNOptimized"
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/kyber/v3/group/edwards25519"
 	"go.dedis.ch/onet/v3"
@@ -22,11 +23,11 @@ func TestCnnSplit(t *testing.T) {
 	// Suite is the type of keys used to secure communication in Onet
 
 	local := onet.NewLocalTest(Suite)
-	servers, _, tree := local.GenTree(HOSTS, true)
+	servers, _, tree := local.GenTree(cellCNN.Hosts, true)
 	defer local.CloseAll()
 
 	CnnClearTestRegister := func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		return NewCnnSplitTest(tni, NBR_LOCAL_ITER, NBR_EPOCHS, DEBUG)
+		return NewCnnSplitTest(tni, NBR_LOCAL_ITER, cellCNN.Epochs, DEBUG)
 	}
 
 	for _, s := range servers {

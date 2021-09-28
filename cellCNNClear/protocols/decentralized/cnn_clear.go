@@ -245,7 +245,7 @@ func (p *CnnClearProtocol) newIterationAnnouncementPhase() IterationMessage {
 
 // first iteration
 func (p *CnnClearProtocol) iterationZero() {
-	//TODO
+	//
 }
 
 // Local updates, Results pushing up the tree containing aggregation results.

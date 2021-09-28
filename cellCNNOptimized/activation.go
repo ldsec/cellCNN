@@ -7,9 +7,10 @@ import (
 
 //var coeffsActivation = []complex128{0.5, 0.1831, 0, -0.003817}
 
-//Interval 3
 //var coeffsActivation = []complex128{0.5, 0.24656666666666668, 0, -0.009070370370370371}
-var coeffsActivation = []complex128{0.5, 0.23323333333333332, 0, -0.009811111111111112}
+//var coeffsActivation = []complex128{0.5, 0.23323333333333332, 0, -0.009811111111111112} //interval 3
+var coeffsActivation = []complex128{0.5, 0.2496, 0, -0.0187} //interval 1
+
 var coeffsActivationDeriv = CoeffsDeriv(coeffsActivation)
 
 func EvaluatePoly(x complex128, coeffs []complex128) (y complex128) {

@@ -8,7 +8,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
-	"runtime"
+	"math/rand"
 	"time"
 )
 
@@ -458,7 +458,8 @@ func (p *TrainingProtocol) ascendingUpdateGeneralModelPhase() error {
 	}
 	p.Combine += time.Since(broadcastTimer)
 
-	runtime.GC() // Forces garbage collection
+	//super slow with garbage collection!
+	//runtime.GC() // Forces garbage collection
 
 	return nil
 }
@@ -471,21 +472,27 @@ func (p *TrainingProtocol) localComputation() {
 
 	// Pre-pools the cells
 	for k := 0; k < cellCNN.BatchSize; k++ {
-		randi := p.PrngInt.RandInt()
+		randi := rand.Intn(len(p.XTrain))
 
 		X := p.XTrain[randi]
 		Y := p.YTrain[randi]
-
+		//log.LLvl2("X " )
+		//X.Print()
 		XPrePool.SumColumns(X)
+		//log.LLvl2("XPrePool ")
+		//XPrePool.Print()
 		XPrePool.MultConst(XPrePool, complex(1.0/float64(cellCNN.Cells), 0))
 
 		XBatch.SetRow(k, XPrePool.M)
+		//log.LLvl2("XBatch ")
+		//XBatch.Print()
 		YBatch.SetRow(k, Y.M)
+
 	}
 
 	if p.TrainPlain {
 		p.CNNProtocol.ForwardPlain(XBatch)
-		p.CNNProtocol.BackWardPlain(XBatch, YBatch, p.Tree().Size()) // takes care of pre-applying 1/#Parties
+		p.CNNProtocol.BackWardPlain(XBatch, YBatch, cellCNN.Hosts) // takes care of pre-applying 1/#Parties
 	}
 
 	//start := time.Now()
@@ -506,6 +513,7 @@ func (p *TrainingProtocol) localComputation() {
 	//if p.IterationNumber%50==0{
 	//	log.Lvlf2("Iter[%d] : %s", p.IterationNumber, time.Since(start))
 	//}
+
 }
 
 func (p *TrainingProtocol) broadcast() error {
@@ -593,12 +601,12 @@ func (p *TrainingProtocol) broadcast() error {
 			return fmt.Errorf("send to parent: %v", err)
 		}
 	}
-
 	return nil
 }
 
 // SyncProtocol defines the messages exchanges to synchronise nodes (especially useful for experiments)
 func SyncProtocol(n *onet.TreeNodeInstance, syncChannel chan SyncStruct) error {
+	fmt.Println("inside sync protol")
 	if n.IsRoot() {
 		for i := 0; i < len(n.Roster().List)-1; i++ {
 			<-syncChannel
@@ -616,5 +624,6 @@ func SyncProtocol(n *onet.TreeNodeInstance, syncChannel chan SyncStruct) error {
 		}
 		<-syncChannel
 	}
+	fmt.Println("end sync protol")
 	return nil
 }

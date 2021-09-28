@@ -15,7 +15,6 @@ import (
 
 func TestCnnSplit(t *testing.T) {
 	log.SetDebugVisible(2)
-
 	// training parameters
 	nbr_local_iter := 1
 	debug := false
@@ -23,8 +22,6 @@ func TestCnnSplit(t *testing.T) {
 
 	// cellCNN parameters
 
-	// for the clear prediction function
-	common.NCLASSES = cellCNN.Classes
 	common.MICRO = false
 
 	local := onet.NewLocalTest(Suite)
@@ -34,7 +31,6 @@ func TestCnnSplit(t *testing.T) {
 	params := cellCNN.GenParams()
 	cryptoParamsList := cellCNN.ReadOrGenerateCryptoParams(cellCNN.Hosts, &params, PathCryptoFiles)
 	require.NotNil(t, cryptoParamsList)
-
 	for _, s := range servers {
 		_, err := s.ProtocolRegister("CnnEncryptedTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 			pi, err := decentralized.NewTrainingProtocol(tni)
@@ -65,6 +61,7 @@ func TestCnnSplit(t *testing.T) {
 	loader, err := common.GetValidLoader()
 	err, _ = RunCnnEncTest(local, tree, time, "CnnEncryptedTest", 1, loader)
 	require.NoError(t, err)
+
 }
 
 func LoadSplitData(dataFolder string, index, nSamplesDist, nbrDatasetUsed, nbrLocalIter, nodeBatchSize int, isRoot bool) ([]*cellCNN.Matrix, []*cellCNN.Matrix, int) {
@@ -82,7 +79,7 @@ func LoadSplitData(dataFolder string, index, nSamplesDist, nbrDatasetUsed, nbrLo
 		log.Lvl2("To use the entire dataset ", nbrDatasetUsed, " times, the number of protocol iterations will be ", maxIterations)
 	}
 
-	X, Y := cellCNN.LoadTrainDataFrom(dataFolder+fmt.Sprintf("host%d/", index), cellCNN.NSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	X, Y := cellCNN.LoadTrainDataFrom(dataFolder+fmt.Sprintf("host%d/", index), cellCNN.NSamplesDist, cellCNN.Cells, cellCNN.Features, cellCNN.Classes, cellCNN.TypeData)
 
 	return X, Y, maxIterations
 }
@@ -129,18 +126,20 @@ func RunCnnEncTest(localTest *onet.LocalTest, tree *onet.Tree, timing bool, name
 		if err != nil {
 			return err, ""
 		}
-
+		fmt.Println("test starting")
 		w = runCnnEnc(rootInstance, w)
+		fmt.Println("test done")
 		//accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTest(w, common.TestData.X, common.TestData.Y)
+		testAllData := common.LoadCellCnnTestAll(cellCNN.DataFolder, cellCNN.TestAllCells, common.NFEATURES, common.TESTSAMPLES)
+		//valid data generated as test data to be used as test set
+		testMultiData := common.LoadCellCnnValidData(cellCNN.DataFolder, cellCNN.Samples, common.NCELLS, common.NFEATURES, cellCNN.TypeData)
 
-		testAllData := common.LoadCellCnnTestAll(cellCNN.DataFolder, cellCNN.TestAllCells, cellCNN.Features)
-		testMultiData := common.LoadCellCnnValidData(cellCNN.DataFolder, cellCNN.Samples, cellCNN.Cells, cellCNN.Features)
-		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData)
+		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData, cellCNN.Classes)
 		log.Lvlf2("Multi-cell test data results:")
 		log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)
 
 		log.Lvlf2("All test data results:")
-		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData)
+		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData, cellCNN.Classes)
 		log.LLvl1(accuracyTmp, precisionTmp, recallTmp, fscoreTmp)
 		accuracy += accuracyTmp
 		precision += precisionTmp
@@ -163,6 +162,7 @@ func RunCnnEncTest(localTest *onet.LocalTest, tree *onet.Tree, timing bool, name
 	precisionMulti = precisionMulti / float64(nbrRuns)
 	recallMulti = recallMulti / float64(nbrRuns)
 	fscoreMulti = fscoreMulti / float64(nbrRuns)
+
 	log.Lvlf2("All test data results:")
 	log.Lvlf2("accuracy: %.2f", accuracy)
 	log.Lvlf2("precision: %.2f", precision)
