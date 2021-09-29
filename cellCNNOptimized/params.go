@@ -22,7 +22,7 @@ var TypeData = 0
 
 //Max number of max cells for
 //all cell prediction (output of preprocessing)
-var TestAllCells = 17523
+var TestAllCells = 10173
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
