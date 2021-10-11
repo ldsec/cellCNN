@@ -30,11 +30,11 @@ func main() {
 	hosts := cellCNN.Hosts
 
 	trainEncrypted := false
-	deterministic := true
+	deterministic := false
 
 	fmt.Printf("Loading Data... ")
-	XTrain, YTrain := cellCNN.LoadTrainDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
-	XValid, YValid := cellCNN.LoadValidDataFrom("../../normalized3/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
+	XTrain, YTrain := cellCNN.LoadTrainDataFrom("exampleData/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes, cellCNN.TypeData)
+	XValid, YValid := cellCNN.LoadValidDataFrom("exampleData/", cellCNN.Samples, cellCNN.Cells, cellCNN.Features, cellCNN.Classes)
 	fmt.Printf("Done\n")
 
 	var C, W *cellCNN.Matrix

@@ -135,12 +135,12 @@ func RunCnnEncTest(localTest *onet.LocalTest, tree *onet.Tree, timing bool, name
 		testMultiData := common.LoadCellCnnValidData(cellCNN.DataFolder, cellCNN.Samples, common.NCELLS, common.NFEATURES, cellCNN.TypeData)
 
 		accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti := common.RunCnnClearPredictionTestAll(w, testMultiData, cellCNN.Classes)
-		log.Lvlf2("Multi-cell test data results:")
-		log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)
+		//log.Lvlf2("Multi-cell test data results:")
+		//log.LLvl1(accuracyTmpMulti, precisionTmpMulti, recallTmpMulti, fscoreTmpMulti)
 
-		log.Lvlf2("All test data results:")
+		//log.Lvlf2("All test data results:")
 		accuracyTmp, precisionTmp, recallTmp, fscoreTmp := common.RunCnnClearPredictionTestAll(w, testAllData, cellCNN.Classes)
-		log.LLvl1(accuracyTmp, precisionTmp, recallTmp, fscoreTmp)
+		//log.LLvl1(accuracyTmp, precisionTmp, recallTmp, fscoreTmp)
 		accuracy += accuracyTmp
 		precision += precisionTmp
 		recall += recallTmp

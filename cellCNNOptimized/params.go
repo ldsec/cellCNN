@@ -10,11 +10,11 @@ import (
 var ThreadsCount = 4
 
 //number of hosts
-var Hosts = 6
+var Hosts = 2
 
 //folder of the data, datafolder is for test/valid sets and split data is for splitted dataset
-var DataFolder = "../../cellCNNClear/data/cellCNN/Flow/"
-var SplitDataFolder = "../../cellCNNClear/data/cellCNN/splitFlow6/"
+var DataFolder = "../../cellCNNClear/data/cellCNN/originalNK/"
+var SplitDataFolder = "../../cellCNNClear/data/cellCNN/splitNK2/"
 
 var TypeData = 0
 
@@ -22,29 +22,29 @@ var TypeData = 0
 
 //Max number of max cells for
 //all cell prediction (output of preprocessing)
-var TestAllCells = 10173
+var TestAllCells = 5652
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 12
+var BatchSize = 100
 
 // number of test samples
 // MUST BE AN EVEN NUMBER
-var Samples = 9998
+var Samples = 1500
 
 //number of distributed training samples (per-host)
-var NSamplesDist = 2500
+var NSamplesDist = 1000
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER
-var Cells = 100
+var Cells = 200
 
 // number of features
 // MUST BE AN EVEN NUMBER
-var Features = 35
+var Features = 37
 
 //Number of donors in the test cohort
-var TestSamples = 12
+var TestSamples = 6
 
 // number of filters
 // MUST BE AN EVEN NUMBER
@@ -54,13 +54,13 @@ var Filters = 8
 var Classes = 2
 
 // learning rate
-var LearningRate = 0.04
+var LearningRate = 0.001
 
 // momentum
 var Momentum = 0.9
 
 //epochs
-var Epochs = 30
+var Epochs = 10
 
 // ring dimension
 var LogN = 15
