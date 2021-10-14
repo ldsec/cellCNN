@@ -24,9 +24,9 @@ type Dense_n struct {
 func (dense *Dense_n) Forward(input *mat.Dense, newWeights *mat.Dense) *mat.Dense {
 
 	nsamples, nfilters := input.Dims()
-	//coeffsSigmoid := []float64{0.5, 0.6997, 0, -0.2649} //coeffs for interval 3
+	coeffsSigmoid := []float64{0.5, 0.6997, 0, -0.2649} //coeffs for interval 3
 	//	coeffsSigmoid :=[]float64{0.5, 0.9917, 0, -0.5592} //coeffs for interval 5
-	coeffsSigmoid := []float64{0.5, 0.2496, 0, -0.0187} //coeffs for interval 1
+	//coeffsSigmoid := []float64{0.5, 0.2496, 0, -0.0187} //coeffs for interval 1
 	//coeffsSigmoid := []float64{0.5, 1.2010, 0, -0.8156} //coeffs for interval 8
 	if dense.weights == nil || dense.last_input == nil {
 		dense.firstMoment = false

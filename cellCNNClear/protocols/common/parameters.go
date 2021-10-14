@@ -14,7 +14,7 @@ var NFILTERS = cellCNN.Filters
 var DATA_FOLDER = cellCNN.DataFolder
 var SPLIT_DATA_FOLDER = cellCNN.SplitDataFolder
 
-const ApproxInterval = 1. //do not change this without changing coefficients!
+const ApproxInterval = 3. //do not change this without changing coefficients!
 var TESTALLCELL = cellCNN.TestAllCells
 var BATCH_SIZE = cellCNN.BatchSize
 var LEARN_RATE = cellCNN.LearningRate

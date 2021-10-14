@@ -22,7 +22,7 @@ var TypeData = 0
 
 //Max number of max cells for
 //all cell prediction (output of preprocessing)
-var TestAllCells = 5652
+var TestAllCells = 3790 //ind
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
@@ -30,10 +30,10 @@ var BatchSize = 100
 
 // number of test samples
 // MUST BE AN EVEN NUMBER
-var Samples = 1500
+var Samples = 4000
 
 //number of distributed training samples (per-host)
-var NSamplesDist = 1000
+var NSamplesDist = 2000
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER
@@ -54,13 +54,13 @@ var Filters = 8
 var Classes = 2
 
 // learning rate
-var LearningRate = 0.001
+var LearningRate = 0.01
 
 // momentum
 var Momentum = 0.9
 
 //epochs
-var Epochs = 10
+var Epochs = 20
 
 // ring dimension
 var LogN = 15
