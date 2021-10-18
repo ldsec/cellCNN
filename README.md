@@ -13,9 +13,7 @@ Private-CellCnn is a Golang library that ensures CellCnn[1] analysis in privacy-
 [2] S. Sav, A. Pyrgelis, J. R. Troncoso-Pastoriza, D. Froelicher, J.-P. Bossuat,
   J. S. Sousa, and J.-P. Hubaux, “POSEIDON: Privacy-Preserving Federated
   Neural Network Learning,” in NDSS, 2021
-## Licence
 
-???
 
 
 
