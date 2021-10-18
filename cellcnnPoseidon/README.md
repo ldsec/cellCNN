@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is the Repository for Semester Project in Computer Science II (12 credits) of Shufan Wang at [Laboratory of Data Security (LDS)](https://lds.epfl.ch/), EPFL 2021.
+This folder is for Semester Project in Computer Science II (12 credits) of Shufan Wang at [Laboratory of Data Security (LDS)](https://lds.epfl.ch/), EPFL 2021 to generate several benchmarks for comparison of optimized protocols with POSEIDON [1].
 
 ## Current Settings
 
@@ -93,4 +93,4 @@ Local computation with the crypto-parmeters above:
 
 
 
-  
+  [1] S. Sav, A. Pyrgelis, J. R. Troncoso-Pastoriza, D. Froelicher, J.-P. Bossuat, J. S. Sousa, and J.-P. Hubaux, “POSEIDON: Privacy-Preserving Federated Neural Network Learning,” in NDSS, 2021
