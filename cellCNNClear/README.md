@@ -1,6 +1,6 @@
 ## Structure
 - `cellCNN_clear/data/`: contains the scripts for data generation and preprocessing
-    - gen_data_NK generates centralized and distributed datasets for NK dataset [1]. Download the relevant data
+    - gen_data_NK generates centralized and distributed datasets for NK dataset for CMV classification [1]. Download the relevant data
 at https://imsb.ethz.ch/research/claassen/Software/cellcnn.html, uncompress and place it in the data/cellCNN/ folder
     - gen_data_AML generates centralized and distributed datasets for AML dataset [1]. Download the relevant data
 at https://imsb.ethz.ch/research/claassen/Software/cellcnn.html, uncompress and place it in the data/cellCNN/ folder
