@@ -17,7 +17,7 @@ The method `GenParams()` will automatically generate a `ckks.Parameters` with se
 ## Testing
 
 - The file `decentralized/example/main.go` is an example of decentralized training (the centralized training can be emulated by setting the number of hosts to 1). Note that this is a dummy example that runs the protocol over distributed multi-cell examples under cellCNN/exampleData folder. 
-- To run actual protocol that executes the learning over N parties where each party has several patients data, please follow the necessary data generation scripts under cellCNN/cellCNNClear, change the relevant parameters in param.go, and run decentralized/cnn_enc_split_test.go
+- To run actual protocol that executes the learning over N parties where each party has several patients data, please follow the necessary data generation scripts under cellCNN/cellCNNClear, change the relevant parameters in `params.go`, and run `decentralized/cnn_enc_split_test.go`. 
 
 ## PREDICTION API
 
