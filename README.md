@@ -8,9 +8,9 @@ PriCell is a Golang library that ensures CellCnn[1] analysis in privacy-preservi
 * PriCell makes use of golang (**go1.13.8**, the code was only tested with this golang version). For more information on how to install go follow this [link](https://golang.org/doc/install).
 * All necessary libraries are automatically downloaded during the first execution ([go modules](https://blog.golang.org/using-go-modules)).
 * PriCell does an intensive use of [Overlay-network (ONet) library](https://github.com/dedis/onet) and of [Lattigo](https://github.com/ldsec/lattigo).
-* For more information regarding the underlying architecture please refer to the stable version of ONet `go.dedis.ch/onet/v3`
-* PriCell requires **Python3.7** and for data preprocessing and generation of the multi-cell inputs in `PriCell/cellCNN_clear`. The rest of the dependencies 
-* PriCell makes use of **conda 4.10.3** (the rest of the dependencies are defined under `enviroment.yml`)
+* For more information regarding the underlying architecture please refer to the stable version of ONet `go.dedis.ch/onet/v3`.
+* PriCell requires **Python3.7** and for data preprocessing and generation of the multi-cell inputs in `PriCell/cellCNN_clear`. 
+* PriCell makes use of **conda 4.10.3** (the rest of the dependencies are defined under `enviroment.yml`).
 
 ## Overview
 - `PriCell/cellCNN_clear`: contains the relevant data preprocessing and distribution scripts and centralized and distributed cellCnn implementation for testing/benchmarking.
