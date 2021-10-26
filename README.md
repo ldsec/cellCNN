@@ -9,13 +9,13 @@ Private-CellCnn is a Golang library that ensures CellCnn[1] analysis in privacy-
     - Data generation and preprocessing scripts require Python 3.6
 - `cellCNN/cellCNN_optimized`: contains the optimized, distributed, privacy-preserving implementation of cellCnn with multiparty homomorphic encryption
 - `cellCNN/cellcnnPoseidon`: contains the distributed, privacy-preserving implementation of cellCnn with multiparty homomorphic encryption, relying on POSEIDON[2] packing strategies, for benchmarking
+- `cellCNN/eval_results`: contains the results for several experimental settings and the script for plotting accuracy, precision, recall, and f-score boxplots.
+- `cellCNN/exampleData`: contains example data generated from CMV infection (NK dataset) for running an example of distributed and privacy-preserving implementation under `cellCNN/cellCNN_optimized/decentralized/example/`
 
 [2] S. Sav, A. Pyrgelis, J. R. Troncoso-Pastoriza, D. Froelicher, J.-P. Bossuat,
   J. S. Sousa, and J.-P. Hubaux, “POSEIDON: Privacy-Preserving Federated
   Neural Network Learning,” in NDSS, 2021
-## Licence
 
-???
 
 
 
