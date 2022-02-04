@@ -141,7 +141,7 @@ func NewCellCNNSimul(tni *onet.TreeNodeInstance, sim *CellCNNSimulation) (onet.P
 		log.Lvl2("Done")
 	} else {
 		log.Lvl2("Loading data...")
-		protocol.XTrain, protocol.YTrain = cellCNN.LoadTrainDataFrom(sim.Path, sim.Samples, sim.Cells, sim.Features)
+		//protocol.XTrain, protocol.YTrain = cellCNN.LoadTrainDataFrom(sim.Path, sim.Samples, sim.Cells, sim.Features)
 		log.Lvl2("Done")
 	}
 
