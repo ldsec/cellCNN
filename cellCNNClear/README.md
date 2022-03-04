@@ -1,8 +1,8 @@
 ## Structure
 - `cellCNN_clear/data/cellCNN`: contains the scripts for data generation and preprocessing, download the relevant data
 at https://zenodo.org/record/5597098#.YXbaz9ZBzt0 (for NK or AML) or http://flowrepository.org/experiments/2166 (for NIND or RRMS), uncompress and place it in the data/cellCNN/folder
-<p>- gen_data_NK generates centralized and distributed datasets for NK dataset<p>
-<p>- gen_data_AML generates centralized and distributed datasets for AML dataset</p>
+  - gen_data_NK generates centralized and distributed datasets for NK dataset
+  - gen_data_AML generates centralized and distributed datasets for AML dataset
 
 - `cellCNN_clear/eval/`: contains the evaluation plots and the notebook used to generate them
 
