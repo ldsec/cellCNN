@@ -8,10 +8,7 @@ at https://imsb.ethz.ch/research/claassen/Software/cellcnn.html, uncompress and 
 
 - `cellCNN_clear/layers/`: contains the implementation of neural networks layers
 
-- `cellCNN_clear/protocols/`: contains the implementation of the centralized and distributed protocols
-    The centralized protocol can be executed with protocols/centralized/centralized_test.go
-        (use flag "-run CellCnn" for the full protocol)
-    The distributed protocol can be executed with protocols/decentralized/cnn_clear_test.go
+- `cellCNN_clear/protocols/`: contains the implementation of the centralized and distributed protocols. The centralized protocol can be executed with protocols/centralized/centralized_test.go (use flag "-run CellCnn" for the full protocol). The distributed protocol can be executed with protocols/decentralized/cnn_clear_test.go
 
 - `cellCNN_clear/simul/`: contains the simulation configurations (to use with Mininet)
 
