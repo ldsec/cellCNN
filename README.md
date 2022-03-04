@@ -1,6 +1,6 @@
-# (Privacy-Preserving) cellCNN 
+# (Privacy-Preserving) PriCell 
 
-cellCNN (private version) is a Golang library that ensures CellCnn[1] analysis in privacy-preserving, distributed, N-party setting.
+PriCell (private version) is a Golang library that ensures CellCnn[1] analysis in privacy-preserving, distributed, N-party setting.
 
 [1] E. Arvaniti and M. Claassen. Sensitive detection of rare disease-associated cell subsets via representation learning.Nat Commun, 8:1–10, 2017
 ## Dependencies
