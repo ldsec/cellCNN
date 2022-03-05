@@ -15,4 +15,3 @@ require (
 	gonum.org/v1/plot v0.9.0
 )
 
-//replace go.dedis.ch/onet/v3 => ../../../go.dedis.ch/onet

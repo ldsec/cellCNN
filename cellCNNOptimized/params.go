@@ -10,7 +10,7 @@ import (
 var ThreadsCount = 4
 
 //number of hosts
-var Hosts = 5
+var Hosts = 10
 
 //folder of the data, datafolder is for test/valid sets and split data is for splitted dataset
 var DataFolder = "../../cellCNNClear/data/cellCNN/originalNK/"
@@ -22,18 +22,18 @@ var TypeData = 0
 
 //Max number of max cells for
 //all cell prediction (output of preprocessing)
-var TestAllCells = 7036 //ind
+var TestAllCells = 6320
 
 // Number of samples per batch
 // MUST BE AN EVEN NUMBER
-var BatchSize = 40
+var BatchSize = 100
 
 // number of test samples
 // MUST BE AN EVEN NUMBER
-var Samples = 4000
+var Samples = 1000
 
 //number of distributed training samples (per-host)
-var NSamplesDist = 800
+var NSamplesDist = 1000
 
 // number of cells per sample
 // MUST BE AN EVEN NUMBER
@@ -41,7 +41,7 @@ var Cells = 200
 
 // number of features
 // MUST BE AN EVEN NUMBER
-var Features = 37
+var Features = 8
 
 //Number of donors in the test cohort
 var TestSamples = 6

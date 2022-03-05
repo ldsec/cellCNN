@@ -1,5 +1,4 @@
-# Semester Project of Shufan Wang
-
+# Implementation of Poseidon[1] with CellCnn for benchmarking
 ## Introduction
 
 This folder is for Semester Project in Computer Science II (12 credits) of Shufan Wang at [Laboratory of Data Security (LDS)](https://lds.epfl.ch/), EPFL 2021 to generate several benchmarks for comparison of optimized protocols with POSEIDON [1].

@@ -45,8 +45,8 @@ func TestCnnSplit(t *testing.T) {
 
 			// ##STEP 2: InitRoot protocol training variables
 			vars := decentralized.InitCellCNNVars{
-				TrainPlain:     true,
-				TrainEncrypted: false,
+				TrainPlain:     false,
+				TrainEncrypted: true,
 				Deterministic:  true,
 				MaxIterations:  maxIterations,
 				LocalSamples:   cellCNN.NSamplesDist,
