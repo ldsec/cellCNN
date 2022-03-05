@@ -1,3 +1,4 @@
+This repository includes the implementation of the paper PriCell (accepted at Patterns).
 # PriCell (Privacy-Preserving CellCNN)
 
 PriCell (private version) is a Golang library that ensures CellCnn[1] analysis in privacy-preserving, distributed, N-party setting.
