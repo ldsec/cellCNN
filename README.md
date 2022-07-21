@@ -17,7 +17,6 @@ Please use the following BibTex entry for citing PriCell:
 	}
 
 
-NOTE: Please update the BibTex entry after the publication and the document is assigned a DOI from Patterns. 
 # PriCell (Privacy-Preserving CellCNN)
 
 PriCell (private version) is a Golang library that ensures CellCnn[1] analysis in privacy-preserving, distributed, N-party setting.
