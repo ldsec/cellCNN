@@ -1,17 +1,21 @@
 This repository includes the implementation of the paper PriCell (accepted at Patterns). 
 Please use the following BibTex entry for citing PriCell:
 
-	@article {Sav2022.01.10.475610,
-		author = {Sav, Sinem and Bossuat, Jean-Philippe and Troncoso-Pastoriza, Juan R. and Claassen, Manfred and Hubaux, Jean-Pierre},
-		title = {Privacy-Preserving Federated Neural Network Learning for Disease-Associated Cell Classification},
-		elocation-id = {2022.01.10.475610},
-		year = {2022},
-		doi = {10.1101/2022.01.10.475610},
-		publisher = {Cold Spring Harbor Laboratory},
-		URL = {https://www.biorxiv.org/content/early/2022/02/11/2022.01.10.475610},
-		eprint = {https://www.biorxiv.org/content/early/2022/02/11/2022.01.10.475610.full.pdf},
-		journal = {bioRxiv}
+	@Article{Sav2022,
+		author={Sav, Sinem and Bossuat, Jean-Philippe and Troncoso-Pastoriza, Juan R. and Claassen, Manfred and Hubaux, Jean-Pierre},
+		title={Privacy-preserving federated neural network learning for disease-associated cell classification},
+		journal={Patterns},
+		year={2022},
+		month={May},
+		day={13},
+		publisher={Elsevier},
+		volume={3},
+		number={5},
+		issn={2666-3899},
+		doi={10.1016/j.patter.2022.100487},
+		url={https://doi.org/10.1016/j.patter.2022.100487}
 	}
+
 
 NOTE: Please update the BibTex entry after the publication and the document is assigned a DOI from Patterns. 
 # PriCell (Privacy-Preserving CellCNN)
